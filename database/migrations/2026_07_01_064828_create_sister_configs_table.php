@@ -1,0 +1,25 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('sister_configs', function (Blueprint $table) {
+            $table->id();
+            $table->string('sister_url', 255);
+            $table->string('sister_username', 255);
+            $table->string('sister_password', 255);
+            $table->string('sister_id_pengguna', 255);
+            $table->timestamps();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('sister_configs');
+    }
+};
