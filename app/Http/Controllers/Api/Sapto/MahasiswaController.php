@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Sapto;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class MahasiswaController extends Controller
 {
@@ -33,6 +34,7 @@ class MahasiswaController extends Controller
         $data = DB::select("
             SELECT
                 ps.id_prodi, -- ID Prodi (UUID) dimunculkan sebagai modal link klik untuk Frontend
+                ps.kode_program_studi, -- Dipakai untuk memetakan prodi -> fakultas (lihat facultyByProdiCode())
 
                 -- KOLOM 2: Program Studi (Gabungan Jenjang + Nama)
                 CONCAT(ps.nama_jenjang_pendidikan, ' ', ps.nama_program_studi) AS program_studi,
@@ -62,6 +64,7 @@ class MahasiswaController extends Controller
             WHERE ps.nama_program_studi IS NOT NULL
             GROUP BY
                 ps.id_prodi,
+                ps.kode_program_studi,
                 ps.nama_program_studi,
                 ps.nama_jenjang_pendidikan
             -- Ini Tabel 2.b MAHASISWA ASING: hanya tampilkan program studi yang
@@ -74,6 +77,20 @@ class MahasiswaController extends Controller
                 ps.nama_program_studi ASC
         ");
 
+        // Lengkapi tiap baris dengan fakultas. Tabel program_studi (skema
+        // Feeder) tidak punya kolom fakultas, jadi dipetakan lewat
+        // kode_program_studi -> fakultas dari database/data/program_studi.csv.
+        // Dipakai frontend untuk filter role Pengelola Fakultas/Program Studi.
+        $facultyMap = $this->facultyByProdiCode();
+
+        $rows = array_map(function ($row) use ($facultyMap) {
+            $faculty = $facultyMap[$row->kode_program_studi] ?? 'Belum Dipetakan';
+            $row->fakultas = $faculty;
+            $row->fakultas_id = Str::slug($faculty) ?: 'belum-dipetakan';
+
+            return $row;
+        }, $data);
+
         return response()->json([
             'success' => true,
             'tahun_akademik' => [
@@ -81,9 +98,83 @@ class MahasiswaController extends Controller
                 'ts_1' => $ts1,
                 'ts'   => $ts
             ],
-            'total_prodi' => count($data),
-            'data' => $data
+            'total_prodi' => count($rows),
+            'data' => $rows
         ]);
+    }
+
+    /**
+     * Peta kode_program_studi -> nama fakultas, dibaca dari
+     * database/data/program_studi.csv (satu-satunya sumber pemetaan
+     * fakultas yang tersedia lokal; tabel program_studi tidak menyimpannya).
+     *
+     * @return array<string, string>
+     */
+    private function facultyByProdiCode(): array
+    {
+        $path = database_path('data/program_studi.csv');
+
+        if (! is_file($path)) {
+            return [];
+        }
+
+        $handle = fopen($path, 'r');
+
+        if ($handle === false) {
+            return [];
+        }
+
+        // $escape = '' eksplisit: hindari deprecation PHP 8.4+ sekaligus
+        // matikan penanganan escape backslash yang tak dipakai di CSV ini.
+        $headers = fgetcsv($handle, 0, ',', '"', '') ?: [];
+        $map = [];
+
+        while (($values = fgetcsv($handle, 0, ',', '"', '')) !== false) {
+            if (count($headers) !== count($values)) {
+                continue;
+            }
+
+            $record = array_combine($headers, $values);
+            $code = trim((string) ($record['kode'] ?? ''));
+
+            if ($code === '') {
+                continue;
+            }
+
+            $map[$code] = $this->normalizeFaculty((string) ($record['fakultas'] ?? ''));
+        }
+
+        fclose($handle);
+
+        return $map;
+    }
+
+    /**
+     * Rapikan nama fakultas mentah dari CSV menjadi label yang konsisten,
+     * mis. "KEDOKTERANM" -> "Fakultas Kedokteran", "PASCASARJANA" ->
+     * "Pascasarjana". Selaras dengan PangkalanDataApiClient::normalizeFaculty().
+     */
+    private function normalizeFaculty(string $faculty): string
+    {
+        $faculty = trim((string) preg_replace('/\s+/', ' ', Str::upper(Str::ascii($faculty))));
+
+        if ($faculty === 'KEDOKTERANM') {
+            $faculty = 'KEDOKTERAN';
+        }
+
+        if ($faculty === '') {
+            return 'Belum Dipetakan';
+        }
+
+        if ($faculty === 'PASCASARJANA') {
+            return 'Pascasarjana';
+        }
+
+        if (str_starts_with($faculty, 'FAKULTAS ')) {
+            $faculty = trim(substr($faculty, 9));
+        }
+
+        return 'Fakultas '.Str::title(Str::lower($faculty));
     }
 
     /**

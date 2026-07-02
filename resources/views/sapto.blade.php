@@ -27,6 +27,8 @@
     </section>
 
     <section id="mahasiswa-asing-page" class="hidden">
+        @include('components.mahasiswa-asing-filter')
+
         <div class="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             @include('components.metric-card', ['id' => 'ma-metric-prodi', 'label' => 'Total program studi', 'icon' => $icons['cap'], 'tint' => 'accent'])
             @include('components.metric-card', ['id' => 'ma-metric-aktif', 'label' => 'Total mahasiswa aktif (TS)', 'icon' => $icons['users'], 'tint' => 'info'])
@@ -105,11 +107,24 @@
         maMetricAktif: document.getElementById('ma-metric-aktif'),
         maMetricFt: document.getElementById('ma-metric-ft'),
         maMetricPt: document.getElementById('ma-metric-pt'),
+        maFakultas: document.getElementById('ma-fakultas'),
+        maFakultasWrap: document.getElementById('ma-fakultas-wrap'),
+        maProgramStudi: document.getElementById('ma-program-studi'),
+        maProdiWrap: document.getElementById('ma-prodi-wrap'),
+        maActiveUnit: document.getElementById('ma-active-unit'),
     };
 
     const metricEls = [els.metricDosen, els.metricPs, els.metricPsLain, els.metricTs];
     const maMetricEls = [els.maMetricProdi, els.maMetricAktif, els.maMetricFt, els.maMetricPt];
     let maSummary = null;
+    let currentTableId = @json($activeTableId ?? 'dosen-pembimbing-ta');
+
+    // Filter mahasiswa asing (role diambil dari state.role yang dibagi topbar).
+    const maFilter = {
+        fakultasId: 'all',   // 'all' | fakultas_id
+        prodiId: 'all',      // 'all' | id_prodi
+        fakultas: [],        // [{ id, nama }]
+    };
 
     function initTsOptions() {
         const years = [];
@@ -503,6 +518,9 @@
             }
 
             maSummary = payload;
+            buildMaFilterData();
+            applyMaRoleDefaults();
+            renderMaFilters();
             renderMaSummary();
         } catch (error) {
             renderMaError(error.message);
@@ -521,8 +539,117 @@
         els.maTableFoot.innerHTML = '';
     }
 
+    // Fakultas unik dari baris yang punya mahasiswa asing, terurut nama.
+    function buildMaFilterData() {
+        const seen = new Map();
+
+        (maSummary.data || []).forEach((row) => {
+            if (row.fakultas_id && !seen.has(row.fakultas_id)) {
+                seen.set(row.fakultas_id, { id: row.fakultas_id, nama: row.fakultas });
+            }
+        });
+
+        maFilter.fakultas = [...seen.values()].sort((a, b) => a.nama.localeCompare(b.nama, 'id'));
+    }
+
+    // Prodi (id_prodi) yang tersedia untuk fakultas terpilih, atau semua.
+    function maProdiOptions() {
+        return (maSummary.data || [])
+            .filter((row) => maFilter.fakultasId === 'all' || row.fakultas_id === maFilter.fakultasId)
+            .map((row) => ({ id: row.id_prodi, nama: row.program_studi }));
+    }
+
+    // Selaraskan pilihan default dengan role aktif:
+    // - universitas: bebas, default Semua/Semua.
+    // - fakultas: wajib satu fakultas (default pertama), prodi Semua.
+    // - prodi: wajib satu fakultas + satu prodi (default pertama).
+    function applyMaRoleDefaults() {
+        const role = state.role;
+
+        if (role === 'universitas') {
+            maFilter.fakultasId = 'all';
+            maFilter.prodiId = 'all';
+            return;
+        }
+
+        const fakultasValid = maFilter.fakultas.some((f) => f.id === maFilter.fakultasId);
+
+        if (!fakultasValid) {
+            maFilter.fakultasId = maFilter.fakultas[0]?.id ?? 'all';
+        }
+
+        if (role === 'fakultas') {
+            maFilter.prodiId = 'all';
+            return;
+        }
+
+        // role === 'prodi'
+        const prodiList = maProdiOptions();
+        const prodiValid = prodiList.some((p) => p.id === maFilter.prodiId);
+
+        if (!prodiValid) {
+            maFilter.prodiId = prodiList[0]?.id ?? 'all';
+        }
+    }
+
+    function renderMaFilters() {
+        const role = state.role;
+
+        // Fakultas: role universitas boleh "Semua"; role lain wajib pilih satu.
+        const fakultasOptions = [
+            ...(role === 'universitas' ? ['<option value="all">Semua Fakultas</option>'] : []),
+            ...maFilter.fakultas.map((f) => `<option value="${escapeAttr(f.id)}">${escapeHtml(f.nama)}</option>`),
+        ];
+        els.maFakultas.innerHTML = fakultasOptions.join('') || '<option value="all">Tidak ada fakultas</option>';
+        els.maFakultas.value = maFilter.fakultasId;
+
+        // Program studi: role prodi wajib pilih satu; selain itu boleh "Semua".
+        const prodiList = maProdiOptions();
+        const prodiOptions = [
+            ...(role === 'prodi' ? [] : ['<option value="all">Semua Program Studi</option>']),
+            ...prodiList.map((p) => `<option value="${escapeAttr(p.id)}">${escapeHtml(p.nama)}</option>`),
+        ];
+        els.maProgramStudi.innerHTML = prodiOptions.join('') || '<option value="all">Tidak ada program studi</option>';
+        els.maProgramStudi.value = maFilter.prodiId;
+
+        // Prodi hanya relevan saat menyaring per fakultas/prodi.
+        els.maProdiWrap.classList.toggle('hidden', role === 'universitas' && maFilter.fakultasId === 'all');
+
+        renderMaActiveUnit();
+    }
+
+    function renderMaActiveUnit() {
+        if (maFilter.prodiId !== 'all') {
+            const prodi = (maSummary.data || []).find((row) => row.id_prodi === maFilter.prodiId);
+            els.maActiveUnit.textContent = prodi ? prodi.program_studi : 'Universitas Sriwijaya';
+            return;
+        }
+
+        if (maFilter.fakultasId !== 'all') {
+            const fakultas = maFilter.fakultas.find((f) => f.id === maFilter.fakultasId);
+            els.maActiveUnit.textContent = fakultas ? fakultas.nama : 'Universitas Sriwijaya';
+            return;
+        }
+
+        els.maActiveUnit.textContent = 'Universitas Sriwijaya';
+    }
+
+    function maVisibleRows() {
+        return (maSummary.data || []).filter((row) => {
+            if (maFilter.fakultasId !== 'all' && row.fakultas_id !== maFilter.fakultasId) {
+                return false;
+            }
+
+            if (maFilter.prodiId !== 'all' && row.id_prodi !== maFilter.prodiId) {
+                return false;
+            }
+
+            return true;
+        });
+    }
+
     function renderMaSummary() {
-        const rows = maSummary.data || [];
+        const rows = maVisibleRows();
         const totals = maRowTotals(rows);
 
         maMetricEls.forEach((el) => el.classList.remove('is-loading'));
@@ -733,6 +860,8 @@
     };
 
     function activateTable(tableId) {
+        currentTableId = tableId;
+
         document.querySelectorAll('.menu-item').forEach((button) => {
             button.classList.toggle('is-active', button.dataset.tableId === tableId);
         });
@@ -795,6 +924,17 @@
     els.role.addEventListener('change', async () => {
         state.role = els.role.value;
 
+        // Tabel Mahasiswa Asing punya filter role sendiri (data lokal, difilter
+        // di klien) — tidak lewat API fakultas/prodi milik tabel dosen.
+        if (currentTableId === 'mahasiswa-asing') {
+            if (maSummary) {
+                applyMaRoleDefaults();
+                renderMaFilters();
+                renderMaSummary();
+            }
+            return;
+        }
+
         if (state.role === 'fakultas' && state.fakultasId === 'all' && state.fakultas[0]) {
             state.fakultasId = String(state.fakultas[0].id);
             state.programStudiId = 'all';
@@ -807,6 +947,27 @@
         await loadFakultas();
         await loadProgramStudi();
         await loadSummary();
+    });
+
+    els.maFakultas.addEventListener('change', () => {
+        maFilter.fakultasId = els.maFakultas.value;
+
+        // Ganti fakultas: reset prodi. Role prodi wajib punya prodi terpilih,
+        // jadi jatuhkan ke prodi pertama di fakultas baru.
+        if (state.role === 'prodi') {
+            maFilter.prodiId = maProdiOptions()[0]?.id ?? 'all';
+        } else {
+            maFilter.prodiId = 'all';
+        }
+
+        renderMaFilters();
+        renderMaSummary();
+    });
+
+    els.maProgramStudi.addEventListener('change', () => {
+        maFilter.prodiId = els.maProgramStudi.value;
+        renderMaActiveUnit();
+        renderMaSummary();
     });
 
     els.ts.addEventListener('change', () => {
