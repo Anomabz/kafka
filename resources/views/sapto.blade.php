@@ -31,7 +31,7 @@
 
         <div class="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             @include('components.metric-card', ['id' => 'ma-metric-prodi', 'label' => 'Total program studi', 'icon' => $icons['cap'], 'tint' => 'accent'])
-            @include('components.metric-card', ['id' => 'ma-metric-aktif', 'label' => 'Total mahasiswa aktif (TS)', 'icon' => $icons['users'], 'tint' => 'info'])
+            @include('components.metric-card', ['id' => 'ma-metric-aktif', 'label' => 'Total mahasiswa asing aktif (TS)', 'icon' => $icons['users'], 'tint' => 'info'])
             @include('components.metric-card', ['id' => 'ma-metric-ft', 'label' => 'Mahasiswa asing penuh waktu (TS)', 'icon' => $icons['globe'], 'tint' => 'warn'])
             @include('components.metric-card', ['id' => 'ma-metric-pt', 'label' => 'Mahasiswa asing paruh waktu (TS)', 'icon' => $icons['calendar'], 'tint' => 'slate'])
         </div>

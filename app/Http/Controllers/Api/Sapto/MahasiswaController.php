@@ -20,16 +20,17 @@ class MahasiswaController extends Controller
         $ts1 = '2024'; 
         $ts2 = '2023'; 
 
-        // "Aktif pada tahun X" = sudah terdaftar (id_periode_masuk <= X) dan
-        // belum keluar sebelum tahun X berakhir (id_periode_keluar kosong,
-        // atau keluarnya di tahun setelah X). Dulu kolom ini cuma mengecek
-        // id_periode_masuk = X, yang sebenarnya menghitung "mahasiswa baru
-        // angkatan X", bukan total mahasiswa aktif di prodi pada tahun itu -
-        // angkanya jauh lebih kecil dari yang seharusnya (lihat histori commit
-        // untuk perbandingan angka sebelum/sesudah perbaikan ini).
+        // Jendela "aktif pada tahun X": sudah terdaftar (id_periode_masuk <= X)
+        // dan belum keluar sebelum tahun X berakhir (id_periode_keluar kosong,
+        // atau keluarnya di tahun setelah X).
         $aktifTs2 = "SUBSTRING(lrpm.id_periode_masuk, 1, 4) <= '$ts2' AND (lrpm.id_periode_keluar IS NULL OR lrpm.id_periode_keluar = '' OR SUBSTRING(lrpm.id_periode_keluar, 1, 4) > '$ts2')";
         $aktifTs1 = "SUBSTRING(lrpm.id_periode_masuk, 1, 4) <= '$ts1' AND (lrpm.id_periode_keluar IS NULL OR lrpm.id_periode_keluar = '' OR SUBSTRING(lrpm.id_periode_keluar, 1, 4) > '$ts1')";
         $aktifTs  = "SUBSTRING(lrpm.id_periode_masuk, 1, 4) <= '$ts'  AND (lrpm.id_periode_keluar IS NULL OR lrpm.id_periode_keluar = '' OR SUBSTRING(lrpm.id_periode_keluar, 1, 4) > '$ts')";
+
+        // Tabel 2.b adalah tabel MAHASISWA ASING, jadi SEMUA kolom (termasuk
+        // "Jumlah Mahasiswa Aktif") hanya menghitung mahasiswa berkewarganegaraan
+        // asing. Filter negara ketat: ada di tabel negara dan bukan 'ID'.
+        $asing = "n.id_negara IS NOT NULL AND n.id_negara <> 'ID'";
 
         $data = DB::select("
             SELECT
@@ -39,15 +40,18 @@ class MahasiswaController extends Controller
                 -- KOLOM 2: Program Studi (Gabungan Jenjang + Nama)
                 CONCAT(ps.nama_jenjang_pendidikan, ' ', ps.nama_program_studi) AS program_studi,
 
-                -- KOLOM 3, 4, 5: Jumlah Mahasiswa Aktif pada TS-2/TS-1/TS (Total Lokal + Asing)
-                COALESCE(SUM(CASE WHEN $aktifTs2 THEN 1 ELSE 0 END), 0) AS mhs_aktif_ts2,
-                COALESCE(SUM(CASE WHEN $aktifTs1 THEN 1 ELSE 0 END), 0) AS mhs_aktif_ts1,
-                COALESCE(SUM(CASE WHEN $aktifTs  THEN 1 ELSE 0 END), 0) AS mhs_aktif_ts,
+                -- KOLOM 3, 4, 5: Jumlah Mahasiswa ASING yang Aktif pada TS-2/TS-1/TS
+                COALESCE(SUM(CASE WHEN $aktifTs2 AND $asing THEN 1 ELSE 0 END), 0) AS mhs_aktif_ts2,
+                COALESCE(SUM(CASE WHEN $aktifTs1 AND $asing THEN 1 ELSE 0 END), 0) AS mhs_aktif_ts1,
+                COALESCE(SUM(CASE WHEN $aktifTs  AND $asing THEN 1 ELSE 0 END), 0) AS mhs_aktif_ts,
 
-                -- KOLOM 6, 7, 8: Jumlah Mahasiswa Asing Penuh Waktu (Full-time) - aktif pada tahun terkait + Filter ID Negara Ketat
-                COALESCE(SUM(CASE WHEN $aktifTs2 AND n.id_negara IS NOT NULL AND n.id_negara <> 'ID' THEN 1 ELSE 0 END), 0) AS asing_ft_ts2,
-                COALESCE(SUM(CASE WHEN $aktifTs1 AND n.id_negara IS NOT NULL AND n.id_negara <> 'ID' THEN 1 ELSE 0 END), 0) AS asing_ft_ts1,
-                COALESCE(SUM(CASE WHEN $aktifTs  AND n.id_negara IS NOT NULL AND n.id_negara <> 'ID' THEN 1 ELSE 0 END), 0) AS asing_ft_ts,
+                -- KOLOM 6, 7, 8: dari mahasiswa asing aktif itu, yang PENUH WAKTU
+                -- (full-time). Sumber data belum membedakan penuh/paruh waktu,
+                -- jadi untuk sekarang semua dianggap full-time (nilainya sama
+                -- dengan kolom aktif); paruh waktu selalu 0.
+                COALESCE(SUM(CASE WHEN $aktifTs2 AND $asing THEN 1 ELSE 0 END), 0) AS asing_ft_ts2,
+                COALESCE(SUM(CASE WHEN $aktifTs1 AND $asing THEN 1 ELSE 0 END), 0) AS asing_ft_ts1,
+                COALESCE(SUM(CASE WHEN $aktifTs  AND $asing THEN 1 ELSE 0 END), 0) AS asing_ft_ts,
 
                 -- KOLOM 9, 10, 11: Jumlah Mahasiswa Asing Paruh Waktu (Part-time)
                 0 AS asing_pt_ts2,
@@ -67,12 +71,9 @@ class MahasiswaController extends Controller
                 ps.kode_program_studi,
                 ps.nama_program_studi,
                 ps.nama_jenjang_pendidikan
-            -- Ini Tabel 2.b MAHASISWA ASING: hanya tampilkan program studi yang
-            -- benar-benar punya mahasiswa asing (full-time/part-time) aktif pada
-            -- salah satu dari TS-2/TS-1/TS. Kolom 'Jumlah Mahasiswa Aktif' tetap
-            -- total (lokal + asing) sebagai denominator sesuai format borang.
-            HAVING (asing_ft_ts2 + asing_ft_ts1 + asing_ft_ts
-                    + asing_pt_ts2 + asing_pt_ts1 + asing_pt_ts) > 0
+            -- Hanya tampilkan program studi yang benar-benar punya mahasiswa
+            -- asing aktif pada salah satu dari TS-2/TS-1/TS.
+            HAVING (mhs_aktif_ts2 + mhs_aktif_ts1 + mhs_aktif_ts) > 0
             ORDER BY
                 ps.nama_program_studi ASC
         ");
