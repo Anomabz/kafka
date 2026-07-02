@@ -19,22 +19,33 @@ class MahasiswaController extends Controller
         $ts1 = '2024'; 
         $ts2 = '2023'; 
 
+        // "Aktif pada tahun X" = sudah terdaftar (id_periode_masuk <= X) dan
+        // belum keluar sebelum tahun X berakhir (id_periode_keluar kosong,
+        // atau keluarnya di tahun setelah X). Dulu kolom ini cuma mengecek
+        // id_periode_masuk = X, yang sebenarnya menghitung "mahasiswa baru
+        // angkatan X", bukan total mahasiswa aktif di prodi pada tahun itu -
+        // angkanya jauh lebih kecil dari yang seharusnya (lihat histori commit
+        // untuk perbandingan angka sebelum/sesudah perbaikan ini).
+        $aktifTs2 = "SUBSTRING(lrpm.id_periode_masuk, 1, 4) <= '$ts2' AND (lrpm.id_periode_keluar IS NULL OR lrpm.id_periode_keluar = '' OR SUBSTRING(lrpm.id_periode_keluar, 1, 4) > '$ts2')";
+        $aktifTs1 = "SUBSTRING(lrpm.id_periode_masuk, 1, 4) <= '$ts1' AND (lrpm.id_periode_keluar IS NULL OR lrpm.id_periode_keluar = '' OR SUBSTRING(lrpm.id_periode_keluar, 1, 4) > '$ts1')";
+        $aktifTs  = "SUBSTRING(lrpm.id_periode_masuk, 1, 4) <= '$ts'  AND (lrpm.id_periode_keluar IS NULL OR lrpm.id_periode_keluar = '' OR SUBSTRING(lrpm.id_periode_keluar, 1, 4) > '$ts')";
+
         $data = DB::select("
-            SELECT 
+            SELECT
                 ps.id_prodi, -- ID Prodi (UUID) dimunculkan sebagai modal link klik untuk Frontend
-                
+
                 -- KOLOM 2: Program Studi (Gabungan Jenjang + Nama)
                 CONCAT(ps.nama_jenjang_pendidikan, ' ', ps.nama_program_studi) AS program_studi,
-                
-                -- KOLOM 3, 4, 5: Jumlah Mahasiswa Aktif per Angkatan (Total Lokal + Asing)
-                COALESCE(SUM(CASE WHEN SUBSTRING(lrpm.id_periode_masuk, 1, 4) = '$ts2' THEN 1 ELSE 0 END), 0) AS mhs_aktif_ts2,
-                COALESCE(SUM(CASE WHEN SUBSTRING(lrpm.id_periode_masuk, 1, 4) = '$ts1' THEN 1 ELSE 0 END), 0) AS mhs_aktif_ts1,
-                COALESCE(SUM(CASE WHEN SUBSTRING(lrpm.id_periode_masuk, 1, 4) = '$ts'  THEN 1 ELSE 0 END), 0) AS mhs_aktif_ts,
 
-                -- KOLOM 6, 7, 8: Jumlah Mahasiswa Asing Penuh Waktu (Full-time) - Filter ID Negara Ketat
-                COALESCE(SUM(CASE WHEN SUBSTRING(lrpm.id_periode_masuk, 1, 4) = '$ts2' AND n.id_negara IS NOT NULL AND n.id_negara <> 'ID' THEN 1 ELSE 0 END), 0) AS asing_ft_ts2,
-                COALESCE(SUM(CASE WHEN SUBSTRING(lrpm.id_periode_masuk, 1, 4) = '$ts1' AND n.id_negara IS NOT NULL AND n.id_negara <> 'ID' THEN 1 ELSE 0 END), 0) AS asing_ft_ts1,
-                COALESCE(SUM(CASE WHEN SUBSTRING(lrpm.id_periode_masuk, 1, 4) = '$ts'  AND n.id_negara IS NOT NULL AND n.id_negara <> 'ID' THEN 1 ELSE 0 END), 0) AS asing_ft_ts,
+                -- KOLOM 3, 4, 5: Jumlah Mahasiswa Aktif pada TS-2/TS-1/TS (Total Lokal + Asing)
+                COALESCE(SUM(CASE WHEN $aktifTs2 THEN 1 ELSE 0 END), 0) AS mhs_aktif_ts2,
+                COALESCE(SUM(CASE WHEN $aktifTs1 THEN 1 ELSE 0 END), 0) AS mhs_aktif_ts1,
+                COALESCE(SUM(CASE WHEN $aktifTs  THEN 1 ELSE 0 END), 0) AS mhs_aktif_ts,
+
+                -- KOLOM 6, 7, 8: Jumlah Mahasiswa Asing Penuh Waktu (Full-time) - aktif pada tahun terkait + Filter ID Negara Ketat
+                COALESCE(SUM(CASE WHEN $aktifTs2 AND n.id_negara IS NOT NULL AND n.id_negara <> 'ID' THEN 1 ELSE 0 END), 0) AS asing_ft_ts2,
+                COALESCE(SUM(CASE WHEN $aktifTs1 AND n.id_negara IS NOT NULL AND n.id_negara <> 'ID' THEN 1 ELSE 0 END), 0) AS asing_ft_ts1,
+                COALESCE(SUM(CASE WHEN $aktifTs  AND n.id_negara IS NOT NULL AND n.id_negara <> 'ID' THEN 1 ELSE 0 END), 0) AS asing_ft_ts,
 
                 -- KOLOM 9, 10, 11: Jumlah Mahasiswa Asing Paruh Waktu (Part-time)
                 0 AS asing_pt_ts2,
@@ -42,20 +53,18 @@ class MahasiswaController extends Controller
                 0 AS asing_pt_ts
 
             FROM program_studi ps
-            LEFT JOIN list_riwayat_pendidikan_mahasiswa lrpm 
+            LEFT JOIN list_riwayat_pendidikan_mahasiswa lrpm
                 ON lrpm.id_prodi = ps.id_prodi
-            LEFT JOIN list_mahasiswa lm 
-                ON lm.id_registrasi_mahasiswa = lrpm.id_registrasi_mahasiswa
-            LEFT JOIN biodata_mahasiswa bm 
+            LEFT JOIN biodata_mahasiswa bm
                 ON bm.id_mahasiswa = lrpm.id_mahasiswa
-            LEFT JOIN negara n 
+            LEFT JOIN negara n
                 ON n.id_negara = bm.id_negara
             WHERE ps.nama_program_studi IS NOT NULL
-            GROUP BY 
+            GROUP BY
                 ps.id_prodi,
                 ps.nama_program_studi,
                 ps.nama_jenjang_pendidikan
-            ORDER BY 
+            ORDER BY
                 ps.nama_program_studi ASC
         ");
 
@@ -91,15 +100,17 @@ class MahasiswaController extends Controller
         }
 
         $query = "
-            SELECT 
+            SELECT
                 lrpm.nim,
-                lm.nama_mahasiswa AS nama,
+                lrpm.nama_mahasiswa AS nama,
                 CONCAT(ps.nama_jenjang_pendidikan, ' ', ps.nama_program_studi) AS program_studi,
                 SUBSTRING(lrpm.id_periode_masuk, 1, 4) AS angkatan,
-                lm.nama_status_mahasiswa AS status,
+                CASE
+                    WHEN lrpm.id_periode_keluar IS NULL OR lrpm.id_periode_keluar = '' THEN 'Aktif'
+                    ELSE COALESCE(lrpm.keterangan_keluar, 'Keluar')
+                END AS status,
                 IFNULL(n.nama_negara, 'Belum Diisi') AS kewarganegaraan
             FROM list_riwayat_pendidikan_mahasiswa lrpm
-            LEFT JOIN list_mahasiswa lm ON lm.id_registrasi_mahasiswa = lrpm.id_registrasi_mahasiswa
             LEFT JOIN program_studi ps ON ps.id_prodi = lrpm.id_prodi
             LEFT JOIN biodata_mahasiswa bm ON bm.id_mahasiswa = lrpm.id_mahasiswa
             LEFT JOIN negara n ON n.id_negara = bm.id_negara
@@ -112,19 +123,23 @@ class MahasiswaController extends Controller
         if ($idProdi) {
             $query .= " AND lrpm.id_prodi = ? ";
             $params[] = $idProdi;
-        } 
+        }
         // Pilihan Filter 2: Jika menggunakan Nama Prodi (Menggunakan klausa LIKE agar fleksibel)
         elseif ($namaProdi) {
             $query .= " AND CONCAT(ps.nama_jenjang_pendidikan, ' ', ps.nama_program_studi) LIKE ? ";
             $params[] = '%' . $namaProdi . '%';
         }
 
-        // Jalankan filter 3 tahun terakhir (hanya memproses angkatan 2023, 2024, dan 2025)
-        $query .= " AND SUBSTRING(lrpm.id_periode_masuk, 1, 4) IN ('2023', '2024', '2025') ";
-
-        // Filter Tambahan: Spesifik per tahun tertentu jika diklik pada kolom TS / TS-1 / TS-2 tertentu
+        // Spesifik per tahun TS / TS-1 / TS-2 yang diklik. "Aktif pada tahun X"
+        // harus sama persis dengan logika di data_mahasiswa_asing() supaya
+        // jumlah baris di sini selalu cocok dengan angka yang diklik: sudah
+        // terdaftar sebelum/di tahun X, dan belum keluar sebelum tahun X
+        // berakhir. Tidak dibatasi ke angkatan 2023-2025 seperti sebelumnya,
+        // karena mahasiswa angkatan lama yang masih aktif di tahun X tetap
+        // harus muncul.
         if ($tahun) {
-            $query .= " AND SUBSTRING(lrpm.id_periode_masuk, 1, 4) = ? ";
+            $query .= " AND SUBSTRING(lrpm.id_periode_masuk, 1, 4) <= ? AND (lrpm.id_periode_keluar IS NULL OR lrpm.id_periode_keluar = '' OR SUBSTRING(lrpm.id_periode_keluar, 1, 4) > ?) ";
+            $params[] = $tahun;
             $params[] = $tahun;
         }
 
@@ -138,7 +153,7 @@ class MahasiswaController extends Controller
         $query .= " AND n.id_negara IS NOT NULL ";
         $query .= " AND n.id_negara <> 'ID' ";
 
-        $query .= " ORDER BY lrpm.id_periode_masuk DESC, lm.nama_mahasiswa ASC ";
+        $query .= " ORDER BY lrpm.id_periode_masuk DESC, lrpm.nama_mahasiswa ASC ";
         
         $data = DB::select($query, $params);
 
