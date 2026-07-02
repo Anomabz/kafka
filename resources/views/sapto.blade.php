@@ -28,7 +28,7 @@
     <section id="placeholder-page" class="hidden rounded-xl border border-line bg-surface p-6">
         <h2 id="placeholder-title" class="text-[16px] font-bold text-ink"></h2>
         <p class="mt-2 text-[13px] text-muted">
-            Halaman ini belum dikembangkan pada tahap pertama. Fokus tahap pertama adalah Tabel 3.a.2) Dosen Pembimbing Utama Tugas Akhir testing.
+            Halaman ini belum dikembangkan pada tahap pertama. Fokus tahap pertama adalah Tabel 3.a.2) Dosen Pembimbing Utama Tugas Akhir testing lagi.
         </p>
     </section>
 @endsection
