@@ -8,6 +8,7 @@
         'cap' => '<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m22 10-10-5L2 10l10 5 10-5Z"/><path d="M6 12v5c0 1.66 2.69 3 6 3s6-1.34 6-3v-5"/></svg>',
         'swap' => '<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/></svg>',
         'calendar' => '<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>',
+        'globe' => '<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z"/></svg>',
     ];
 @endphp
 
@@ -25,6 +26,17 @@
         @include('components.table-panel')
     </section>
 
+    <section id="mahasiswa-asing-page" class="hidden">
+        <div class="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            @include('components.metric-card', ['id' => 'ma-metric-prodi', 'label' => 'Total program studi', 'icon' => $icons['cap'], 'tint' => 'accent'])
+            @include('components.metric-card', ['id' => 'ma-metric-aktif', 'label' => 'Total mahasiswa aktif (TS)', 'icon' => $icons['users'], 'tint' => 'info'])
+            @include('components.metric-card', ['id' => 'ma-metric-ft', 'label' => 'Mahasiswa asing penuh waktu (TS)', 'icon' => $icons['globe'], 'tint' => 'warn'])
+            @include('components.metric-card', ['id' => 'ma-metric-pt', 'label' => 'Mahasiswa asing paruh waktu (TS)', 'icon' => $icons['calendar'], 'tint' => 'slate'])
+        </div>
+
+        @include('components.mahasiswa-asing-panel')
+    </section>
+
     <section id="placeholder-page" class="hidden rounded-xl border border-line bg-surface p-6">
         <h2 id="placeholder-title" class="text-[16px] font-bold text-ink"></h2>
         <p class="mt-2 text-[13px] text-muted">
@@ -40,7 +52,6 @@
 @section('scripts')
 <script>
     const tables = @json($tables);
-    const activeTableId = 'dosen-pembimbing-ta';
     const currentYear = new Date().getFullYear();
     const state = {
         role: 'universitas',
@@ -77,7 +88,28 @@
         detailSubtitle: document.getElementById('detail-subtitle'),
         detailBody: document.getElementById('detail-body'),
         closeDrawer: document.getElementById('close-drawer'),
+        menuSearch: document.getElementById('menu-search'),
+        menuGroups: document.querySelectorAll('[data-menu-group]'),
+        menuEmpty: document.getElementById('menu-empty'),
+        appShell: document.getElementById('app-shell'),
+        sidebar: document.getElementById('sidebar'),
+        sidebarBackdrop: document.getElementById('sidebar-backdrop'),
+        sidebarToggle: document.getElementById('sidebar-toggle'),
+        sidebarClose: document.getElementById('sidebar-close'),
+        maPage: document.getElementById('mahasiswa-asing-page'),
+        maTableStatus: document.getElementById('ma-table-status'),
+        maTableHead: document.getElementById('ma-table-head'),
+        maTableBody: document.getElementById('ma-table-body'),
+        maTableFoot: document.getElementById('ma-table-foot'),
+        maMetricProdi: document.getElementById('ma-metric-prodi'),
+        maMetricAktif: document.getElementById('ma-metric-aktif'),
+        maMetricFt: document.getElementById('ma-metric-ft'),
+        maMetricPt: document.getElementById('ma-metric-pt'),
     };
+
+    const metricEls = [els.metricDosen, els.metricPs, els.metricPsLain, els.metricTs];
+    const maMetricEls = [els.maMetricProdi, els.maMetricAktif, els.maMetricFt, els.maMetricPt];
+    let maSummary = null;
 
     function initTsOptions() {
         const years = [];
@@ -271,9 +303,14 @@
     }
 
     function setLoading() {
+        metricEls.forEach((el) => el.classList.add('is-loading'));
         els.tableStatus.textContent = 'Memuat data...';
         els.tableHead.innerHTML = '';
-        els.tableBody.innerHTML = `<tr><td class="sp-empty-row" colspan="12">Memuat data...</td></tr>`;
+        els.tableBody.innerHTML = Array.from({ length: 6 }).map(() => `
+            <tr>
+                <td class="sp-skeleton-td" colspan="12"><div class="sp-skeleton-bar w-full max-w-md"></div></td>
+            </tr>
+        `).join('');
         els.tableFoot.innerHTML = '';
     }
 
@@ -284,6 +321,7 @@
         const psTotal = sumYearCounts(totals.ps_diakreditasi);
         const psLainTotal = sumYearCounts(totals.ps_lain_pt);
 
+        metricEls.forEach((el) => el.classList.remove('is-loading'));
         els.metricDosen.textContent = rows.length;
         els.metricPs.textContent = psTotal;
         els.metricPsLain.textContent = psLainTotal;
@@ -376,6 +414,7 @@
     }
 
     function renderError(message) {
+        metricEls.forEach((el) => el.classList.remove('is-loading'));
         els.metricDosen.textContent = '0';
         els.metricPs.textContent = '0';
         els.metricPsLain.textContent = '0';
@@ -453,6 +492,219 @@
         `).join('');
     }
 
+    async function loadMahasiswaAsing() {
+        setMaLoading();
+
+        try {
+            const payload = await fetchJson('/sapto/mahasiswa-asing');
+
+            if (!payload.success) {
+                throw new Error(payload.message || 'Permintaan data gagal.');
+            }
+
+            maSummary = payload;
+            renderMaSummary();
+        } catch (error) {
+            renderMaError(error.message);
+        }
+    }
+
+    function setMaLoading() {
+        maMetricEls.forEach((el) => el.classList.add('is-loading'));
+        els.maTableStatus.textContent = 'Memuat data...';
+        els.maTableHead.innerHTML = '';
+        els.maTableBody.innerHTML = Array.from({ length: 6 }).map(() => `
+            <tr>
+                <td class="sp-skeleton-td" colspan="11"><div class="sp-skeleton-bar w-full max-w-md"></div></td>
+            </tr>
+        `).join('');
+        els.maTableFoot.innerHTML = '';
+    }
+
+    function renderMaSummary() {
+        const rows = maSummary.data || [];
+        const totals = maRowTotals(rows);
+
+        maMetricEls.forEach((el) => el.classList.remove('is-loading'));
+        els.maMetricProdi.textContent = rows.length;
+        els.maMetricAktif.textContent = formatNumber(totals.aktif.ts);
+        els.maMetricFt.textContent = formatNumber(totals.ft.ts);
+        els.maMetricPt.textContent = formatNumber(totals.pt.ts);
+        els.maTableStatus.textContent = rows.length ? `${rows.length} program studi` : 'Belum ada data';
+
+        renderMaTable(rows, totals);
+    }
+
+    function maRowTotals(rows) {
+        const totals = {
+            aktif: { ts_2: 0, ts_1: 0, ts: 0 },
+            ft: { ts_2: 0, ts_1: 0, ts: 0 },
+            pt: { ts_2: 0, ts_1: 0, ts: 0 },
+        };
+
+        rows.forEach((row) => {
+            totals.aktif.ts_2 += Number(row.mhs_aktif_ts2 || 0);
+            totals.aktif.ts_1 += Number(row.mhs_aktif_ts1 || 0);
+            totals.aktif.ts += Number(row.mhs_aktif_ts || 0);
+            totals.ft.ts_2 += Number(row.asing_ft_ts2 || 0);
+            totals.ft.ts_1 += Number(row.asing_ft_ts1 || 0);
+            totals.ft.ts += Number(row.asing_ft_ts || 0);
+            totals.pt.ts_2 += Number(row.asing_pt_ts2 || 0);
+            totals.pt.ts_1 += Number(row.asing_pt_ts1 || 0);
+            totals.pt.ts += Number(row.asing_pt_ts || 0);
+        });
+
+        return totals;
+    }
+
+    function renderMaTable(rows, totals) {
+        const y = maSummary.tahun_akademik || { ts_2: '-', ts_1: '-', ts: '-' };
+
+        els.maTableHead.innerHTML = `
+            <tr>
+                <th rowspan="2" class="sp-th">No</th>
+                <th rowspan="2" class="sp-th">Program Studi</th>
+                <th class="sp-th sp-th-group" colspan="3">Jumlah Mahasiswa Aktif</th>
+                <th class="sp-th sp-th-group" colspan="3">Jumlah Mahasiswa Asing Penuh Waktu (Full-time)</th>
+                <th class="sp-th sp-th-group" colspan="3">Jumlah Mahasiswa Asing Paruh Waktu (Part-time)</th>
+            </tr>
+            <tr>
+                <th class="sp-th sp-th-num">TS-2 (${y.ts_2})</th>
+                <th class="sp-th sp-th-num">TS-1 (${y.ts_1})</th>
+                <th class="sp-th sp-th-num">TS (${y.ts})</th>
+                <th class="sp-th sp-th-num">TS-2 (${y.ts_2})</th>
+                <th class="sp-th sp-th-num">TS-1 (${y.ts_1})</th>
+                <th class="sp-th sp-th-num">TS (${y.ts})</th>
+                <th class="sp-th sp-th-num">TS-2 (${y.ts_2})</th>
+                <th class="sp-th sp-th-num">TS-1 (${y.ts_1})</th>
+                <th class="sp-th sp-th-num">TS (${y.ts})</th>
+            </tr>
+        `;
+
+        if (!rows.length) {
+            els.maTableBody.innerHTML = `<tr><td class="sp-empty-row" colspan="11">Belum ada data mahasiswa asing untuk periode ini.</td></tr>`;
+            els.maTableFoot.innerHTML = maTotalsRow(totals, true);
+            return;
+        }
+
+        els.maTableBody.innerHTML = rows.map((row, index) => `
+            <tr class="sp-row">
+                <td class="sp-td">${index + 1}</td>
+                <td class="sp-td">${escapeHtml(row.program_studi || '-')}</td>
+                <td class="sp-td sp-td-num">${formatNumber(row.mhs_aktif_ts2)}</td>
+                <td class="sp-td sp-td-num">${formatNumber(row.mhs_aktif_ts1)}</td>
+                <td class="sp-td sp-td-num">${formatNumber(row.mhs_aktif_ts)}</td>
+                ${maNumberChip(row, 'asing_ft_ts2', y.ts_2)}
+                ${maNumberChip(row, 'asing_ft_ts1', y.ts_1)}
+                ${maNumberChip(row, 'asing_ft_ts', y.ts)}
+                <td class="sp-td sp-td-num text-muted" title="Data paruh waktu belum tersedia di sumber data saat ini">${formatNumber(row.asing_pt_ts2)}</td>
+                <td class="sp-td sp-td-num text-muted" title="Data paruh waktu belum tersedia di sumber data saat ini">${formatNumber(row.asing_pt_ts1)}</td>
+                <td class="sp-td sp-td-num text-muted" title="Data paruh waktu belum tersedia di sumber data saat ini">${formatNumber(row.asing_pt_ts)}</td>
+            </tr>
+        `).join('');
+        els.maTableFoot.innerHTML = maTotalsRow(totals, false);
+    }
+
+    function maNumberChip(row, field, tahun) {
+        return `
+            <td class="sp-td sp-td-num">
+                <button type="button" class="sp-number-chip" data-id-prodi="${escapeAttr(row.id_prodi || '')}" data-program-studi="${escapeAttr(row.program_studi || '')}" data-tahun="${tahun}">
+                    ${formatNumber(row[field])}
+                </button>
+            </td>
+        `;
+    }
+
+    function maTotalsRow(totals, empty) {
+        return `
+            <tr>
+                <td class="sp-foot-td" colspan="2">${empty ? 'Ringkasan' : 'Total'}</td>
+                <td class="sp-foot-td sp-td-num">${formatNumber(totals.aktif.ts_2)}</td>
+                <td class="sp-foot-td sp-td-num">${formatNumber(totals.aktif.ts_1)}</td>
+                <td class="sp-foot-td sp-td-num">${formatNumber(totals.aktif.ts)}</td>
+                <td class="sp-foot-td sp-td-num">${formatNumber(totals.ft.ts_2)}</td>
+                <td class="sp-foot-td sp-td-num">${formatNumber(totals.ft.ts_1)}</td>
+                <td class="sp-foot-td sp-td-num">${formatNumber(totals.ft.ts)}</td>
+                <td class="sp-foot-td sp-td-num">${formatNumber(totals.pt.ts_2)}</td>
+                <td class="sp-foot-td sp-td-num">${formatNumber(totals.pt.ts_1)}</td>
+                <td class="sp-foot-td sp-td-num">${formatNumber(totals.pt.ts)}</td>
+            </tr>
+        `;
+    }
+
+    function renderMaError(message) {
+        maMetricEls.forEach((el) => el.classList.remove('is-loading'));
+        maMetricEls.forEach((el) => { el.textContent = '0'; });
+        els.maTableStatus.innerHTML = `<span class="font-medium text-warn">Perlu perhatian</span>`;
+        els.maTableHead.innerHTML = '';
+        els.maTableBody.innerHTML = `
+            <tr>
+                <td colspan="11" class="p-4">
+                    <div class="sp-alert-warn" role="alert">
+                        <svg class="mt-0.5 h-5 w-5 shrink-0 text-warn" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <path d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"
+                                  stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                        <div>
+                            <div class="font-semibold">Data belum bisa ditampilkan</div>
+                            <p class="mt-0.5 text-warn/90">${escapeHtml(message)}</p>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        `;
+        els.maTableFoot.innerHTML = '';
+    }
+
+    async function openMaDetail(button) {
+        const params = new URLSearchParams({ tahun: button.dataset.tahun });
+
+        if (button.dataset.idProdi) {
+            params.set('id_prodi', button.dataset.idProdi);
+        } else {
+            params.set('nama_prodi', button.dataset.programStudi);
+        }
+
+        els.detailTitle.textContent = button.dataset.programStudi || 'Detail Data';
+        els.detailSubtitle.textContent = `Mahasiswa Asing Penuh Waktu - TS ${button.dataset.tahun}`;
+        els.detailBody.innerHTML = '<div class="text-sm text-muted">Memuat detail...</div>';
+        showDrawer();
+
+        try {
+            const payload = await fetchJson(`/sapto/mahasiswa-asing/detail?${params}`);
+
+            if (!payload.success) {
+                throw new Error(payload.message || 'Permintaan detail gagal.');
+            }
+
+            renderMaDetail(payload);
+        } catch (error) {
+            els.detailBody.innerHTML = `<div class="text-sm text-warn">${escapeHtml(error.message)}</div>`;
+        }
+    }
+
+    function renderMaDetail(payload) {
+        const items = payload.data || [];
+
+        if (!items.length) {
+            els.detailBody.innerHTML = '<div class="text-sm text-muted">Tidak ada mahasiswa asing untuk program studi dan tahun ini.</div>';
+            return;
+        }
+
+        els.detailBody.innerHTML = items.map((item) => `
+            <article class="rounded-xl border border-line p-3.5">
+                <strong class="mb-1.5 block text-[14px] text-ink">${escapeHtml(item.nama || '-')}</strong>
+                <div class="grid grid-cols-2 gap-x-3 gap-y-2 text-[13px] text-slate-600">
+                    <div><span class="block text-[11px] text-muted">NIM</span>${escapeHtml(item.nim || '-')}</div>
+                    <div><span class="block text-[11px] text-muted">Angkatan</span>${escapeHtml(String(item.angkatan || '-'))}</div>
+                    <div class="col-span-2"><span class="block text-[11px] text-muted">Program Studi</span>${escapeHtml(item.program_studi || '-')}</div>
+                    <div><span class="block text-[11px] text-muted">Status</span>${escapeHtml(item.status || '-')}</div>
+                    <div><span class="block text-[11px] text-muted">Kewarganegaraan</span>${escapeHtml(item.kewarganegaraan || '-')}</div>
+                </div>
+            </article>
+        `).join('');
+    }
+
     function showDrawer() {
         els.drawer.classList.add('is-open');
         els.drawerBackdrop.classList.add('is-open');
@@ -463,6 +715,23 @@
         els.drawerBackdrop.classList.remove('is-open');
     }
 
+    const TABLE_HANDLERS = {
+        'dosen-pembimbing-ta': {
+            description: 'Data jumlah mahasiswa yang dibimbing oleh dosen sebagai pembimbing utama tugas akhir berdasarkan program studi dan tahun TS.',
+            show() {
+                els.tablePage.classList.remove('hidden');
+                loadSummary();
+            },
+        },
+        'mahasiswa-asing': {
+            description: 'Rekapitulasi jumlah mahasiswa aktif dan mahasiswa asing (penuh waktu/paruh waktu) per program studi, mengikuti format Tabel 2.b BAN-PT.',
+            show() {
+                els.maPage.classList.remove('hidden');
+                loadMahasiswaAsing();
+            },
+        },
+    };
+
     function activateTable(tableId) {
         document.querySelectorAll('.menu-item').forEach((button) => {
             button.classList.toggle('is-active', button.dataset.tableId === tableId);
@@ -471,14 +740,17 @@
         const table = tables.find((item) => item.id === tableId);
         els.pageTitle.textContent = table?.name || 'SAPTO';
 
-        if (tableId === activeTableId) {
-            els.pageDescription.textContent = 'Data jumlah mahasiswa yang dibimbing oleh dosen sebagai pembimbing utama tugas akhir berdasarkan program studi dan tahun TS.';
-            els.tablePage.classList.remove('hidden');
-            els.placeholderPage.classList.add('hidden');
-            loadSummary();
+        els.tablePage.classList.add('hidden');
+        els.maPage.classList.add('hidden');
+        els.placeholderPage.classList.add('hidden');
+
+        const handler = TABLE_HANDLERS[tableId];
+
+        if (handler) {
+            els.pageDescription.textContent = handler.description;
+            handler.show();
         } else {
             els.pageDescription.textContent = 'Tahap pertama pengembangan SAPTO.';
-            els.tablePage.classList.add('hidden');
             els.placeholderPage.classList.remove('hidden');
             els.placeholderTitle.textContent = table?.name || 'Tabel SAPTO';
         }
@@ -564,12 +836,59 @@
         }
     });
 
+    els.maTableBody.addEventListener('click', (event) => {
+        const button = event.target.closest('.sp-number-chip');
+
+        if (button) {
+            openMaDetail(button);
+        }
+    });
+
     document.querySelectorAll('.menu-item').forEach((button) => {
         button.addEventListener('click', () => activateTable(button.dataset.tableId));
     });
 
     els.closeDrawer.addEventListener('click', closeDrawer);
     els.drawerBackdrop.addEventListener('click', closeDrawer);
+
+    function toggleSidebar() {
+        els.sidebar.classList.toggle('is-open');
+        els.sidebarBackdrop.classList.toggle('is-open');
+        els.appShell.classList.toggle('sidebar-closed');
+        els.sidebarToggle.setAttribute('aria-expanded', String(els.sidebar.classList.contains('is-open') || !els.appShell.classList.contains('sidebar-closed')));
+    }
+
+    function closeSidebarOffCanvas() {
+        els.sidebar.classList.remove('is-open');
+        els.sidebarBackdrop.classList.remove('is-open');
+    }
+
+    els.sidebarToggle.addEventListener('click', toggleSidebar);
+    els.sidebarClose.addEventListener('click', closeSidebarOffCanvas);
+    els.sidebarBackdrop.addEventListener('click', closeSidebarOffCanvas);
+
+    els.menuSearch.addEventListener('input', () => {
+        const query = els.menuSearch.value.trim().toLowerCase();
+        let visibleCount = 0;
+
+        els.menuGroups.forEach((group) => {
+            let groupHasMatch = false;
+
+            group.querySelectorAll('.menu-item').forEach((button) => {
+                const matches = !query || button.dataset.search.includes(query);
+                button.classList.toggle('hidden', !matches);
+
+                if (matches) {
+                    groupHasMatch = true;
+                    visibleCount += 1;
+                }
+            });
+
+            group.classList.toggle('hidden', !groupHasMatch);
+        });
+
+        els.menuEmpty.classList.toggle('hidden', visibleCount > 0);
+    });
 
     initTsOptions();
     loadFakultas()

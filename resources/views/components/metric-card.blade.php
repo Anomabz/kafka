@@ -22,7 +22,7 @@
     <div class="flex items-start justify-between gap-3 pl-2">
         <div class="min-w-0">
             <div class="text-[12px] leading-snug text-muted">{{ $label }}</div>
-            <div id="{{ $id }}" class="mt-2 text-[26px] font-extrabold leading-none text-ink">0</div>
+            <div id="{{ $id }}" class="metric-value is-loading mt-2 text-[26px] font-extrabold leading-none text-ink">0</div>
         </div>
         <div class="grid h-9 w-9 shrink-0 place-items-center rounded-lg {{ $t['chip'] }}">
             {!! $icon !!}
