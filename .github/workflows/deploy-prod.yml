@@ -1,6 +1,5 @@
 name: Sapto Production Deployment Pipeline
 
-# 1. Robot ini HANYA akan berjalan saat Paduka melakukan PUSH ke branch dev-prod
 on:
   push:
     branches:
@@ -11,24 +10,32 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 2. Menghubungkan GitHub ke server sapto-dev-servers via SSH
+      # 1. Pasang cloudflared di server virtual GitHub Actions
+      - name: Install Cloudflare Client
+        run: |
+          sudo mkdir -p --mode=0755 /usr/share/keyrings
+          curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
+          echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared general main" | sudo tee /etc/apt/sources.list.p/cloudflared.list
+          sudo apt-get update && sudo apt-get install cloudflared -y
+
+      # 2. Beritahu SSH GitHub agar melewatkan koneksi ke domain Paduka melalui cloudflared
+      - name: Configure SSH for Cloudflare Tunnel
+        run: |
+          mkdir -p ~/.ssh
+          echo "Host ${{ secrets.SSH_HOST }}" >> ~/.ssh/config
+          echo "  ProxyCommand /usr/bin/cloudflared access ssh --hostname %h" >> ~/.ssh/config
+
+      # 3. Jalankan deploy seperti biasa, sekarang jalurnya sudah tembus ke kampus!
       - name: Koneksi ke Server dan Update Folder sapto-prod
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USERNAME }}
-          password: ${{ secrets.SSH_PASSWORD }}
+          host: ${{ secrets.SSH_HOST }}        # Tetap isi dengan: server.simiku.tech
+          username: ${{ secrets.SSH_USERNAME }}  # Tetap isi dengan: sapto
+          password: ${{ secrets.SSH_PASSWORD }}  # Password sapto Paduka
           port: 22
           script: |
-            # Masuk ke folder produksi yang tertera di gambar server Paduka
             cd /home/sapto/sapto-prod
-            
-            # Tarik kode spesifik dari branch dev-prod
             git pull origin dev-prod --no-rebase
-            
-            # Bangun ulang container Docker produksi secara background
             docker compose up -d --build
-            
-            # Jalankan instalasi dependensi dan build aset frontend Laravel di dalam container
             docker compose exec -T app npm install
             docker compose exec -T app npm run build
