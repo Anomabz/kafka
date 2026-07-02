@@ -64,6 +64,12 @@ class MahasiswaController extends Controller
                 ps.id_prodi,
                 ps.nama_program_studi,
                 ps.nama_jenjang_pendidikan
+            -- Ini Tabel 2.b MAHASISWA ASING: hanya tampilkan program studi yang
+            -- benar-benar punya mahasiswa asing (full-time/part-time) aktif pada
+            -- salah satu dari TS-2/TS-1/TS. Kolom 'Jumlah Mahasiswa Aktif' tetap
+            -- total (lokal + asing) sebagai denominator sesuai format borang.
+            HAVING (asing_ft_ts2 + asing_ft_ts1 + asing_ft_ts
+                    + asing_pt_ts2 + asing_pt_ts1 + asing_pt_ts) > 0
             ORDER BY
                 ps.nama_program_studi ASC
         ");
