@@ -3,7 +3,123 @@
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
 
+/*
+ * SAPTO design tokens.
+ * Single-family type system (Inter) — this is a data-dense accreditation
+ * console read by staff all day, not a marketing page, so hierarchy comes
+ * from weight/size, not a display/body font pairing.
+ */
 @theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
-        'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+    --color-ink: #0f172a;
+    --color-muted: #64748b;
+    --color-canvas: #f3f5f9;
+    --color-surface: #ffffff;
+    --color-line: #e2e8f0;
+
+    --color-navy-950: #0a1b2e;
+    --color-navy-900: #0f2438;
+    --color-navy-800: #16324c;
+
+    --color-accent: #0f9d8b;
+    --color-accent-dark: #0b7566;
+    --color-accent-soft: #e3f5f2;
+    --color-accent-line: #b9e4dd;
+
+    --color-focus: #2f6fed;
+
+    --color-info: #2f6fed;
+    --color-info-soft: #eaf1ff;
+
+    --color-warn: #b45309;
+    --color-warn-soft: #fff4e5;
+    --color-warn-line: #fbd9a5;
+
+    --color-slate-soft: #eef1f5;
+}
+
+/*
+ * Component-layer classes for markup that gets generated inside <script>
+ * template strings (table head/rows, alert states, number chips). Keeping
+ * these as named classes (instead of long inline utility strings inside
+ * JS) keeps the JS readable and keeps one source of truth for the look.
+ */
+@layer components {
+    .sp-th {
+        @apply bg-slate-50 text-[11px] font-bold uppercase tracking-wide text-slate-600 px-3 py-2.5 text-left border-b border-line whitespace-nowrap;
+    }
+
+    .sp-th-group {
+        @apply text-center border-l border-line;
+    }
+
+    .sp-th-num,
+    .sp-td-num {
+        @apply text-right tabular-nums;
+    }
+
+    .sp-td {
+        @apply px-3 py-2.5 border-b border-line text-[13px] text-ink align-middle;
+    }
+
+    .sp-row:hover .sp-td {
+        @apply bg-slate-50/70;
+    }
+
+    .sp-foot-td {
+        @apply px-3 py-2.5 bg-slate-50 text-[13px] font-bold text-ink;
+    }
+
+    .sp-empty-row {
+        @apply px-3 py-10 text-center text-sm text-muted;
+    }
+
+    .sp-number-chip {
+        @apply inline-flex min-w-[36px] justify-center rounded-md border border-accent-line bg-accent-soft
+               px-2.5 py-1 text-[13px] font-medium text-accent-dark tabular-nums cursor-pointer transition
+               hover:border-accent hover:bg-accent/10 focus:outline-none focus:ring-2 focus:ring-accent/30;
+    }
+
+    .sp-alert-warn {
+        @apply flex items-start gap-3 rounded-xl border border-warn-line bg-warn-soft px-4 py-3.5 text-[13px] text-warn;
+    }
+
+    /* Sidebar nav item. Base state + `.is-active` toggled by JS in activateTable(). */
+    .menu-item {
+        @apply relative flex w-full items-center rounded-lg px-3 py-2.5 text-left text-[13px] leading-snug
+               text-slate-300 transition-colors duration-150 hover:bg-white/[0.06] hover:text-white;
+    }
+
+    .menu-item.is-active {
+        @apply bg-navy-800 text-white;
+    }
+
+    .menu-item.is-active::before {
+        content: '';
+        @apply absolute inset-y-1.5 left-0 w-[3px] rounded-full bg-accent;
+    }
+
+    .filter-select {
+        @apply min-h-[38px] w-full rounded-lg border border-slate-300 bg-white px-3 text-[13px] text-ink
+               transition focus:border-focus focus:outline-none focus:ring-2 focus:ring-focus/25
+               disabled:bg-slate-100 disabled:text-slate-500;
+    }
+
+    /* Drawer + backdrop: JS toggles `.is-open`, see showDrawer()/closeDrawer(). */
+    .drawer-backdrop {
+        display: none;
+    }
+
+    .drawer-backdrop.is-open {
+        display: block;
+    }
+
+    .drawer {
+        display: none;
+    }
+
+    .drawer.is-open {
+        display: flex;
+    }
 }
