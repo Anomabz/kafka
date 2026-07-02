@@ -10,13 +10,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Pasang cloudflared di server virtual GitHub Actions
+      # 1. Pasang cloudflared menggunakan modul instan (Anti-Gagal)
       - name: Install Cloudflare Client
-        run: |
-          sudo mkdir -p --mode=0755 /usr/share/keyrings
-          curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
-          echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared general main" | sudo tee /etc/apt/sources.list.p/cloudflared.list
-          sudo apt-get update && sudo apt-get install cloudflared -y
+        uses: cloudflare/cloudflare-service-action@v1
+        with:
+          version: 'latest'
 
       # 2. Beritahu SSH GitHub agar melewatkan koneksi ke domain Paduka melalui cloudflared
       - name: Configure SSH for Cloudflare Tunnel
@@ -25,13 +23,13 @@ jobs:
           echo "Host ${{ secrets.SSH_HOST }}" >> ~/.ssh/config
           echo "  ProxyCommand /usr/bin/cloudflared access ssh --hostname %h" >> ~/.ssh/config
 
-      # 3. Jalankan deploy seperti biasa, sekarang jalurnya sudah tembus ke kampus!
+      # 3. Jalankan deploy ke server kampus Paduka
       - name: Koneksi ke Server dan Update Folder sapto-prod
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.SSH_HOST }}        # Tetap isi dengan: server.simiku.tech
-          username: ${{ secrets.SSH_USERNAME }}  # Tetap isi dengan: sapto
-          password: ${{ secrets.SSH_PASSWORD }}  # Password sapto Paduka
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          password: ${{ secrets.SSH_PASSWORD }}
           port: 22
           script: |
             cd /home/sapto/sapto-prod
