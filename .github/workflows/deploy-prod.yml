@@ -26,12 +26,11 @@ jobs:
       # 3. Eksekusi SSH langsung lewat terminal Runner (Jalur Native)
       - name: Koneksi ke Server Kampus dan Update Proyek
         env:
-          SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+          SSHPASS: ${{ secrets.SSH_PASSWORD }} # <-- SUDAH DIPERBAIKI MENJADI SSHPASS, YANG MULIA!
         run: |
-          # Pasang sshpass agar bisa memasukkan password SSH otomatis tanpa interaksi prompt
           sudo apt-get update && sudo apt-get install -y sshpass
           
-          # Tembus langsung ke server menggunakan SSH bawaan yang mematuhi config tunnel
+          # Sekarang sshpass -e akan langsung mengenali password dari variabel di atas
           sshpass -e ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} << 'EOF'
             cd /home/sapto/sapto-prod
             git pull origin dev-prod --no-rebase
