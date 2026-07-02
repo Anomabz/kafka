@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Api\Sapto\MahasiswaController; // <-- 1. Import Controllernya di sini
 
 Route::get('/', function () {
     return view('sapto', [
@@ -52,4 +53,10 @@ Route::get('/', function () {
             ['id' => 'buku-mahasiswa', 'code' => '8.f.4', 'name' => 'Tabel 8.f.4) Luaran Penelitian yang Dihasilkan Mahasiswa - Buku ber-ISBN, Book Chapter'],
         ],
     ]);
+});
+
+// 2. Taruh jalur web tanpa prefix API lu di sini (Sesuai arahan pembimbing)
+Route::prefix('sapto')->group(function () {
+    Route::get('/mahasiswa-asing', [MahasiswaController::class, 'data_mahasiswa_asing']);
+    Route::get('/mahasiswa-asing/detail', [MahasiswaController::class, 'detail_mahasiswa_asing']); 
 });
