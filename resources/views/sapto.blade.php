@@ -16,7 +16,7 @@
     <section id="table-page">
         @include('components.filter-bar')
 
-        <div class="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="mb-4 grid grid-cols-2 gap-2.5 sm:mb-5 sm:gap-3 lg:grid-cols-4">
             @include('components.metric-card', ['id' => 'metric-dosen', 'labelId' => 'metric-dosen-label', 'label' => 'Total dosen pembimbing', 'icon' => $icons['users'], 'tint' => 'accent'])
             @include('components.metric-card', ['id' => 'metric-ps', 'labelId' => 'metric-ps-label', 'label' => 'Total mahasiswa bimbingan PS diakreditasi', 'icon' => $icons['cap'], 'tint' => 'info'])
             @include('components.metric-card', ['id' => 'metric-ps-lain', 'labelId' => 'metric-ps-lain-label', 'label' => 'Total mahasiswa bimbingan PS lain di PT', 'icon' => $icons['swap'], 'tint' => 'warn'])
@@ -29,7 +29,7 @@
     <section id="mahasiswa-asing-page" class="hidden">
         @include('components.mahasiswa-asing-filter')
 
-        <div class="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="mb-4 grid grid-cols-2 gap-2.5 sm:mb-5 sm:gap-3 lg:grid-cols-4">
             @include('components.metric-card', ['id' => 'ma-metric-prodi', 'label' => 'Total program studi', 'icon' => $icons['cap'], 'tint' => 'accent'])
             @include('components.metric-card', ['id' => 'ma-metric-aktif', 'label' => 'Total mahasiswa asing aktif (TS)', 'icon' => $icons['users'], 'tint' => 'info'])
             @include('components.metric-card', ['id' => 'ma-metric-ft', 'label' => 'Mahasiswa asing penuh waktu (TS)', 'icon' => $icons['globe'], 'tint' => 'warn'])
@@ -1312,6 +1312,8 @@
         themeToggle.addEventListener('click', () => {
             const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
             document.documentElement.setAttribute('data-theme', next);
+            const meta = document.getElementById('theme-color-meta');
+            if (meta) meta.setAttribute('content', next === 'dark' ? '#060a13' : '#e7ecf5');
             try { localStorage.setItem('sapto-theme', next); } catch (e) {}
         });
     }

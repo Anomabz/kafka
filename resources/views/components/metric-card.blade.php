@@ -16,15 +16,15 @@
     $t = $tints[$tint] ?? $tints['slate'];
 @endphp
 
-<div class="glass glass-hover relative overflow-hidden rounded-2xl p-4">
+<div class="glass glass-hover relative overflow-hidden rounded-2xl p-3.5 sm:p-4">
     <span class="absolute inset-y-0 left-0 w-1 {{ $t['bar'] }}" aria-hidden="true"></span>
 
-    <div class="flex items-start justify-between gap-3 pl-2">
+    <div class="flex items-start justify-between gap-2 pl-1.5 sm:gap-3 sm:pl-2">
         <div class="min-w-0">
-            <div @isset($labelId) id="{{ $labelId }}" @endisset class="text-[12px] leading-snug text-muted">{{ $label }}</div>
-            <div id="{{ $id }}" class="metric-value is-loading mt-2 text-[26px] font-extrabold leading-none text-ink">0</div>
+            <div @isset($labelId) id="{{ $labelId }}" @endisset class="text-[11px] leading-snug text-muted sm:text-[12px]">{{ $label }}</div>
+            <div id="{{ $id }}" class="metric-value is-loading mt-1.5 text-[21px] font-extrabold leading-none text-ink sm:mt-2 sm:text-[26px]">0</div>
         </div>
-        <div class="grid h-9 w-9 shrink-0 place-items-center rounded-xl {{ $t['chip'] }}">
+        <div class="grid h-8 w-8 shrink-0 place-items-center rounded-lg sm:h-9 sm:w-9 sm:rounded-xl {{ $t['chip'] }}">
             {!! $icon !!}
         </div>
     </div>

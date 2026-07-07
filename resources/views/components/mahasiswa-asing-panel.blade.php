@@ -19,11 +19,16 @@
         <span id="ma-table-status" class="text-[12px] text-muted">Memuat data...</span>
     </header>
 
-    <div class="w-full overflow-x-auto">
+    <div class="table-scroll">
         <table class="w-full min-w-[980px] border-collapse">
             <thead id="ma-table-head"></thead>
             <tbody id="ma-table-body"></tbody>
             <tfoot id="ma-table-foot"></tfoot>
         </table>
+    </div>
+
+    <div class="swipe-hint">
+        <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+        Geser tabel ke samping untuk melihat kolom lain
     </div>
 </section>

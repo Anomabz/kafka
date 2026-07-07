@@ -6,7 +6,7 @@
     #ma-program-studi di sapto.blade.php. Semua difilter di sisi klien karena
     datanya kecil (hanya prodi yang punya mahasiswa asing).
 --}}
-<div class="glass mb-5 grid grid-cols-1 gap-3 rounded-2xl p-4 sm:grid-cols-2 lg:grid-cols-[1.3fr_1.5fr_1fr]">
+<div class="glass mb-4 grid grid-cols-1 gap-2.5 rounded-2xl p-3.5 sm:mb-5 sm:grid-cols-2 sm:gap-3 sm:p-4 lg:grid-cols-[1.3fr_1.5fr_1fr]">
 
     <div class="flex flex-col gap-1.5" id="ma-fakultas-wrap">
         <label for="ma-fakultas" class="text-[11px] font-semibold uppercase tracking-wide text-muted">Fakultas</label>

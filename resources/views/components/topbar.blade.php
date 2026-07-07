@@ -13,21 +13,21 @@
                 <path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
             </svg>
         </button>
-        <div>
-            <h1 id="page-title" class="text-[19px] font-bold leading-tight text-ink sm:text-[21px]">
+        <div class="min-w-0">
+            <h1 id="page-title" class="text-[17px] font-bold leading-tight text-ink sm:text-[21px]">
                 Tabel 3.a.2) Dosen Pembimbing Utama Tugas Akhir
             </h1>
-            <p id="page-description" class="mt-1 text-[13px] leading-relaxed text-muted">
+            <p id="page-description" class="mt-1 text-[12px] leading-relaxed text-muted sm:text-[13px]">
                 Data jumlah mahasiswa yang dibimbing oleh dosen sebagai pembimbing utama tugas akhir berdasarkan program studi dan tahun TS.
             </p>
         </div>
     </div>
 
-    <div class="flex items-center gap-2.5">
+    <div class="flex w-full items-center gap-2.5 sm:w-auto">
         <button
             type="button"
             id="theme-toggle"
-            class="theme-toggle"
+            class="theme-toggle shrink-0"
             aria-label="Ganti mode terang/gelap"
             title="Ganti mode terang/gelap"
         >
@@ -40,11 +40,11 @@
             </svg>
         </button>
 
-        <label for="role" class="text-[12px] font-semibold text-muted">Role</label>
+        <label for="role" class="shrink-0 text-[12px] font-semibold text-muted">Role</label>
         <select
             id="role"
             aria-label="Role pengguna"
-            class="filter-select w-auto"
+            class="filter-select flex-1 sm:w-auto sm:flex-none"
         >
             <option value="universitas">Pengelola SAPTO Universitas</option>
             <option value="fakultas">Pengelola Fakultas</option>

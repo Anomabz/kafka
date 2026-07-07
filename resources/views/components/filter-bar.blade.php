@@ -1,5 +1,5 @@
 {{-- resources/views/components/filter-bar.blade.php --}}
-<div class="glass mb-5 grid grid-cols-2 gap-3 rounded-2xl p-4 sm:grid-cols-4 lg:grid-cols-[110px_1fr_1.4fr_1fr]">
+<div class="glass mb-4 grid grid-cols-2 gap-2.5 rounded-2xl p-3.5 sm:mb-5 sm:grid-cols-4 sm:gap-3 sm:p-4 lg:grid-cols-[110px_1fr_1.4fr_1fr]">
 
     <div class="flex flex-col gap-1.5">
         <label for="ts" class="text-[11px] font-semibold uppercase tracking-wide text-muted">TS</label>

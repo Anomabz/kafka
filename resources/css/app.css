@@ -185,6 +185,12 @@
  * so the frosted panels have something luminous to refract. Kept on a pseudo
  * element (not body background) so it never scrolls and never repaints panels.
  */
+/* Mobile-first base: stop iOS from inflating text, and honour safe areas. */
+html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+}
+
 body {
     position: relative;
     min-height: 100vh;
@@ -547,5 +553,63 @@ body::before {
 
     .drawer.is-open {
         display: flex;
+    }
+
+    /*
+     * ---- Mobile-first table scrolling ----
+     * BAN-PT tables are wide by nature, so on phones the panel body scrolls
+     * horizontally with momentum. A sticky right-edge fade + a swipe hint make
+     * it obvious there's more to the right instead of it looking cut off.
+     */
+    .table-scroll {
+        position: relative;
+        width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior-x: contain;
+        scrollbar-width: thin;
+        scrollbar-color: var(--color-accent-line) transparent;
+    }
+
+    .table-scroll::-webkit-scrollbar {
+        height: 7px;
+    }
+
+    .table-scroll::-webkit-scrollbar-thumb {
+        background: var(--color-accent-line);
+        border-radius: 9999px;
+    }
+
+    .swipe-hint {
+        color: var(--color-muted);
+        border-top: 1px solid var(--color-line);
+        @apply flex items-center justify-center gap-1.5 px-4 py-2 text-[11px] font-medium sm:hidden;
+    }
+}
+
+/* Denser, touch-friendly tables on phones. */
+@media (max-width: 640px) {
+    .sp-th {
+        padding: 0.45rem 0.6rem;
+        font-size: 10px;
+    }
+
+    .sp-td {
+        padding: 0.5rem 0.6rem;
+        font-size: 12px;
+    }
+
+    .sp-foot-td {
+        padding: 0.5rem 0.6rem;
+    }
+
+    .sp-number-chip {
+        min-height: 34px;
+        min-width: 42px;
+    }
+
+    .sp-page-btn {
+        min-height: 36px;
+        min-width: 36px;
     }
 }
