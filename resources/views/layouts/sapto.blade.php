@@ -7,9 +7,11 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="bg-canvas text-ink font-sans text-[14px] antialiased">
-    <div class="min-h-screen lg:grid lg:grid-cols-[280px_minmax(0,1fr)]">
+    <div id="app-shell">
 
         @include('components.sidebar', ['tables' => $tables, 'activeTableId' => $activeTableId ?? 'dosen-pembimbing-ta'])
+
+        <div id="sidebar-backdrop" class="sidebar-backdrop lg:hidden"></div>
 
         <div class="flex min-w-0 flex-col">
             @include('components.topbar')

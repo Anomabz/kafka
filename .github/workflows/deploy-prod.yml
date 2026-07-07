@@ -1,0 +1,40 @@
+name: Sapto Production Deployment Pipeline
+
+on:
+  push:
+    branches:
+      - dev-prod
+
+jobs:
+  deploy-production:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Unduh dan pasang cloudflared resmi
+      - name: Install Cloudflare Client
+        run: |
+          curl -L --output cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+          sudo dpkg -i cloudflared.deb
+
+      # 2. Konfigurasi SSH Host agar tahu cara pakai cloudflared
+      - name: Configure SSH for Cloudflare Tunnel
+        run: |
+          mkdir -p ~/.ssh
+          echo "Host ${{ secrets.SSH_HOST }}" >> ~/.ssh/config
+          echo "  ProxyCommand /usr/bin/cloudflared access ssh --hostname %h" >> ~/.ssh/config
+
+      # 3. Eksekusi SSH langsung lewat terminal Runner (Jalur Native)
+      - name: Koneksi ke Server Kampus dan Update Proyek
+        env:
+          SSHPASS: ${{ secrets.SSH_PASSWORD }} # <-- SUDAH DIPERBAIKI MENJADI SSHPASS, YANG MULIA!
+        run: |
+          sudo apt-get update && sudo apt-get install -y sshpass
+          
+          # Sekarang sshpass -e akan langsung mengenali password dari variabel di atas
+          sshpass -e ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} << 'EOF'
+            cd /home/sapto/sapto-prod
+            git pull origin dev-prod --no-rebase
+            docker compose up -d --build
+            docker compose exec -T app npm install
+            docker compose exec -T app npm run build
+          EOF

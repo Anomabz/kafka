@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api\Sapto;
 
 use App\Http\Controllers\Controller;
-use App\Services\PangkalanDataApiClient;
+use App\Services\SaptoProgramStudiRepository;
 use App\Support\SaptoUserContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -11,7 +11,7 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class FakultasController extends Controller
 {
-    public function __invoke(Request $request, PangkalanDataApiClient $client): JsonResponse
+    public function __invoke(Request $request, SaptoProgramStudiRepository $client): JsonResponse
     {
         $context = SaptoUserContext::fromRequest($request);
         $fakultas = $client->faculties();
