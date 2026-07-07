@@ -136,9 +136,9 @@ class SaptoMasaStudiRepository
             $cohorts = [];
             foreach ($graduates as $row) {
                 $angkatan = (int) $row->angkatan;
-                $gradYear = (int) substr((string) $row->id_periode_keluar, 0, 4);
+                $gradYear = $this->graduationYear($row);
 
-                if ($gradYear < 2000) {
+                if ($gradYear === null || $gradYear < 2000) {
                     continue;
                 }
 
@@ -197,6 +197,31 @@ class SaptoMasaStudiRepository
 
         // S1, D4/Sarjana Terapan, Profesi, dan lainnya -> pola sarjana.
         return [[6, 5, 4, 3], [6, 5, 4, 3, 2, 1, 0]];
+    }
+
+    /**
+     * Tahun lulus sebuah baris lulusan. Utamakan id_periode_keluar (YYYYS);
+     * bila kosong, pulihkan dari tanggal keluar/yudisium (DD-MM-YYYY atau
+     * YYYY-MM-DD). Selaras dengan SaptoIpkLulusanRepository::graduationYearSql()
+     * agar 8.a & 8.c menghitung lulusan yang sama.
+     */
+    private function graduationYear(object $row): ?int
+    {
+        $periode = (string) ($row->id_periode_keluar ?? '');
+
+        if ($periode !== '') {
+            return (int) substr($periode, 0, 4);
+        }
+
+        foreach ([$row->tanggal_keluar ?? null, $row->tgl_keluar ?? null, $row->tgl_sk_yudisium ?? null] as $tanggal) {
+            $date = $this->parseDate((string) ($tanggal ?? ''));
+
+            if ($date !== null) {
+                return (int) $date->format('Y');
+            }
+        }
+
+        return null;
     }
 
     private function masaStudiTahun(string $masuk, string $keluar): ?float

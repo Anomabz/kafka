@@ -541,16 +541,28 @@ class SaptoDosenPembimbingTaRepository
 
     /**
      * Jenis aktivitas yang dihitung sebagai "Tugas Akhir" pada Tabel 3.a.2:
-     * skripsi (S1), tesis (S2), disertasi (S3), dan "tugas akhir".
+     * skripsi (S1), tesis (S2), disertasi (S3), "tugas akhir", dan "laporan
+     * akhir studi" (tugas akhir jenjang diploma/D3). Tanpa "laporan akhir
+     * studi", pembimbing utama TA prodi diploma tidak ikut terhitung.
+     *
+     * Sebagian data sinkronisasi menaruh aktivitas kerja praktik/PKL pada slot
+     * yang jenis_aktivitas-nya terlanjur berlabel skripsi, dengan judul harfiah
+     * "Kerja Praktik" (bukan judul tugas akhir). Baris seperti itu dikecualikan
+     * lewat judul agar tabel benar-benar hanya berisi tugas akhir — hampir semua
+     * mahasiswanya tetap terhitung lewat record tugas akhir mereka yang sah.
      */
     private function thesisFilterSql(): string
     {
+        // coalesce: judul NULL jangan ikut terkecuali (NULL not like -> NULL).
         return "(
             lower(dp.jenis_aktivitas) like '%tugas akhir%'
             or lower(dp.jenis_aktivitas) like '%skripsi%'
             or lower(dp.jenis_aktivitas) like '%tesis%'
             or lower(dp.jenis_aktivitas) like '%disertasi%'
-        )";
+            or lower(dp.jenis_aktivitas) like '%laporan akhir studi%'
+        )
+        and lower(trim(coalesce(lam.judul, ''))) not like 'kerja prakt%'
+        and lower(trim(coalesce(lam.judul, ''))) <> 'pkl'";
     }
 
     private function cacheTtl(): int

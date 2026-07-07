@@ -209,6 +209,53 @@ class SaptoApiTest extends TestCase
             ->assertJsonPath('items.0.program_studi_id', 'P1');
     }
 
+    public function test_summary_and_detail_exclude_kerja_praktik_mislabeled_as_thesis(): void
+    {
+        // Data sinkronisasi kadang menaruh aktivitas kerja praktik pada slot
+        // ber-jenis_aktivitas "Skripsi" dengan judul harfiah "Kerja Praktik".
+        // Tabel 3.a.2 harus tetap hanya berisi tugas akhir -> baris seperti ini
+        // tidak boleh menambah hitungan maupun muncul di detail.
+        DB::table('dosen_pembimbing')->insert([
+            'id_registrasi_mahasiswa' => 'M9',
+            'id_bimbing_mahasiswa' => 'M9',
+            'nim' => 'NIM9',
+            'nama_mahasiswa' => 'Mhs Sembilan',
+            'id_dosen' => 'D1',
+            'nama_dosen' => 'Dr. Budi',
+            'nidn' => '0001',
+            'nuptk' => null,
+            'pembimbing_ke' => '1',
+            'id_aktivitas' => 'A9',
+            'jenis_aktivitas' => 'Skripsi',
+        ]);
+
+        DB::table('list_aktivitas_mahasiswa')->insert([
+            'id_aktivitas' => 'A9',
+            'id_prodi' => 'P1',
+            'nama_prodi' => 'Teknik Informatika',
+            'id_semester' => '20261',
+            'judul' => 'Kerja Praktik',
+            'status_sync' => 'sudah sync',
+        ]);
+
+        $d1 = collect($this->withHeader('X-SAPTO-Role', 'universitas')
+            ->getJson('/api/sapto/tables/dosen-pembimbing-ta/summary?ts=2026')
+            ->assertOk()
+            ->json('rows'))->firstWhere('dosen_id', 'D1');
+
+        // M9 tidak menambah diakreditasi (tetap 1 = M1), bukan 2.
+        $this->assertSame(1, $d1['ps_diakreditasi']['ts']);
+
+        // Detail juga tidak memuat M9 / judul "Kerja Praktik".
+        $items = collect($this->withHeader('X-SAPTO-Role', 'universitas')
+            ->getJson('/api/sapto/tables/dosen-pembimbing-ta/detail?ts=2026&dosen_id=D1&scope=ps_diakreditasi&year_key=ts')
+            ->assertOk()
+            ->json('items'));
+
+        $this->assertFalse($items->contains('mahasiswa_id', 'M9'));
+        $this->assertFalse($items->contains(fn (array $i): bool => str_contains(strtolower($i['judul_tugas_akhir']), 'kerja prakt')));
+    }
+
     private function seedLocalData(): void
     {
         DB::table('program_studi')->insert([

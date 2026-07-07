@@ -57,6 +57,30 @@ class SaptoNewTablesTest extends TestCase
         $this->assertEquals(4.0, $tsRow['ipk_maks']);
     }
 
+    public function test_ipk_lulusan_recovers_graduation_year_from_tanggal_keluar(): void
+    {
+        // Baris "Lulus" tanpa id_periode_keluar tapi punya tanggal_keluar
+        // (DD-MM-YYYY) harus tetap terhitung pada tahun lulusnya, bukan di-drop.
+        DB::table('list_mahasiswa_lulus_do')->insert([
+            'nama_jenis_keluar' => 'Lulus',
+            'id_prodi' => 'P1',
+            'nama_program_studi' => 'Teknik Informatika',
+            'angkatan' => '2020',
+            'id_periode_keluar' => null,
+            'ipk' => '3.60',
+            'tgl_masuk_sp' => '01-09-2020',
+            'tanggal_keluar' => '15-06-2024',
+        ]);
+
+        $tsRow = collect($this->withHeader('X-SAPTO-Role', 'universitas')
+            ->getJson('/api/sapto/tables/ipk-lulusan/summary?ts=2024')
+            ->assertOk()
+            ->json('rows'))->firstWhere('tahun_lulus', '2024 (TS)');
+
+        // 4 dari seeder + 1 hasil pemulihan dari tanggal_keluar = 5.
+        $this->assertSame(5, $tsRow['jumlah_lulusan']);
+    }
+
     public function test_ipk_lulusan_respects_fakultas_scope(): void
     {
         // Fakultas Ilmu Komputer -> hanya P1. TS 2024 P1: 4.0, 3.5, & IPK 0 ->

@@ -98,9 +98,10 @@ class SaptoIpkLulusanRepository
             // ipk+0: koersi teks->angka konsisten di MySQL & SQLite. Batas [2,4]
             // = ambang IPK kelulusan minimum; nilai di bawahnya (mis. 0 atau
             // 0.17) dianggap data kotor/kosong dan tidak masuk statistik IPK.
+            $yearExpr = $this->graduationYearSql();
             $sql = "
                 select
-                    substr(id_periode_keluar,1,4) as thn,
+                    {$yearExpr} as thn,
                     count(*) as jumlah,
                     sum(case when ipk+0 >= 2 and ipk+0 <= 4 then 1 else 0 end) as ipk_n,
                     min(case when ipk+0 >= 2 and ipk+0 <= 4 then ipk+0 end) as ipk_min,
@@ -108,9 +109,9 @@ class SaptoIpkLulusanRepository
                     avg(case when ipk+0 >= 2 and ipk+0 <= 4 then ipk+0 end) as ipk_avg
                 from list_mahasiswa_lulus_do
                 where nama_jenis_keluar = 'Lulus'
-                  and substr(id_periode_keluar,1,4) in ({$yearPlaceholders})
+                  and {$yearExpr} in ({$yearPlaceholders})
                   {$scopeSql}
-                group by substr(id_periode_keluar,1,4)
+                group by {$yearExpr}
             ";
 
             return array_map(fn (object $row): array => (array) $row, DB::select($sql, $bindings));
@@ -140,12 +141,13 @@ class SaptoIpkLulusanRepository
     public function availableYears(): array
     {
         return Cache::remember('sapto:ipk-lulusan:years:v1', $this->cacheTtl(), function (): array {
+            $yearExpr = $this->graduationYearSql();
+
             $rows = DB::select("
-                select distinct substr(id_periode_keluar,1,4) as thn
+                select distinct {$yearExpr} as thn
                 from list_mahasiswa_lulus_do
                 where nama_jenis_keluar = 'Lulus'
-                  and id_periode_keluar is not null
-                  and id_periode_keluar <> ''
+                  and {$yearExpr} is not null
                 order by thn desc
             ");
 
@@ -159,6 +161,26 @@ class SaptoIpkLulusanRepository
     private function latestYear(): int
     {
         return $this->availableYears()[0] ?? (int) now()->year;
+    }
+
+    /**
+     * Ekspresi SQL tahun lulus. Utamakan id_periode_keluar (format YYYYS); bila
+     * kosong—yang terjadi pada ~18% baris "Lulus" (kebanyakan lulusan lama)—
+     * ambil tahun dari tanggal keluar/yudisium (format DD-MM-YYYY, tahun di 4
+     * karakter terakhir; juga menangani YYYY-MM-DD). Tanpa fallback ini ribuan
+     * lulusan tidak masuk hitungan per tahun. Portabel MySQL & SQLite.
+     */
+    private function graduationYearSql(): string
+    {
+        $fromDate = static fn (string $col): string => "case when substr({$col},3,1) = '-' then substr({$col},7,4) else substr({$col},1,4) end";
+
+        return "case
+            when id_periode_keluar is not null and id_periode_keluar <> '' then substr(id_periode_keluar,1,4)
+            when tanggal_keluar is not null and length(tanggal_keluar) = 10 then {$fromDate('tanggal_keluar')}
+            when tgl_keluar is not null and length(tgl_keluar) = 10 then {$fromDate('tgl_keluar')}
+            when tgl_sk_yudisium is not null and length(tgl_sk_yudisium) = 10 then {$fromDate('tgl_sk_yudisium')}
+            else null
+        end";
     }
 
     private function sourcePayload(): array
