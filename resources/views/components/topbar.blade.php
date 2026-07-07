@@ -1,5 +1,5 @@
 {{-- resources/views/components/topbar.blade.php --}}
-<header class="flex flex-col gap-4 border-b border-line bg-surface px-4 py-4 sm:px-6 sm:flex-row sm:items-center sm:justify-between lg:px-8">
+<header class="glass-strong sticky top-0 z-20 flex flex-col gap-4 px-4 py-4 sm:px-6 sm:flex-row sm:items-center sm:justify-between lg:px-8">
     <div class="flex items-start gap-3">
         <button
             type="button"
@@ -7,7 +7,7 @@
             aria-label="Buka/tutup sidebar"
             aria-controls="sidebar"
             aria-expanded="true"
-            class="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-line text-slate-500 transition hover:bg-slate-100 hover:text-ink"
+            class="theme-toggle mt-0.5"
         >
             <svg class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
@@ -24,12 +24,27 @@
     </div>
 
     <div class="flex items-center gap-2.5">
-        <label for="role" class="text-[12px] font-semibold text-slate-600">Role</label>
+        <button
+            type="button"
+            id="theme-toggle"
+            class="theme-toggle"
+            aria-label="Ganti mode terang/gelap"
+            title="Ganti mode terang/gelap"
+        >
+            <svg class="icon-moon h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/>
+            </svg>
+            <svg class="icon-sun h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="4"/>
+                <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+            </svg>
+        </button>
+
+        <label for="role" class="text-[12px] font-semibold text-muted">Role</label>
         <select
             id="role"
             aria-label="Role pengguna"
-            class="min-h-[38px] rounded-lg border border-slate-300 bg-white px-3 text-[13px] text-ink
-                   transition focus:border-focus focus:outline-none focus:ring-2 focus:ring-focus/25"
+            class="filter-select w-auto"
         >
             <option value="universitas">Pengelola SAPTO Universitas</option>
             <option value="fakultas">Pengelola Fakultas</option>

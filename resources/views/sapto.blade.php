@@ -39,7 +39,7 @@
         @include('components.mahasiswa-asing-panel')
     </section>
 
-    <section id="placeholder-page" class="hidden rounded-xl border border-line bg-surface p-6">
+    <section id="placeholder-page" class="glass hidden rounded-2xl p-6">
         <h2 id="placeholder-title" class="text-[16px] font-bold text-ink"></h2>
         <p class="mt-2 text-[13px] text-muted">
             Halaman ini belum dikembangkan pada tahap pertama. Fokus tahap pertama adalah Tabel 3.a.2) Dosen Pembimbing Utama Tugas Akhir.
@@ -684,9 +684,9 @@
         }
 
         els.detailBody.innerHTML = payload.items.map((item) => `
-            <article class="rounded-xl border border-line p-3.5">
+            <article class="rounded-2xl p-3.5" style="background:var(--glass-2);border:1px solid var(--color-line)">
                 <strong class="mb-1.5 block text-[14px] text-ink">${escapeHtml(item.nama_mahasiswa || '-')}</strong>
-                <div class="grid grid-cols-2 gap-x-3 gap-y-2 text-[13px] text-slate-600">
+                <div class="grid grid-cols-2 gap-x-3 gap-y-2 text-[13px] text-muted">
                     <div><span class="block text-[11px] text-muted">NIM</span>${escapeHtml(item.nim || '-')}</div>
                     <div><span class="block text-[11px] text-muted">Fakultas</span>${escapeHtml(item.fakultas || '-')}</div>
                     <div><span class="block text-[11px] text-muted">Program Studi</span>${escapeHtml(item.program_studi || '-')}</div>
@@ -1012,9 +1012,9 @@
         }
 
         els.detailBody.innerHTML = items.map((item) => `
-            <article class="rounded-xl border border-line p-3.5">
+            <article class="rounded-2xl p-3.5" style="background:var(--glass-2);border:1px solid var(--color-line)">
                 <strong class="mb-1.5 block text-[14px] text-ink">${escapeHtml(item.nama || '-')}</strong>
-                <div class="grid grid-cols-2 gap-x-3 gap-y-2 text-[13px] text-slate-600">
+                <div class="grid grid-cols-2 gap-x-3 gap-y-2 text-[13px] text-muted">
                     <div><span class="block text-[11px] text-muted">NIM</span>${escapeHtml(item.nim || '-')}</div>
                     <div><span class="block text-[11px] text-muted">Angkatan</span>${escapeHtml(String(item.angkatan || '-'))}</div>
                     <div class="col-span-2"><span class="block text-[11px] text-muted">Program Studi</span>${escapeHtml(item.program_studi || '-')}</div>
@@ -1040,8 +1040,8 @@
     const GENERIC_TABLES = {
         'ipk-lulusan': {
             endpoint: 'ipk-lulusan',
-            unit: 'program studi',
-            description: 'Rata-rata IPK lulusan (minimum/rata-rata/maksimum) beserta jumlah lulusan per program studi pada tahun lulus terpilih, mengikuti format Tabel 8.a BAN-PT.',
+            unit: 'tahun lulus',
+            description: 'Rata-rata IPK lulusan (minimum/rata-rata/maksimum) beserta jumlah lulusan per tahun lulus (TS-2/TS-1/TS) dalam cakupan terpilih, mengikuti format Tabel 8.a BAN-PT.',
         },
         'dosen-tetap-pt': {
             endpoint: 'dosen-tetap-pt',
@@ -1050,8 +1050,8 @@
         },
         'masa-studi': {
             endpoint: 'masa-studi',
-            unit: 'program studi',
-            description: 'Rata-rata masa studi lulusan (dalam tahun) beserta jumlah lulusan per program studi pada tahun lulus terpilih, mengikuti format Tabel 8.c BAN-PT.',
+            unit: 'angkatan',
+            description: 'Matriks masa studi lulusan per angkatan (tahun masuk) untuk satu program studi: jumlah diterima, lulus di akhir tiap TS, dan rata-rata masa studi, mengikuti format Tabel 8.c BAN-PT.',
         },
     };
 
@@ -1302,6 +1302,19 @@
         event.preventDefault();
         els.menuSearch.focus();
     });
+
+    // Toggle mode terang/gelap. data-theme selalu di-set (lihat skrip anti-flash
+    // di <head>), jadi ikon matahari/bulan selalu cocok. Pilihan disimpan di
+    // localStorage supaya bertahan antar kunjungan.
+    const themeToggle = document.getElementById('theme-toggle');
+
+    if (themeToggle) {
+        themeToggle.addEventListener('click', () => {
+            const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', next);
+            try { localStorage.setItem('sapto-theme', next); } catch (e) {}
+        });
+    }
 
     initTsOptions();
     loadFakultas()

@@ -4,6 +4,20 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>@yield('title', 'SAPTO')</title>
+    {{-- Set the theme before first paint to avoid a light/dark flash. Only an
+         explicit user choice is stored; otherwise the OS preference drives it
+         through the prefers-color-scheme rules in app.css. --}}
+    <script>
+        (function () {
+            try {
+                var t = localStorage.getItem('sapto-theme');
+                if (t !== 'dark' && t !== 'light') {
+                    t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+                }
+                document.documentElement.setAttribute('data-theme', t);
+            } catch (e) {}
+        })();
+    </script>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="bg-canvas text-ink font-sans text-[14px] antialiased">

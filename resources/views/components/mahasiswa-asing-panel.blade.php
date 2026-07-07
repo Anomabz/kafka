@@ -9,12 +9,12 @@
     the "Part-time" count (not tracked yet, always 0) without showing numbers
     that don't match what the drawer actually returns.
 --}}
-<div class="mb-5 rounded-xl border border-line bg-surface px-4 py-3.5 text-[13px] leading-relaxed text-muted">
+<div class="glass mb-5 rounded-2xl px-4 py-3.5 text-[13px] leading-relaxed text-muted">
     Diisi oleh pengusul dari Program Studi pada program Sarjana/Sarjana Terapan/Magister/Magister Terapan/Doktor/Doktor Terapan.
 </div>
 
-<section class="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
-    <header class="flex items-center justify-between gap-3 border-b border-line px-4 py-3.5">
+<section class="glass overflow-hidden rounded-2xl">
+    <header class="flex items-center justify-between gap-3 px-4 py-3.5" style="border-bottom:1px solid var(--color-line)">
         <h2 class="text-[15px] font-bold text-ink">Mahasiswa Asing</h2>
         <span id="ma-table-status" class="text-[12px] text-muted">Memuat data...</span>
     </header>
