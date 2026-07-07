@@ -4,54 +4,259 @@
 @source '../../storage/framework/views/*.php';
 
 /*
- * SAPTO design tokens.
- * Single-family type system (Inter) — this is a data-dense accreditation
- * console read by staff all day, not a marketing page, so hierarchy comes
- * from weight/size, not a display/body font pairing.
+ * SAPTO — Liquid Glass design system.
+ *
+ * A minimalist frosted-glass UI over a soft aurora background, with a full
+ * light/dark theme. Everything is driven by CSS custom properties so a single
+ * `data-theme` swap on <html> re-skins the whole console. Semantic colour
+ * tokens keep their names (ink/muted/canvas/surface/line/accent...) so the
+ * existing Tailwind utilities (`text-ink`, `border-line`, `bg-accent/10` ...)
+ * keep working AND adapt to the theme, because in Tailwind v4 those utilities
+ * resolve to `var(--color-*)` which we override per theme below.
+ *
+ * Hex is kept for accent/focus/info/warn so `/opacity` modifiers still work
+ * via color-mix; translucent glass fills live in the non-utility vars.
  */
 @theme {
     --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
 
-    --color-ink: #0f172a;
-    --color-muted: #64748b;
-    --color-canvas: #f3f5f9;
+    /* Light theme defaults — overridden under [data-theme="dark"] below. */
+    --color-ink: #0f1b2d;
+    --color-muted: #55637a;
+    --color-canvas: #e7ecf5;
     --color-surface: #ffffff;
-    --color-line: #e2e8f0;
-
-    --color-navy-950: #0a1b2e;
-    --color-navy-900: #0f2438;
-    --color-navy-800: #16324c;
+    --color-line: rgba(15, 27, 45, 0.10);
 
     --color-accent: #0f9d8b;
-    --color-accent-dark: #0b7566;
-    --color-accent-soft: #e3f5f2;
-    --color-accent-line: #b9e4dd;
+    --color-accent-dark: #0a6b5e;
+    --color-accent-soft: rgba(15, 157, 139, 0.12);
+    --color-accent-line: rgba(15, 157, 139, 0.30);
 
     --color-focus: #2f6fed;
 
     --color-info: #2f6fed;
-    --color-info-soft: #eaf1ff;
+    --color-info-soft: rgba(47, 111, 237, 0.12);
 
     --color-warn: #b45309;
-    --color-warn-soft: #fff4e5;
-    --color-warn-line: #fbd9a5;
+    --color-warn-soft: rgba(180, 83, 9, 0.12);
+    --color-warn-line: rgba(180, 83, 9, 0.32);
 
-    --color-slate-soft: #eef1f5;
+    --color-slate-soft: rgba(15, 27, 45, 0.06);
 }
 
 /*
- * Component-layer classes for markup that gets generated inside <script>
- * template strings (table head/rows, alert states, number chips). Keeping
- * these as named classes (instead of long inline utility strings inside
- * JS) keeps the JS readable and keeps one source of truth for the look.
+ * Non-utility design tokens (glass fills, blur, shadows, sidebar, backdrop).
+ * These are intentionally NOT in @theme — they don't generate utilities, they
+ * are consumed by the component classes below.
  */
+:root {
+    color-scheme: light;
+
+    --glass-bg: rgba(255, 255, 255, 0.55);
+    --glass-bg-strong: rgba(255, 255, 255, 0.72);
+    --glass-2: rgba(255, 255, 255, 0.42);
+    --glass-border: rgba(255, 255, 255, 0.60);
+    --glass-hi: rgba(255, 255, 255, 0.75);
+    --glass-shadow: 0 12px 34px -14px rgba(15, 27, 45, 0.30);
+    --glass-blur: 20px;
+
+    --row-hover: rgba(15, 27, 45, 0.04);
+    --skeleton: rgba(15, 27, 45, 0.10);
+    --input-bg: rgba(255, 255, 255, 0.60);
+    --input-border: rgba(15, 27, 45, 0.14);
+
+    --scrim: rgba(15, 27, 45, 0.28);
+
+    /* Sidebar (frosted, adapts per theme). */
+    --side-bg: rgba(255, 255, 255, 0.55);
+    --side-text: #0f1b2d;
+    --side-dim: #5b6b82;
+    --side-faint: #94a3b8;
+    --side-hover: rgba(15, 27, 45, 0.05);
+    --side-active: rgba(15, 157, 139, 0.14);
+    --side-border: rgba(15, 27, 45, 0.08);
+
+    /* Backdrop wash — very subtle, near-neutral so panels read clean. */
+    --aura-1: rgba(15, 157, 139, 0.08);
+    --aura-2: rgba(100, 116, 139, 0.07);
+}
+
+/* Dark theme — a single attribute flip re-skins everything. */
+:root[data-theme='dark'] {
+    color-scheme: dark;
+
+    --color-ink: #e8eef8;
+    --color-muted: #94a3ba;
+    --color-canvas: #060a13;
+    --color-surface: #131c2e;
+    --color-line: rgba(255, 255, 255, 0.10);
+
+    --color-accent: #22c7b3;
+    --color-accent-dark: #7ff0e2;
+    --color-accent-soft: rgba(34, 199, 179, 0.16);
+    --color-accent-line: rgba(34, 199, 179, 0.34);
+
+    --color-focus: #5b8cff;
+
+    --color-info: #5b8cff;
+    --color-info-soft: rgba(91, 140, 255, 0.16);
+
+    --color-warn: #fbbf24;
+    --color-warn-soft: rgba(251, 191, 36, 0.14);
+    --color-warn-line: rgba(251, 191, 36, 0.32);
+
+    --color-slate-soft: rgba(255, 255, 255, 0.07);
+
+    --glass-bg: rgba(22, 32, 52, 0.55);
+    --glass-bg-strong: rgba(20, 29, 48, 0.74);
+    --glass-2: rgba(255, 255, 255, 0.04);
+    --glass-border: rgba(255, 255, 255, 0.10);
+    --glass-hi: rgba(255, 255, 255, 0.12);
+    --glass-shadow: 0 22px 46px -18px rgba(0, 0, 0, 0.60);
+    --glass-blur: 22px;
+
+    --row-hover: rgba(255, 255, 255, 0.045);
+    --skeleton: rgba(255, 255, 255, 0.10);
+    --input-bg: rgba(255, 255, 255, 0.05);
+    --input-border: rgba(255, 255, 255, 0.14);
+
+    --scrim: rgba(2, 6, 14, 0.55);
+
+    --side-bg: rgba(13, 20, 34, 0.62);
+    --side-text: #e8eef8;
+    --side-dim: #8595ad;
+    --side-faint: #5c6b83;
+    --side-hover: rgba(255, 255, 255, 0.06);
+    --side-active: rgba(34, 199, 179, 0.16);
+    --side-border: rgba(255, 255, 255, 0.08);
+
+    --aura-1: rgba(34, 199, 179, 0.07);
+    --aura-2: rgba(100, 116, 139, 0.09);
+}
+
+/* Follow the OS when the user hasn't picked a theme yet (no data-theme set). */
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme]) {
+        color-scheme: dark;
+
+        --color-ink: #e8eef8;
+        --color-muted: #94a3ba;
+        --color-canvas: #060a13;
+        --color-surface: #131c2e;
+        --color-line: rgba(255, 255, 255, 0.10);
+        --color-accent: #22c7b3;
+        --color-accent-dark: #7ff0e2;
+        --color-accent-soft: rgba(34, 199, 179, 0.16);
+        --color-accent-line: rgba(34, 199, 179, 0.34);
+        --color-focus: #5b8cff;
+        --color-info: #5b8cff;
+        --color-info-soft: rgba(91, 140, 255, 0.16);
+        --color-warn: #fbbf24;
+        --color-warn-soft: rgba(251, 191, 36, 0.14);
+        --color-warn-line: rgba(251, 191, 36, 0.32);
+        --color-slate-soft: rgba(255, 255, 255, 0.07);
+
+        --glass-bg: rgba(22, 32, 52, 0.55);
+        --glass-bg-strong: rgba(20, 29, 48, 0.74);
+        --glass-2: rgba(255, 255, 255, 0.04);
+        --glass-border: rgba(255, 255, 255, 0.10);
+        --glass-hi: rgba(255, 255, 255, 0.12);
+        --glass-shadow: 0 22px 46px -18px rgba(0, 0, 0, 0.60);
+        --glass-blur: 22px;
+        --row-hover: rgba(255, 255, 255, 0.045);
+        --skeleton: rgba(255, 255, 255, 0.10);
+        --input-bg: rgba(255, 255, 255, 0.05);
+        --input-border: rgba(255, 255, 255, 0.14);
+        --scrim: rgba(2, 6, 14, 0.55);
+        --side-bg: rgba(13, 20, 34, 0.62);
+        --side-text: #e8eef8;
+        --side-dim: #8595ad;
+        --side-faint: #5c6b83;
+        --side-hover: rgba(255, 255, 255, 0.06);
+        --side-active: rgba(34, 199, 179, 0.16);
+        --side-border: rgba(255, 255, 255, 0.08);
+        --aura-1: rgba(34, 199, 179, 0.07);
+        --aura-2: rgba(100, 116, 139, 0.09);
+    }
+}
+
+/*
+ * Aurora backdrop. A fixed layer of soft colour blobs sits behind everything
+ * so the frosted panels have something luminous to refract. Kept on a pseudo
+ * element (not body background) so it never scrolls and never repaints panels.
+ */
+/* Mobile-first base: stop iOS from inflating text, and honour safe areas. */
+html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+}
+
+body {
+    position: relative;
+    min-height: 100vh;
+    background-color: var(--color-canvas);
+}
+
+body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background:
+        radial-gradient(50rem 50rem at 6% -8%, var(--aura-1), transparent 62%),
+        radial-gradient(52rem 52rem at 100% 108%, var(--aura-2), transparent 62%);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    html {
+        scroll-behavior: smooth;
+    }
+}
+
 @layer components {
+    /*
+     * Core frosted-glass surface. Panels, cards, the topbar, the drawer and
+     * the sidebar all build on this. The inset top highlight is what reads as
+     * a lit glass rim; the outer shadow lifts it off the aurora.
+     */
+    .glass {
+        background: var(--glass-bg);
+        -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(118%);
+        backdrop-filter: blur(var(--glass-blur)) saturate(118%);
+        border: 1px solid var(--glass-border);
+        box-shadow: var(--glass-shadow), inset 0 1px 0 0 var(--glass-hi);
+    }
+
+    .glass-strong {
+        background: var(--glass-bg-strong);
+        -webkit-backdrop-filter: blur(calc(var(--glass-blur) + 4px)) saturate(120%);
+        backdrop-filter: blur(calc(var(--glass-blur) + 4px)) saturate(120%);
+        border: 1px solid var(--glass-border);
+        box-shadow: var(--glass-shadow), inset 0 1px 0 0 var(--glass-hi);
+    }
+
+    /* Subtle interactive lift for cards — no glow, just a small raise + border. */
+    .glass-hover {
+        transition: transform 180ms ease, border-color 180ms ease;
+    }
+
+    .glass-hover:hover {
+        transform: translateY(-2px);
+        border-color: var(--color-accent-line);
+    }
+
+    /* ---- Table primitives (rendered from JS template strings) ---- */
     .sp-th {
-        @apply bg-slate-50 text-[11px] font-bold uppercase tracking-wide text-slate-600 px-3 py-2.5 text-left border-b border-line whitespace-nowrap;
+        background: var(--glass-2);
+        color: var(--color-muted);
+        border-bottom: 1px solid var(--color-line);
+        @apply text-[11px] font-bold uppercase tracking-wide px-3 py-2.5 text-left whitespace-nowrap;
     }
 
     .sp-th-group {
-        @apply text-center border-l border-line;
+        text-align: center;
+        border-left: 1px solid var(--color-line);
     }
 
     .sp-th-num,
@@ -60,55 +265,282 @@
     }
 
     .sp-td {
-        @apply px-3 py-2.5 border-b border-line text-[13px] text-ink align-middle;
+        color: var(--color-ink);
+        border-bottom: 1px solid var(--color-line);
+        @apply px-3 py-2.5 text-[13px] align-middle;
     }
 
-    .sp-row:hover .sp-td {
-        @apply bg-slate-50/70;
+    .sp-row {
+        transition: background-color 120ms ease;
+    }
+
+    .sp-row:hover {
+        background: var(--row-hover);
     }
 
     .sp-foot-td {
-        @apply px-3 py-2.5 bg-slate-50 text-[13px] font-bold text-ink;
+        background: var(--glass-2);
+        color: var(--color-ink);
+        border-top: 1px solid var(--color-line);
+        @apply px-3 py-2.5 text-[13px] font-bold;
     }
 
     .sp-empty-row {
-        @apply px-3 py-10 text-center text-sm text-muted;
+        color: var(--color-muted);
+        @apply px-3 py-10 text-center text-sm;
     }
 
     .sp-number-chip {
-        @apply inline-flex min-w-[36px] justify-center rounded-md border border-accent-line bg-accent-soft
-               px-2.5 py-1 text-[13px] font-medium text-accent-dark tabular-nums cursor-pointer transition
-               hover:border-accent hover:bg-accent/10 focus:outline-none focus:ring-2 focus:ring-accent/30;
+        background: var(--color-accent-soft);
+        border: 1px solid var(--color-accent-line);
+        color: var(--color-accent-dark);
+        @apply inline-flex min-w-[36px] justify-center rounded-lg px-2.5 py-1 text-[13px] font-semibold
+               tabular-nums cursor-pointer transition;
+    }
+
+    .sp-number-chip:hover {
+        background: color-mix(in srgb, var(--color-accent) 22%, transparent);
+        border-color: var(--color-accent);
+    }
+
+    .sp-number-chip:focus {
+        outline: none;
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent) 45%, transparent);
+    }
+
+    .sp-page-btn {
+        background: var(--input-bg);
+        border: 1px solid var(--input-border);
+        color: var(--color-ink);
+        -webkit-backdrop-filter: blur(8px);
+        backdrop-filter: blur(8px);
+        @apply inline-flex min-w-[34px] items-center justify-center rounded-lg px-2.5 py-1 text-[12px]
+               font-medium tabular-nums cursor-pointer transition;
+    }
+
+    .sp-page-btn:hover {
+        border-color: var(--color-accent);
+        background: var(--color-accent-soft);
+    }
+
+    .sp-page-btn:disabled {
+        cursor: not-allowed;
+        opacity: 0.4;
+    }
+
+    .sp-page-btn:disabled:hover {
+        border-color: var(--input-border);
+        background: var(--input-bg);
+    }
+
+    .sp-page-btn-active {
+        background: var(--color-accent);
+        border-color: var(--color-accent);
+        color: #ffffff;
+    }
+
+    .sp-page-btn-active:hover {
+        background: var(--color-accent);
+        border-color: var(--color-accent);
     }
 
     .sp-alert-warn {
-        @apply flex items-start gap-3 rounded-xl border border-warn-line bg-warn-soft px-4 py-3.5 text-[13px] text-warn;
+        border: 1px solid var(--color-warn-line);
+        background: var(--color-warn-soft);
+        color: var(--color-warn);
+        @apply flex items-start gap-3 rounded-2xl px-4 py-3.5 text-[13px];
     }
 
-    /* Sidebar nav item. Base state + `.is-active` toggled by JS in activateTable(). */
+    /* ---- Sidebar ---- */
+    .side-glass {
+        background: var(--side-bg);
+        -webkit-backdrop-filter: blur(26px) saturate(120%);
+        backdrop-filter: blur(26px) saturate(120%);
+        border-right: 1px solid var(--side-border);
+        color: var(--side-text);
+    }
+
     .menu-item {
-        @apply relative flex w-full items-center rounded-lg px-3 py-2.5 text-left text-[13px] leading-snug
-               text-slate-300 transition-colors duration-150 hover:bg-white/[0.06] hover:text-white;
+        color: var(--side-dim);
+        @apply relative flex w-full items-center rounded-xl px-3.5 py-2.5 text-left text-[13px] font-medium
+               leading-snug transition-all duration-150;
+    }
+
+    .menu-item:hover {
+        color: var(--side-text);
+        background: var(--side-hover);
+        transform: translateX(2px);
     }
 
     .menu-item.is-active {
-        @apply bg-navy-800 text-white;
+        color: var(--side-text);
+        background: linear-gradient(90deg, var(--side-active), transparent);
+        box-shadow: inset 0 0 0 1px var(--color-accent-line);
     }
 
     .menu-item.is-active::before {
         content: '';
-        @apply absolute inset-y-1.5 left-0 w-[3px] rounded-full bg-accent;
+        position: absolute;
+        inset-block: 6px;
+        left: 0;
+        width: 3px;
+        border-radius: 9999px;
+        background: var(--color-accent);
     }
 
+    .menu {
+        scrollbar-width: thin;
+        scrollbar-color: var(--color-accent-line) transparent;
+    }
+
+    .menu::-webkit-scrollbar {
+        width: 7px;
+    }
+
+    .menu::-webkit-scrollbar-thumb {
+        background: var(--color-accent-line);
+        border-radius: 9999px;
+    }
+
+    /* ---- Inputs ---- */
     .filter-select {
-        @apply min-h-[38px] w-full rounded-lg border border-slate-300 bg-white px-3 text-[13px] text-ink
-               transition focus:border-focus focus:outline-none focus:ring-2 focus:ring-focus/25
-               disabled:bg-slate-100 disabled:text-slate-500;
+        background: var(--input-bg);
+        border: 1px solid var(--input-border);
+        color: var(--color-ink);
+        -webkit-backdrop-filter: blur(8px);
+        backdrop-filter: blur(8px);
+        @apply min-h-[38px] w-full rounded-xl px-3 text-[13px] transition;
     }
 
-    /* Drawer + backdrop: JS toggles `.is-open`, see showDrawer()/closeDrawer(). */
+    .filter-select:focus {
+        outline: none;
+        border-color: var(--color-focus);
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-focus) 35%, transparent);
+    }
+
+    .filter-select:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+    }
+
+    /* Unit-active pill. */
+    .unit-pill {
+        background: var(--color-accent-soft);
+        border: 1px solid var(--color-accent-line);
+        color: var(--color-accent-dark);
+        @apply inline-flex min-h-[38px] w-fit items-center rounded-full px-3.5 text-[12px] font-semibold;
+    }
+
+    /* Theme toggle button. */
+    .theme-toggle {
+        background: var(--input-bg);
+        border: 1px solid var(--input-border);
+        color: var(--color-ink);
+        -webkit-backdrop-filter: blur(8px);
+        backdrop-filter: blur(8px);
+        @apply grid h-9 w-9 shrink-0 place-items-center rounded-xl transition cursor-pointer;
+    }
+
+    .theme-toggle:hover {
+        border-color: var(--color-accent);
+        color: var(--color-accent);
+    }
+
+    .theme-toggle .icon-sun {
+        display: none;
+    }
+
+    :root[data-theme='dark'] .theme-toggle .icon-sun {
+        display: block;
+    }
+
+    :root[data-theme='dark'] .theme-toggle .icon-moon {
+        display: none;
+    }
+
+    /* ---- App shell / sidebar layout (unchanged behaviour, glassy skin) ---- */
+    #app-shell {
+        @apply min-h-screen;
+    }
+
+    #sidebar {
+        @apply fixed inset-y-0 left-0 z-40 flex -translate-x-full flex-col overflow-hidden
+               transition-transform duration-200 ease-in-out;
+        width: 280px;
+    }
+
+    #sidebar.is-open {
+        @apply translate-x-0;
+    }
+
+    .sidebar-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 30;
+        display: none;
+        background: var(--scrim);
+        -webkit-backdrop-filter: blur(2px);
+        backdrop-filter: blur(2px);
+    }
+
+    .sidebar-backdrop.is-open {
+        display: block;
+    }
+
+    @media (min-width: 64rem) {
+        #app-shell {
+            display: grid;
+            grid-template-columns: 280px minmax(0, 1fr);
+            transition: grid-template-columns 200ms ease-in-out;
+        }
+
+        #app-shell.sidebar-closed {
+            grid-template-columns: 0px minmax(0, 1fr);
+        }
+
+        #sidebar {
+            position: sticky;
+            top: 0;
+            z-index: auto;
+            height: 100vh;
+            width: auto;
+            translate: none;
+            transition: opacity 200ms ease-in-out;
+        }
+
+        #app-shell.sidebar-closed #sidebar {
+            opacity: 0;
+            pointer-events: none;
+        }
+    }
+
+    /* ---- Loading skeletons ---- */
+    .metric-value.is-loading {
+        @apply relative invisible;
+    }
+
+    .metric-value.is-loading::after {
+        content: '';
+        background: var(--skeleton);
+        @apply visible absolute inset-y-1 left-0 w-14 animate-pulse rounded-md;
+    }
+
+    .sp-skeleton-td {
+        border-bottom: 1px solid var(--color-line);
+        @apply px-3 py-3;
+    }
+
+    .sp-skeleton-bar {
+        background: var(--skeleton);
+        @apply h-3.5 animate-pulse rounded-md;
+    }
+
+    /* ---- Drawer ---- */
     .drawer-backdrop {
         display: none;
+        background: var(--scrim);
+        -webkit-backdrop-filter: blur(3px);
+        backdrop-filter: blur(3px);
     }
 
     .drawer-backdrop.is-open {
@@ -121,5 +553,63 @@
 
     .drawer.is-open {
         display: flex;
+    }
+
+    /*
+     * ---- Mobile-first table scrolling ----
+     * BAN-PT tables are wide by nature, so on phones the panel body scrolls
+     * horizontally with momentum. A sticky right-edge fade + a swipe hint make
+     * it obvious there's more to the right instead of it looking cut off.
+     */
+    .table-scroll {
+        position: relative;
+        width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior-x: contain;
+        scrollbar-width: thin;
+        scrollbar-color: var(--color-accent-line) transparent;
+    }
+
+    .table-scroll::-webkit-scrollbar {
+        height: 7px;
+    }
+
+    .table-scroll::-webkit-scrollbar-thumb {
+        background: var(--color-accent-line);
+        border-radius: 9999px;
+    }
+
+    .swipe-hint {
+        color: var(--color-muted);
+        border-top: 1px solid var(--color-line);
+        @apply flex items-center justify-center gap-1.5 px-4 py-2 text-[11px] font-medium sm:hidden;
+    }
+}
+
+/* Denser, touch-friendly tables on phones. */
+@media (max-width: 640px) {
+    .sp-th {
+        padding: 0.45rem 0.6rem;
+        font-size: 10px;
+    }
+
+    .sp-td {
+        padding: 0.5rem 0.6rem;
+        font-size: 12px;
+    }
+
+    .sp-foot-td {
+        padding: 0.5rem 0.6rem;
+    }
+
+    .sp-number-chip {
+        min-height: 34px;
+        min-width: 42px;
+    }
+
+    .sp-page-btn {
+        min-height: 36px;
+        min-width: 36px;
     }
 }
