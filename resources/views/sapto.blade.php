@@ -17,10 +17,10 @@
         @include('components.filter-bar')
 
         <div class="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            @include('components.metric-card', ['id' => 'metric-dosen', 'label' => 'Total dosen pembimbing', 'icon' => $icons['users'], 'tint' => 'accent'])
-            @include('components.metric-card', ['id' => 'metric-ps', 'label' => 'Total mahasiswa bimbingan PS diakreditasi', 'icon' => $icons['cap'], 'tint' => 'info'])
-            @include('components.metric-card', ['id' => 'metric-ps-lain', 'label' => 'Total mahasiswa bimbingan PS lain di PT', 'icon' => $icons['swap'], 'tint' => 'warn'])
-            @include('components.metric-card', ['id' => 'metric-ts', 'label' => 'TS aktif', 'icon' => $icons['calendar'], 'tint' => 'slate'])
+            @include('components.metric-card', ['id' => 'metric-dosen', 'labelId' => 'metric-dosen-label', 'label' => 'Total dosen pembimbing', 'icon' => $icons['users'], 'tint' => 'accent'])
+            @include('components.metric-card', ['id' => 'metric-ps', 'labelId' => 'metric-ps-label', 'label' => 'Total mahasiswa bimbingan PS diakreditasi', 'icon' => $icons['cap'], 'tint' => 'info'])
+            @include('components.metric-card', ['id' => 'metric-ps-lain', 'labelId' => 'metric-ps-lain-label', 'label' => 'Total mahasiswa bimbingan PS lain di PT', 'icon' => $icons['swap'], 'tint' => 'warn'])
+            @include('components.metric-card', ['id' => 'metric-ts', 'labelId' => 'metric-ts-label', 'label' => 'TS aktif', 'icon' => $icons['calendar'], 'tint' => 'slate'])
         </div>
 
         @include('components.table-panel')
@@ -55,14 +55,16 @@
 <script>
     const tables = @json($tables);
     const currentYear = new Date().getFullYear();
+    const PAGE_SIZE = 15; // baris dosen per halaman pada tabel 3.a.2
     const state = {
         role: 'universitas',
-        ts: currentYear,
+        ts: null, // diisi dari available_years hasil summary (mengikuti isi database)
         fakultasId: 'all',
         programStudiId: 'all',
         fakultas: [],
         programStudi: [],
         summary: null,
+        page: 1, // halaman aktif tabel dosen pembimbing
     };
 
     const els = {
@@ -80,10 +82,15 @@
         tableHead: document.getElementById('table-head'),
         tableBody: document.getElementById('table-body'),
         tableFoot: document.getElementById('table-foot'),
+        tablePagination: document.getElementById('table-pagination'),
         metricDosen: document.getElementById('metric-dosen'),
         metricPs: document.getElementById('metric-ps'),
         metricPsLain: document.getElementById('metric-ps-lain'),
         metricTs: document.getElementById('metric-ts'),
+        metricDosenLabel: document.getElementById('metric-dosen-label'),
+        metricPsLabel: document.getElementById('metric-ps-label'),
+        metricPsLainLabel: document.getElementById('metric-ps-lain-label'),
+        metricTsLabel: document.getElementById('metric-ts-label'),
         drawer: document.getElementById('detail-drawer'),
         drawerBackdrop: document.getElementById('drawer-backdrop'),
         detailTitle: document.getElementById('detail-title'),
@@ -126,15 +133,19 @@
         fakultas: [],        // [{ id, nama }]
     };
 
+    // TS awal belum diketahui sampai summary pertama memberi tahu tahun akademik
+    // apa saja yang ada di database. Tampilkan placeholder dulu.
     function initTsOptions() {
-        const years = [];
+        els.ts.innerHTML = '<option value="">Memuat...</option>';
+    }
 
-        for (let year = currentYear + 1; year >= currentYear - 6; year--) {
-            years.push(year);
-        }
+    // Isi dropdown TS dari daftar tahun akademik yang benar-benar ada di
+    // database (available_years), lalu pilih tahun aktif.
+    function populateTsOptions(years, selected) {
+        const list = Array.isArray(years) && years.length ? years : [selected];
 
-        els.ts.innerHTML = years.map((year) => `<option value="${year}">${year}</option>`).join('');
-        els.ts.value = String(state.ts);
+        els.ts.innerHTML = list.map((year) => `<option value="${year}">${year}</option>`).join('');
+        els.ts.value = String(selected);
     }
 
     function contextHeaders() {
@@ -293,7 +304,12 @@
     }
 
     function summaryUrl() {
-        const params = new URLSearchParams({ ts: state.ts });
+        const params = new URLSearchParams();
+
+        // TS null pada load pertama -> backend memakai tahun akademik terbaru.
+        if (state.ts !== null) {
+            params.set('ts', state.ts);
+        }
 
         if (state.role === 'universitas' && state.fakultasId !== 'all') {
             params.set('fakultas_id', state.fakultasId);
@@ -303,7 +319,9 @@
             params.set('program_studi_id', state.programStudiId);
         }
 
-        return `/api/sapto/tables/dosen-pembimbing-ta/summary?${params}`;
+        const slug = isGeneric(currentTableId) ? GENERIC_TABLES[currentTableId].endpoint : 'dosen-pembimbing-ta';
+
+        return `/api/sapto/tables/${slug}/summary?${params}`;
     }
 
     async function loadSummary() {
@@ -327,24 +345,121 @@
             </tr>
         `).join('');
         els.tableFoot.innerHTML = '';
+        els.tablePagination.innerHTML = '';
+    }
+
+    // Label metric card default untuk tabel 3.a.2 (dipulihkan bila sebelumnya
+    // dipakai tabel generik yang mengubah label).
+    const DOSEN_METRIC_LABELS = [
+        'Total dosen pembimbing',
+        'Total mahasiswa bimbingan PS diakreditasi',
+        'Total mahasiswa bimbingan PS lain di PT',
+        'TS aktif',
+    ];
+    const metricValueEls = [els.metricDosen, els.metricPs, els.metricPsLain, els.metricTs];
+    const metricLabelEls = [els.metricDosenLabel, els.metricPsLabel, els.metricPsLainLabel, els.metricTsLabel];
+
+    function setMetricLabels(labels) {
+        metricLabelEls.forEach((el, i) => { if (el) el.textContent = labels[i] ?? ''; });
+    }
+
+    // Isi kartu metrik dari daftar {label, value} (tabel generik). Kartu sisa
+    // dikosongkan agar tidak menampilkan angka tabel sebelumnya.
+    function setMetricCards(metrics) {
+        metricValueEls.forEach((el, i) => {
+            const metric = metrics[i];
+            if (metricLabelEls[i]) metricLabelEls[i].textContent = metric ? metric.label : '';
+            el.textContent = metric ? String(metric.value) : '';
+        });
     }
 
     function renderSummary() {
         const summary = state.summary;
-        const rows = summary.rows || [];
-        const totals = summary.totals || {};
-        const psTotal = sumYearCounts(totals.ps_diakreditasi);
-        const psLainTotal = sumYearCounts(totals.ps_lain_pt);
+
+        // Data baru -> kembali ke halaman pertama tabel.
+        state.page = 1;
+
+        // Sinkronkan TS aktif + dropdown dengan tahun yang ada di database.
+        state.ts = summary.ts;
+        populateTsOptions(summary.available_years, summary.ts);
 
         metricEls.forEach((el) => el.classList.remove('is-loading'));
+
+        if (isGeneric(currentTableId)) {
+            renderGenericSummary(summary);
+        } else {
+            renderDosenSummary(summary);
+        }
+    }
+
+    function renderDosenSummary(summary) {
+        const rows = summary.rows || [];
+        const totals = summary.totals || {};
+
+        setMetricLabels(DOSEN_METRIC_LABELS);
         els.metricDosen.textContent = rows.length;
-        els.metricPs.textContent = psTotal;
-        els.metricPsLain.textContent = psLainTotal;
+        els.metricPs.textContent = sumYearCounts(totals.ps_diakreditasi);
+        els.metricPsLain.textContent = sumYearCounts(totals.ps_lain_pt);
         els.metricTs.textContent = summary.ts;
         els.tableStatus.textContent = rows.length
             ? `${rows.length} dosen${summary.source?.partial ? ' - data API parsial' : ''}`
             : 'Belum ada data';
         renderTable(summary);
+    }
+
+    function renderGenericSummary(summary) {
+        setMetricCards(summary.metrics || []);
+        const unit = GENERIC_TABLES[currentTableId]?.unit || 'baris';
+        els.tableStatus.textContent = summary.notice
+            ? 'Pilih program studi'
+            : (summary.rows.length
+                ? `${summary.rows.length} ${unit}${summary.source?.partial ? ' - sebagian kolom belum tersedia' : ''}`
+                : 'Belum ada data');
+        renderGenericTable(summary);
+    }
+
+    // Render tabel generik dari definisi kolom + baris envelope backend.
+    function renderGenericTable(summary) {
+        const cols = summary.columns || [];
+
+        // Pesan pengarah (mis. Tabel 8.c minta pilih prodi dulu).
+        if (summary.notice) {
+            els.tableHead.innerHTML = '';
+            els.tableBody.innerHTML = `<tr><td class="sp-empty-row">${escapeHtml(summary.notice)}</td></tr>`;
+            els.tableFoot.innerHTML = '';
+            els.tablePagination.innerHTML = '';
+            return;
+        }
+
+        els.tableHead.innerHTML = `<tr>${cols.map((c) =>
+            `<th class="sp-th ${c.align === 'num' ? 'sp-th-num' : ''}">${escapeHtml(c.label)}</th>`).join('')}</tr>`;
+
+        if (!summary.rows.length) {
+            els.tableBody.innerHTML = `<tr><td class="sp-empty-row" colspan="${cols.length || 1}">Belum ada data untuk kombinasi filter ini.</td></tr>`;
+            els.tableFoot.innerHTML = '';
+            els.tablePagination.innerHTML = '';
+            return;
+        }
+
+        const pageCount = Math.max(1, Math.ceil(summary.rows.length / PAGE_SIZE));
+        state.page = Math.min(Math.max(state.page, 1), pageCount);
+        const startIndex = (state.page - 1) * PAGE_SIZE;
+        const pageRows = summary.rows.slice(startIndex, startIndex + PAGE_SIZE);
+
+        els.tableBody.innerHTML = pageRows.map((row) =>
+            `<tr class="sp-row">${cols.map((c) => genericCell(row, c)).join('')}</tr>`).join('');
+        els.tableFoot.innerHTML = '';
+        renderPagination(summary.rows.length, GENERIC_TABLES[currentTableId]?.unit || 'baris');
+    }
+
+    function genericCell(row, col) {
+        const value = row[col.key];
+
+        if (col.align === 'num') {
+            return `<td class="sp-td sp-td-num">${value === null || value === undefined ? '-' : formatNumber(value)}</td>`;
+        }
+
+        return `<td class="sp-td">${value === null || value === undefined || value === '' ? '-' : escapeHtml(String(value))}</td>`;
     }
 
     function renderTable(summary) {
@@ -373,10 +488,17 @@
         if (!summary.rows.length) {
             els.tableBody.innerHTML = `<tr><td class="sp-empty-row" colspan="12">Belum ada data dosen pembimbing utama tugas akhir untuk kombinasi filter ini.</td></tr>`;
             els.tableFoot.innerHTML = totalsRow(summary.totals, true);
+            els.tablePagination.innerHTML = '';
             return;
         }
 
-        els.tableBody.innerHTML = summary.rows.map((row) => `
+        // Jaga halaman aktif tetap valid bila jumlah baris berubah.
+        const pageCount = Math.max(1, Math.ceil(summary.rows.length / PAGE_SIZE));
+        state.page = Math.min(Math.max(state.page, 1), pageCount);
+        const startIndex = (state.page - 1) * PAGE_SIZE;
+        const pageRows = summary.rows.slice(startIndex, startIndex + PAGE_SIZE);
+
+        els.tableBody.innerHTML = pageRows.map((row) => `
             <tr class="sp-row">
                 <td class="sp-td">${row.no}</td>
                 <td class="sp-td">${escapeHtml(row.nama_dosen || '-')}</td>
@@ -393,6 +515,76 @@
             </tr>
         `).join('');
         els.tableFoot.innerHTML = totalsRow(summary.totals, false);
+        renderPagination(summary.rows.length, 'dosen');
+    }
+
+    // Deretan nomor halaman dengan pemadatan (…) bila halaman banyak.
+    function pageWindow(current, count) {
+        const wanted = new Set([1, count, current, current - 1, current + 1]);
+        const pages = [...wanted].filter((p) => p >= 1 && p <= count).sort((a, b) => a - b);
+        const out = [];
+        let prev = 0;
+
+        pages.forEach((p) => {
+            if (p - prev > 1) {
+                out.push('…');
+            }
+            out.push(p);
+            prev = p;
+        });
+
+        return out;
+    }
+
+    function renderPagination(total, unit = 'dosen') {
+        const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+        const start = total === 0 ? 0 : (state.page - 1) * PAGE_SIZE + 1;
+        const end = Math.min(state.page * PAGE_SIZE, total);
+
+        // Satu halaman saja: cukup tampilkan ringkasan jumlah.
+        if (pageCount <= 1) {
+            els.tablePagination.innerHTML = `<span class="text-[12px] text-muted">Menampilkan ${total} ${unit}</span>`;
+            return;
+        }
+
+        const navBtn = (label, page, disabled, active) => `
+            <button type="button"
+                    class="sp-page-btn ${active ? 'sp-page-btn-active' : ''}"
+                    data-page="${page}" ${disabled ? 'disabled' : ''}>${label}</button>
+        `;
+
+        const numbers = pageWindow(state.page, pageCount).map((p) =>
+            p === '…'
+                ? '<span class="px-2 text-[12px] text-muted">…</span>'
+                : navBtn(p, p, false, p === state.page)
+        ).join('');
+
+        els.tablePagination.innerHTML = `
+            <span class="text-[12px] text-muted">Menampilkan ${start}–${end} dari ${total} ${unit}</span>
+            <div class="flex items-center gap-1">
+                ${navBtn('Sebelumnya', state.page - 1, state.page === 1, false)}
+                ${numbers}
+                ${navBtn('Berikutnya', state.page + 1, state.page === pageCount, false)}
+            </div>
+        `;
+    }
+
+    function goToPage(page) {
+        const total = state.summary?.rows?.length || 0;
+        const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+        const target = Math.min(Math.max(page, 1), pageCount);
+
+        if (target === state.page) {
+            return;
+        }
+
+        state.page = target;
+
+        if (isGeneric(currentTableId)) {
+            renderGenericTable(state.summary);
+        } else {
+            renderTable(state.summary);
+        }
     }
 
     function yearButton(row, scope, yearKey) {
@@ -433,7 +625,7 @@
         els.metricDosen.textContent = '0';
         els.metricPs.textContent = '0';
         els.metricPsLain.textContent = '0';
-        els.metricTs.textContent = state.ts;
+        els.metricTs.textContent = state.ts ?? '-';
         els.tableStatus.innerHTML = `<span class="font-medium text-warn">Perlu perhatian</span>`;
         els.tableHead.innerHTML = '';
         els.tableBody.innerHTML = `
@@ -453,6 +645,7 @@
             </tr>
         `;
         els.tableFoot.innerHTML = '';
+        els.tablePagination.innerHTML = '';
     }
 
     async function openDetail(button) {
@@ -842,6 +1035,30 @@
         els.drawerBackdrop.classList.remove('is-open');
     }
 
+    // Tabel generik: memakai kembali #table-page (filter, kartu metrik, panel,
+    // pagination) tapi render dari envelope {columns, rows, metrics} backend.
+    const GENERIC_TABLES = {
+        'ipk-lulusan': {
+            endpoint: 'ipk-lulusan',
+            unit: 'program studi',
+            description: 'Rata-rata IPK lulusan (minimum/rata-rata/maksimum) beserta jumlah lulusan per program studi pada tahun lulus terpilih, mengikuti format Tabel 8.a BAN-PT.',
+        },
+        'dosen-tetap-pt': {
+            endpoint: 'dosen-tetap-pt',
+            unit: 'dosen',
+            description: 'Daftar dosen tetap perguruan tinggi berdasarkan program studi homebase pada tahun ajaran terpilih (Tabel 3.a.1). Kolom pendidikan/jabatan/sertifikat menyusul saat data tersedia.',
+        },
+        'masa-studi': {
+            endpoint: 'masa-studi',
+            unit: 'program studi',
+            description: 'Rata-rata masa studi lulusan (dalam tahun) beserta jumlah lulusan per program studi pada tahun lulus terpilih, mengikuti format Tabel 8.c BAN-PT.',
+        },
+    };
+
+    function isGeneric(tableId) {
+        return Object.prototype.hasOwnProperty.call(GENERIC_TABLES, tableId);
+    }
+
     const TABLE_HANDLERS = {
         'dosen-pembimbing-ta': {
             description: 'Data jumlah mahasiswa yang dibimbing oleh dosen sebagai pembimbing utama tugas akhir berdasarkan program studi dan tahun TS.',
@@ -858,6 +1075,17 @@
             },
         },
     };
+
+    // Tabel generik berbagi handler yang sama: tampilkan #table-page lalu muat.
+    Object.keys(GENERIC_TABLES).forEach((tableId) => {
+        TABLE_HANDLERS[tableId] = {
+            description: GENERIC_TABLES[tableId].description,
+            show() {
+                els.tablePage.classList.remove('hidden');
+                loadSummary();
+            },
+        };
+    });
 
     function activateTable(tableId) {
         currentTableId = tableId;
@@ -997,6 +1225,14 @@
         }
     });
 
+    els.tablePagination.addEventListener('click', (event) => {
+        const button = event.target.closest('.sp-page-btn');
+
+        if (button && !button.disabled) {
+            goToPage(Number(button.dataset.page));
+        }
+    });
+
     els.maTableBody.addEventListener('click', (event) => {
         const button = event.target.closest('.sp-number-chip');
 
@@ -1049,6 +1285,22 @@
         });
 
         els.menuEmpty.classList.toggle('hidden', visibleCount > 0);
+    });
+
+    // Shortcut "/" fokus ke pencarian menu (kecuali sedang mengetik di field lain).
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey) {
+            return;
+        }
+
+        const tag = document.activeElement?.tagName;
+
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || document.activeElement?.isContentEditable) {
+            return;
+        }
+
+        event.preventDefault();
+        els.menuSearch.focus();
     });
 
     initTsOptions();

@@ -38,9 +38,15 @@ class DosenPembimbingTaController extends Controller
         return response()->json($repository->detail($ts, $fakultasId, $programStudiId, (string) $dosenId, $scope, $yearKey));
     }
 
-    private function validateTs(Request $request): int
+    private function validateTs(Request $request): ?int
     {
-        $ts = $request->query('ts', now()->year);
+        $ts = $request->query('ts');
+
+        // TS opsional: bila tidak dikirim, repository memakai tahun akademik
+        // terbaru yang benar-benar ada di database.
+        if ($ts === null || $ts === '' || $ts === 'all') {
+            return null;
+        }
 
         if (! is_scalar($ts) || preg_match('/^[0-9]{4}$/', (string) $ts) !== 1) {
             throw new HttpException(400, 'Parameter TS tidak valid.');

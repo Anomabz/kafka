@@ -27,9 +27,11 @@ class MahasiswaController extends Controller
         $aktifTs1 = "SUBSTRING(lrpm.id_periode_masuk, 1, 4) <= '$ts1' AND (lrpm.id_periode_keluar IS NULL OR lrpm.id_periode_keluar = '' OR SUBSTRING(lrpm.id_periode_keluar, 1, 4) > '$ts1')";
         $aktifTs  = "SUBSTRING(lrpm.id_periode_masuk, 1, 4) <= '$ts'  AND (lrpm.id_periode_keluar IS NULL OR lrpm.id_periode_keluar = '' OR SUBSTRING(lrpm.id_periode_keluar, 1, 4) > '$ts')";
 
-        // Tabel 2.b adalah tabel MAHASISWA ASING, jadi SEMUA kolom (termasuk
-        // "Jumlah Mahasiswa Aktif") hanya menghitung mahasiswa berkewarganegaraan
-        // asing. Filter negara ketat: ada di tabel negara dan bukan 'ID'.
+        // Tabel 2.b (format resmi BAN-PT LKPS): "Jumlah Mahasiswa Aktif" adalah
+        // TOTAL mahasiswa aktif SEMUA kewarganegaraan (basis/pembagi), BUKAN
+        // hanya mahasiswa asing. Hanya kolom "Mahasiswa Asing Penuh Waktu/Paruh
+        // Waktu" di bawah yang dibatasi ke kewarganegaraan asing. Filter negara
+        // ketat: ada di tabel negara dan bukan 'ID'.
         $asing = "n.id_negara IS NOT NULL AND n.id_negara <> 'ID'";
 
         $data = DB::select("
@@ -40,10 +42,10 @@ class MahasiswaController extends Controller
                 -- KOLOM 2: Program Studi (Gabungan Jenjang + Nama)
                 CONCAT(ps.nama_jenjang_pendidikan, ' ', ps.nama_program_studi) AS program_studi,
 
-                -- KOLOM 3, 4, 5: Jumlah Mahasiswa ASING yang Aktif pada TS-2/TS-1/TS
-                COALESCE(SUM(CASE WHEN $aktifTs2 AND $asing THEN 1 ELSE 0 END), 0) AS mhs_aktif_ts2,
-                COALESCE(SUM(CASE WHEN $aktifTs1 AND $asing THEN 1 ELSE 0 END), 0) AS mhs_aktif_ts1,
-                COALESCE(SUM(CASE WHEN $aktifTs  AND $asing THEN 1 ELSE 0 END), 0) AS mhs_aktif_ts,
+                -- KOLOM 3, 4, 5: Jumlah TOTAL Mahasiswa Aktif (semua kewarganegaraan) pada TS-2/TS-1/TS
+                COALESCE(SUM(CASE WHEN $aktifTs2 THEN 1 ELSE 0 END), 0) AS mhs_aktif_ts2,
+                COALESCE(SUM(CASE WHEN $aktifTs1 THEN 1 ELSE 0 END), 0) AS mhs_aktif_ts1,
+                COALESCE(SUM(CASE WHEN $aktifTs  THEN 1 ELSE 0 END), 0) AS mhs_aktif_ts,
 
                 -- KOLOM 6, 7, 8: dari mahasiswa asing aktif itu, yang PENUH WAKTU
                 -- (full-time). Sumber data belum membedakan penuh/paruh waktu,
@@ -72,8 +74,10 @@ class MahasiswaController extends Controller
                 ps.nama_program_studi,
                 ps.nama_jenjang_pendidikan
             -- Hanya tampilkan program studi yang benar-benar punya mahasiswa
-            -- asing aktif pada salah satu dari TS-2/TS-1/TS.
-            HAVING (mhs_aktif_ts2 + mhs_aktif_ts1 + mhs_aktif_ts) > 0
+            -- asing aktif pada salah satu dari TS-2/TS-1/TS (mhs_aktif_* di atas
+            -- sudah jadi TOTAL semua kewarganegaraan, jadi filter 'punya
+            -- mahasiswa asing' harus pakai asing_ft_*, bukan mhs_aktif_*).
+            HAVING (asing_ft_ts2 + asing_ft_ts1 + asing_ft_ts) > 0
             ORDER BY
                 ps.nama_program_studi ASC
         ");

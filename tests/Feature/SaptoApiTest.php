@@ -2,33 +2,26 @@
 
 namespace Tests\Feature;
 
-use Illuminate\Http\Client\Request;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class SaptoApiTest extends TestCase
 {
+    use RefreshDatabase;
+
     protected function setUp(): void
     {
         parent::setUp();
 
         Cache::flush();
 
-        config([
-            'services.pangkalan_data.base_url' => 'https://pangkalan-data.unsri.ac.id',
-            'services.pangkalan_data.email' => 'user@example.test',
-            'services.pangkalan_data.password' => 'secret',
-            'sapto.api.program_studi_max_pages' => 1,
-            'sapto.api.data_max_pages' => 1,
-            'sapto.api.activity_lookup_limit' => 10,
-        ]);
+        $this->seedLocalData();
     }
 
-    public function test_universitas_can_read_program_studi_reference_data_from_api(): void
+    public function test_universitas_can_read_program_studi_reference_data_from_local_db(): void
     {
-        $this->fakePangkalanDataApi();
-
         $this->withHeader('X-SAPTO-Role', 'universitas')
             ->getJson('/api/sapto/program-studi')
             ->assertOk()
@@ -38,10 +31,8 @@ class SaptoApiTest extends TestCase
             ->assertJsonFragment(['id' => 'P2']);
     }
 
-    public function test_prodi_role_uses_account_program_studi_context_from_api(): void
+    public function test_prodi_role_uses_account_program_studi_context_from_local_db(): void
     {
-        $this->fakePangkalanDataApi();
-
         $this->withHeaders([
             'X-SAPTO-Role' => 'prodi',
             'X-SAPTO-Program-Studi-Id' => 'P1',
@@ -55,8 +46,6 @@ class SaptoApiTest extends TestCase
 
     public function test_fakultas_role_limits_program_studi_and_summary_scope(): void
     {
-        $this->fakePangkalanDataApi();
-
         $this->withHeaders([
             'X-SAPTO-Role' => 'fakultas',
             'X-SAPTO-Fakultas-Id' => 'fakultas-ilmu-komputer',
@@ -67,6 +56,9 @@ class SaptoApiTest extends TestCase
             ->assertJsonPath('data.0.id', 'P1')
             ->assertJsonPath('data.0.fakultas', 'Fakultas Ilmu Komputer');
 
+        // Scope fakultas: "PS yang Diakreditasi" = mahasiswa di prodi fakultas
+        // itu (M1 di P1), "PS Lain di PT" = mahasiswa dosen yang sama di prodi
+        // luar fakultas (M2 di P2/Ekonomi). Sebelumnya keliru selalu 0.
         $this->withHeaders([
             'X-SAPTO-Role' => 'fakultas',
             'X-SAPTO-Fakultas-Id' => 'fakultas-ilmu-komputer',
@@ -75,13 +67,74 @@ class SaptoApiTest extends TestCase
             ->assertJsonPath('fakultas.id', 'fakultas-ilmu-komputer')
             ->assertJsonPath('rows.0.dosen_id', 'D1')
             ->assertJsonPath('rows.0.ps_diakreditasi.ts', 1)
-            ->assertJsonPath('rows.0.ps_lain_pt.ts', 0);
+            ->assertJsonPath('rows.0.ps_lain_pt.ts', 1);
+
+        // Detail "PS Lain di PT" untuk fakultas Ilmu Komputer harus berisi M2
+        // (mahasiswa Manajemen/Ekonomi) — di luar scope fakultas.
+        $this->withHeaders([
+            'X-SAPTO-Role' => 'fakultas',
+            'X-SAPTO-Fakultas-Id' => 'fakultas-ilmu-komputer',
+        ])->getJson('/api/sapto/tables/dosen-pembimbing-ta/detail?ts=2026&dosen_id=D1&scope=ps_lain_pt&year_key=ts')
+            ->assertOk()
+            ->assertJsonCount(1, 'items')
+            ->assertJsonPath('items.0.nama_mahasiswa', 'Mhs Dua')
+            ->assertJsonPath('items.0.program_studi_id', 'P2');
+
+        // Detail "PS yang Diakreditasi" berisi M1 (Teknik Informatika).
+        $this->withHeaders([
+            'X-SAPTO-Role' => 'fakultas',
+            'X-SAPTO-Fakultas-Id' => 'fakultas-ilmu-komputer',
+        ])->getJson('/api/sapto/tables/dosen-pembimbing-ta/detail?ts=2026&dosen_id=D1&scope=ps_diakreditasi&year_key=ts')
+            ->assertOk()
+            ->assertJsonCount(1, 'items')
+            ->assertJsonPath('items.0.program_studi_id', 'P1');
+    }
+
+    public function test_summary_defaults_ts_to_latest_academic_year_in_database(): void
+    {
+        // Tanpa parameter ts, TS harus mengikuti tahun akademik terbaru yang
+        // benar-benar ada di database (di seeder: 2026), bukan tahun kalender.
+        $this->withHeader('X-SAPTO-Role', 'universitas')
+            ->getJson('/api/sapto/tables/dosen-pembimbing-ta/summary')
+            ->assertOk()
+            ->assertJsonPath('ts', 2026)
+            ->assertJsonPath('year_columns.ts', 2026)
+            ->assertJsonPath('available_years', [2026]);
+    }
+
+    public function test_university_scope_splits_by_dominant_prodi(): void
+    {
+        // Di tingkat universitas, "PS yang Diakreditasi" = prodi utama dosen
+        // (prodi tempat ia paling banyak membimbing) dan "PS Lain di PT" =
+        // bimbingan di prodi lain. D1 membimbing M1 di P1 dan M2 di P2 (seri),
+        // jadi prodi utama = P1 (id terkecil): diakreditasi=1, PS lain=1.
+        $response = $this->withHeader('X-SAPTO-Role', 'universitas')
+            ->getJson('/api/sapto/tables/dosen-pembimbing-ta/summary?ts=2026')
+            ->assertOk();
+
+        $d1 = collect($response->json('rows'))->firstWhere('dosen_id', 'D1');
+
+        $this->assertSame(1, $d1['ps_diakreditasi']['ts']);
+        $this->assertSame(1, $d1['ps_lain_pt']['ts']);
+
+        // Detail "PS Lain di PT" tingkat universitas berisi M2 (prodi P2, bukan
+        // prodi utama). Sebelumnya selalu kosong.
+        $this->withHeader('X-SAPTO-Role', 'universitas')
+            ->getJson('/api/sapto/tables/dosen-pembimbing-ta/detail?ts=2026&dosen_id=D1&scope=ps_lain_pt&year_key=ts')
+            ->assertOk()
+            ->assertJsonCount(1, 'items')
+            ->assertJsonPath('items.0.program_studi_id', 'P2');
+
+        // Detail "PS yang Diakreditasi" berisi M1 (prodi utama P1).
+        $this->withHeader('X-SAPTO-Role', 'universitas')
+            ->getJson('/api/sapto/tables/dosen-pembimbing-ta/detail?ts=2026&dosen_id=D1&scope=ps_diakreditasi&year_key=ts')
+            ->assertOk()
+            ->assertJsonCount(1, 'items')
+            ->assertJsonPath('items.0.program_studi_id', 'P1');
     }
 
     public function test_universitas_can_filter_by_fakultas(): void
     {
-        $this->fakePangkalanDataApi();
-
         $this->withHeader('X-SAPTO-Role', 'universitas')
             ->getJson('/api/sapto/fakultas')
             ->assertOk()
@@ -96,88 +149,132 @@ class SaptoApiTest extends TestCase
             ->assertJsonPath('data.0.id', 'P2');
     }
 
-    public function test_summary_rejects_invalid_ts_before_calling_api(): void
+    public function test_summary_rejects_invalid_ts(): void
     {
-        Http::fake();
-
         $this->withHeader('X-SAPTO-Role', 'universitas')
             ->getJson('/api/sapto/tables/dosen-pembimbing-ta/summary?ts=abc')
             ->assertBadRequest()
             ->assertJsonPath('message', 'Parameter TS tidak valid.');
-
-        Http::assertNothingSent();
     }
 
-    private function fakePangkalanDataApi(): void
+    public function test_summary_counts_a_student_with_duplicate_supervision_rows_once(): void
     {
-        $profile = [
-            'id_perguruan_tinggi' => 'PT-UNSRI',
-            'kode_perguruan_tinggi' => '001009',
-            'nama_perguruan_tinggi' => 'Universitas Sriwijaya',
-        ];
+        // Data sinkronisasi kadang punya lebih dari satu baris untuk
+        // mahasiswa+dosen+tahun yang sama (id_bimbing_mahasiswa/id_aktivitas
+        // berbeda, id_registrasi_mahasiswa sama). Pastikan itu tidak
+        // menggandakan hitungan "jumlah mahasiswa yang dibimbing".
+        DB::table('dosen_pembimbing')->insert([
+            'id_registrasi_mahasiswa' => 'M1',
+            'id_bimbing_mahasiswa' => 'M1-duplicate',
+            'nim' => 'NIM1',
+            'nama_mahasiswa' => 'Mhs Satu',
+            'id_dosen' => 'D1',
+            'nama_dosen' => 'Dr. Budi',
+            'nidn' => '0001',
+            'nuptk' => null,
+            'pembimbing_ke' => '1',
+            'id_aktivitas' => 'A1-duplicate',
+            'jenis_aktivitas' => 'Tugas akhir',
+        ]);
 
-        $programStudis = [
+        DB::table('list_aktivitas_mahasiswa')->insert([
+            'id_aktivitas' => 'A1-duplicate',
+            'id_prodi' => 'P1',
+            'nama_prodi' => 'Teknik Informatika',
+            'id_semester' => '20261',
+            'judul' => 'Sistem Informasi Akademik (revisi)',
+            'status_sync' => 'sudah sync',
+        ]);
+
+        $response = $this->withHeader('X-SAPTO-Role', 'universitas')
+            ->getJson('/api/sapto/tables/dosen-pembimbing-ta/summary?ts=2026')
+            ->assertOk();
+
+        $rows = collect($response->json('rows'));
+        $d1 = $rows->firstWhere('dosen_id', 'D1');
+
+        // M1 (2 baris aktivitas di P1) dihitung sekali. Prodi utama D1 = P1
+        // (seri dengan P2, id terkecil), jadi diakreditasi=1 (M1), PS lain=1
+        // (M2), bukan 3.
+        $this->assertNotNull($d1);
+        $this->assertSame(1, $d1['ps_diakreditasi']['ts']);
+        $this->assertSame(1, $d1['ps_lain_pt']['ts']);
+
+        // Detail "PS yang Diakreditasi" berisi M1 saja — dua baris aktivitasnya
+        // menyatu jadi satu mahasiswa.
+        $this->withHeader('X-SAPTO-Role', 'universitas')
+            ->getJson('/api/sapto/tables/dosen-pembimbing-ta/detail?ts=2026&dosen_id=D1&scope=ps_diakreditasi&year_key=ts')
+            ->assertOk()
+            ->assertJsonCount(1, 'items')
+            ->assertJsonPath('items.0.program_studi_id', 'P1');
+    }
+
+    private function seedLocalData(): void
+    {
+        DB::table('program_studi')->insert([
             [
-                'id_perguruan_tinggi' => 'PT-UNSRI',
                 'id_prodi' => 'P1',
                 'kode_program_studi' => '55201',
                 'nama_program_studi' => 'Teknik Informatika',
+                'status' => 'AKTIF',
+                'id_jenjang_pendidikan' => 1,
                 'nama_jenjang_pendidikan' => 'S1',
-                'nama_perguruan_tinggi' => 'Universitas Sriwijaya',
-                'kode_perguruan_tinggi' => '001009',
             ],
             [
-                'id_perguruan_tinggi' => 'PT-UNSRI',
                 'id_prodi' => 'P2',
                 'kode_program_studi' => '61101',
                 'nama_program_studi' => 'Manajemen',
+                'status' => 'AKTIF',
+                'id_jenjang_pendidikan' => 1,
                 'nama_jenjang_pendidikan' => 'S1',
-                'nama_perguruan_tinggi' => 'Universitas Sriwijaya',
-                'kode_perguruan_tinggi' => '001009',
             ],
-            [
-                'id_perguruan_tinggi' => 'PT-OTHER',
-                'id_prodi' => 'P3',
-                'kode_program_studi' => '11111',
-                'nama_program_studi' => 'Bukan Unsri',
-                'nama_jenjang_pendidikan' => 'S1',
-                'nama_perguruan_tinggi' => 'Universitas Lain',
-                'kode_perguruan_tinggi' => '999999',
-            ],
-        ];
+        ]);
 
-        $bimbingMahasiswa = [
+        DB::table('dosen_pembimbing')->insert([
             [
+                'id_registrasi_mahasiswa' => 'M1',
                 'id_bimbing_mahasiswa' => 'M1',
+                'nim' => 'NIM1',
+                'nama_mahasiswa' => 'Mhs Satu',
                 'id_dosen' => 'D1',
-                'nidn' => '0001',
                 'nama_dosen' => 'Dr. Budi',
+                'nidn' => '0001',
+                'nuptk' => null,
                 'pembimbing_ke' => '1',
                 'id_aktivitas' => 'A1',
-                'nama_kategori_kegiatan' => 'Skripsi (pembimbing utama)',
+                'jenis_aktivitas' => 'Skripsi',
             ],
             [
+                'id_registrasi_mahasiswa' => 'M2',
                 'id_bimbing_mahasiswa' => 'M2',
+                'nim' => 'NIM2',
+                'nama_mahasiswa' => 'Mhs Dua',
                 'id_dosen' => 'D1',
-                'nidn' => '0001',
                 'nama_dosen' => 'Dr. Budi',
+                'nidn' => '0001',
+                'nuptk' => null,
                 'pembimbing_ke' => '1',
                 'id_aktivitas' => 'A2',
-                'nama_kategori_kegiatan' => 'Tesis (pembimbing utama)',
+                'jenis_aktivitas' => 'Tesis',
             ],
             [
+                // Pembimbing pendamping (bukan utama) — tidak boleh terhitung.
+                'id_registrasi_mahasiswa' => 'M3',
                 'id_bimbing_mahasiswa' => 'M3',
+                'nim' => 'NIM3',
+                'nama_mahasiswa' => 'Mhs Tiga',
                 'id_dosen' => 'D2',
-                'nidn' => '0002',
                 'nama_dosen' => 'Dr. Citra',
+                'nidn' => '0002',
+                'nuptk' => null,
                 'pembimbing_ke' => '2',
                 'id_aktivitas' => 'A3',
-                'nama_kategori_kegiatan' => 'Skripsi (pembimbing pendamping)',
+                'jenis_aktivitas' => 'Skripsi',
             ],
-        ];
+        ]);
 
-        $activities = [
-            'A1' => [
+        DB::table('list_aktivitas_mahasiswa')->insert([
+            [
                 'id_aktivitas' => 'A1',
                 'id_prodi' => 'P1',
                 'nama_prodi' => 'Teknik Informatika',
@@ -185,7 +282,7 @@ class SaptoApiTest extends TestCase
                 'judul' => 'Sistem Informasi Akademik',
                 'status_sync' => 'sudah sync',
             ],
-            'A2' => [
+            [
                 'id_aktivitas' => 'A2',
                 'id_prodi' => 'P2',
                 'nama_prodi' => 'Manajemen',
@@ -193,57 +290,14 @@ class SaptoApiTest extends TestCase
                 'judul' => 'Analisis Kinerja Organisasi',
                 'status_sync' => 'sudah sync',
             ],
-        ];
-
-        Http::fake(function (Request $request) use ($activities, $bimbingMahasiswa, $profile, $programStudis) {
-            $url = $request->url();
-
-            if (str_contains($url, '/api/login')) {
-                return Http::response(['data' => ['token' => 'fake-token']], 200);
-            }
-
-            if (str_contains($url, '/api/feeder/profil-pt')) {
-                return Http::response(['data' => [$profile]], 200);
-            }
-
-            if (str_contains($url, '/api/feeder/all-prodi')) {
-                return Http::response($this->paginated($programStudis), 200);
-            }
-
-            if (str_contains($url, '/api/feeder/bimbing-mahasiswa')) {
-                return Http::response($this->paginated($bimbingMahasiswa), 200);
-            }
-
-            if (str_contains($url, '/api/feeder/list-aktivitas-mahasiswa')) {
-                $activityId = data_get($request->data(), 'filter[id_aktivitas]')
-                    ?? data_get($request->data(), 'filter.id_aktivitas');
-
-                return Http::response($this->paginated(isset($activities[$activityId]) ? [$activities[$activityId]] : []), 200);
-            }
-
-            return Http::response(['message' => 'Unexpected API request.'], 404);
-        });
-    }
-
-    /**
-     * @param  array<int, array<string, mixed>>  $rows
-     */
-    private function paginated(array $rows): array
-    {
-        return [
-            'data' => $rows,
-            'links' => [
-                'first' => '/?page=1',
-                'last' => '/?page=1',
-                'prev' => null,
-                'next' => null,
+            [
+                'id_aktivitas' => 'A3',
+                'id_prodi' => 'P1',
+                'nama_prodi' => 'Teknik Informatika',
+                'id_semester' => '20261',
+                'judul' => 'Tidak Relevan (bukan pembimbing utama)',
+                'status_sync' => 'sudah sync',
             ],
-            'meta' => [
-                'current_page' => 1,
-                'last_page' => 1,
-                'per_page' => 500,
-                'total' => count($rows),
-            ],
-        ];
+        ]);
     }
 }

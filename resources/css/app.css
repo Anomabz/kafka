@@ -81,23 +81,34 @@
                hover:border-accent hover:bg-accent/10 focus:outline-none focus:ring-2 focus:ring-accent/30;
     }
 
+    .sp-page-btn {
+        @apply inline-flex min-w-[34px] items-center justify-center rounded-md border border-slate-300 bg-white
+               px-2.5 py-1 text-[12px] font-medium text-ink tabular-nums cursor-pointer transition
+               hover:border-accent hover:bg-accent/10 focus:outline-none focus:ring-2 focus:ring-accent/30
+               disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-slate-300 disabled:hover:bg-white;
+    }
+
+    .sp-page-btn-active {
+        @apply border-accent bg-accent text-white hover:bg-accent hover:border-accent;
+    }
+
     .sp-alert-warn {
         @apply flex items-start gap-3 rounded-xl border border-warn-line bg-warn-soft px-4 py-3.5 text-[13px] text-warn;
     }
 
     /* Sidebar nav item. Base state + `.is-active` toggled by JS in activateTable(). */
     .menu-item {
-        @apply relative flex w-full items-center rounded-lg px-3 py-2.5 text-left text-[13px] leading-snug
-               text-slate-300 transition-colors duration-150 hover:bg-white/[0.06] hover:text-white;
+        @apply relative flex w-full items-center rounded-xl px-3.5 py-2.5 text-left text-[13px] font-medium leading-snug
+               text-slate-400 transition-all duration-150 hover:translate-x-0.5 hover:bg-white/[0.06] hover:text-white;
     }
 
     .menu-item.is-active {
-        @apply bg-navy-800 text-white;
+        @apply bg-gradient-to-r from-accent/20 to-transparent text-white shadow-[inset_0_0_0_1px_rgba(15,157,139,0.3)];
     }
 
     .menu-item.is-active::before {
         content: '';
-        @apply absolute inset-y-1.5 left-0 w-[3px] rounded-full bg-accent;
+        @apply absolute inset-y-1.5 left-0 w-[3px] rounded-full bg-accent shadow-[0_0_8px_rgba(15,157,139,0.9)];
     }
 
     /* Sidebar nav scrollbar — 45 grouped items make this a long list. */

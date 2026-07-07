@@ -12,4 +12,6 @@
             <tfoot id="table-foot"></tfoot>
         </table>
     </div>
+
+    <div id="table-pagination" class="flex flex-col items-center justify-between gap-3 border-t border-line px-4 py-3 sm:flex-row"></div>
 </section>
