@@ -26,12 +26,16 @@ class SaptoDashboardRepository
     ) {}
 
     /**
-     * @return array{ts: int|null, cards: array<int, array<string, mixed>>}
+     * @return array{ts: int, available_years: array<int, int>, cards: array<int, array<string, mixed>>}
      */
     public function summary(?int $ts, ?string $fakultasId, ?string $programStudiId): array
     {
+        $availableYears = $this->dosenTetap->availableYears();
+        $ts ??= $availableYears[0] ?? (int) now()->year;
+
         return [
             'ts' => $ts,
+            'available_years' => $availableYears,
             'cards' => [
                 $this->dosenTetapCard($ts, $fakultasId, $programStudiId),
                 $this->dosenPembimbingTaCard($ts, $fakultasId, $programStudiId),

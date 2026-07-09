@@ -47,6 +47,22 @@ class SaptoDashboardTest extends TestCase
         ], $ids);
     }
 
+    public function test_dashboard_resolves_ts_and_returns_available_years_when_ts_omitted(): void
+    {
+        $response = $this->withHeaders([
+            'X-SAPTO-Role' => 'prodi',
+            'X-SAPTO-Program-Studi-Id' => 'P1',
+        ])->getJson('/api/sapto/dashboard/summary')
+            ->assertOk();
+
+        $ts = $response->json('ts');
+        $availableYears = $response->json('available_years');
+
+        $this->assertNotNull($ts);
+        $this->assertNotEmpty($availableYears);
+        $this->assertContains($ts, $availableYears);
+    }
+
     public function test_dosen_pembimbing_card_has_metrics_and_three_point_trend(): void
     {
         $response = $this->withHeader('X-SAPTO-Role', 'universitas')
