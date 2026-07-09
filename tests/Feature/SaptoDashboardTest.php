@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Services\SaptoDosenTetapRepository;
 use App\Services\SaptoIpkLulusanRepository;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
@@ -123,6 +124,31 @@ class SaptoDashboardTest extends TestCase
         $this->assertFalse($cards['dosen-tetap-pt']['error']);
         $this->assertFalse($cards['dosen-pembimbing-ta']['error']);
         $this->assertFalse($cards['mahasiswa-asing']['error']);
+    }
+
+    public function test_available_years_failure_does_not_break_whole_endpoint(): void
+    {
+        $this->partialMock(SaptoDosenTetapRepository::class, function ($mock): void {
+            $mock->shouldReceive('availableYears')->andThrow(new \RuntimeException('DB down'));
+        });
+
+        $response = $this->withHeaders([
+            'X-SAPTO-Role' => 'prodi',
+            'X-SAPTO-Program-Studi-Id' => 'P1',
+        ])->getJson('/api/sapto/dashboard/summary?ts=2025')
+            ->assertOk();
+
+        $this->assertSame(2025, $response->json('ts'));
+        $this->assertSame([], $response->json('available_years'));
+
+        $ids = collect($response->json('cards'))->pluck('id')->all();
+        $this->assertSame([
+            'dosen-tetap-pt',
+            'dosen-pembimbing-ta',
+            'ipk-lulusan',
+            'masa-studi',
+            'mahasiswa-asing',
+        ], $ids);
     }
 
     private function seedAllFiveDomains(): void

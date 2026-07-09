@@ -30,7 +30,13 @@ class SaptoDashboardRepository
      */
     public function summary(?int $ts, ?string $fakultasId, ?string $programStudiId): array
     {
-        $availableYears = $this->dosenTetap->availableYears();
+        try {
+            $availableYears = $this->dosenTetap->availableYears();
+        } catch (Throwable $e) {
+            report($e);
+            $availableYears = [];
+        }
+
         $ts ??= $availableYears[0] ?? (int) now()->year;
 
         return [
