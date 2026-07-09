@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\Sapto\DashboardController;
 use App\Http\Controllers\Api\Sapto\DosenPembimbingTaController;
 use App\Http\Controllers\Api\Sapto\DosenTetapController;
 use App\Http\Controllers\Api\Sapto\FakultasController;
@@ -14,6 +15,8 @@ use Illuminate\Support\Facades\Route;
 Route::middleware(['web', 'sso.auth'])->prefix('sapto')->group(function (): void {
     Route::get('/fakultas', FakultasController::class);
     Route::get('/program-studi', ProgramStudiController::class);
+
+    Route::get('/dashboard/summary', [DashboardController::class, 'summary']);
 
     Route::prefix('tables/dosen-pembimbing-ta')->group(function (): void {
         Route::get('/summary', [DosenPembimbingTaController::class, 'summary']);
