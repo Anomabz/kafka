@@ -13,11 +13,13 @@
 @endphp
 
 @section('content')
+    <div id="shared-filter-bar">
+        @include('components.filter-bar')
+    </div>
+
     @include('components.dashboard-page')
 
     <section id="table-page" class="hidden">
-        @include('components.filter-bar')
-
         <div class="mb-4 grid grid-cols-2 gap-2.5 sm:mb-5 sm:gap-3 lg:grid-cols-4">
             @include('components.metric-card', ['id' => 'metric-dosen', 'labelId' => 'metric-dosen-label', 'label' => 'Total dosen pembimbing', 'icon' => $icons['users'], 'tint' => 'accent'])
             @include('components.metric-card', ['id' => 'metric-ps', 'labelId' => 'metric-ps-label', 'label' => 'Total mahasiswa bimbingan PS diakreditasi', 'icon' => $icons['cap'], 'tint' => 'info'])
@@ -81,6 +83,7 @@
         dashboardPage: document.getElementById('dashboard-page'),
         dashboardStatus: document.getElementById('dashboard-status'),
         dashboardCards: document.querySelectorAll('.dashboard-card'),
+        sharedFilterBar: document.getElementById('shared-filter-bar'),
         pageTitle: document.getElementById('page-title'),
         pageDescription: document.getElementById('page-description'),
         tableStatus: document.getElementById('table-status'),
@@ -1116,6 +1119,12 @@
         els.placeholderPage.classList.add('hidden');
         els.dashboardPage.classList.add('hidden');
 
+        // Filter bar dipakai bersama dashboard + keluarga tabel "table-page"
+        // (dosen-pembimbing-ta + tabel generik); mahasiswa-asing punya filter
+        // sendiri, placeholder tidak butuh filter sama sekali.
+        const usesSharedFilterBar = tableId === 'dashboard' || tableId === 'dosen-pembimbing-ta' || isGeneric(tableId);
+        els.sharedFilterBar.classList.toggle('hidden', !usesSharedFilterBar);
+
         const handler = TABLE_HANDLERS[tableId];
 
         if (handler) {
@@ -1211,6 +1220,8 @@
         if (payload.ts !== null && payload.ts !== undefined) {
             state.ts = payload.ts;
         }
+
+        populateTsOptions(payload.available_years, payload.ts);
 
         els.dashboardStatus.textContent = '';
 

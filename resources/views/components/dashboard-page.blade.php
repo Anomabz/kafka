@@ -19,8 +19,6 @@
 @endphp
 
 <section id="dashboard-page">
-    @include('components.filter-bar')
-
     <div id="dashboard-status" class="mb-3 text-[12px] text-muted sm:mb-4"></div>
 
     <div class="grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-2">
