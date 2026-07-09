@@ -91,19 +91,19 @@
     --color-surface: #131c2e;
     --color-line: rgba(255, 255, 255, 0.10);
 
-    --color-accent: #22c7b3;
-    --color-accent-dark: #7ff0e2;
-    --color-accent-soft: rgba(34, 199, 179, 0.16);
-    --color-accent-line: rgba(34, 199, 179, 0.34);
+    --color-accent: #3fab9c;
+    --color-accent-dark: #97cec5;
+    --color-accent-soft: rgba(63, 171, 156, 0.16);
+    --color-accent-line: rgba(63, 171, 156, 0.30);
 
-    --color-focus: #5b8cff;
+    --color-focus: #7c93d6;
 
-    --color-info: #5b8cff;
-    --color-info-soft: rgba(91, 140, 255, 0.16);
+    --color-info: #7c93d6;
+    --color-info-soft: rgba(124, 147, 214, 0.16);
 
-    --color-warn: #fbbf24;
-    --color-warn-soft: rgba(251, 191, 36, 0.14);
-    --color-warn-line: rgba(251, 191, 36, 0.32);
+    --color-warn: #cf9f4a;
+    --color-warn-soft: rgba(207, 159, 74, 0.14);
+    --color-warn-line: rgba(207, 159, 74, 0.30);
 
     --color-slate-soft: rgba(255, 255, 255, 0.07);
 
@@ -127,10 +127,10 @@
     --side-dim: #8595ad;
     --side-faint: #5c6b83;
     --side-hover: rgba(255, 255, 255, 0.06);
-    --side-active: rgba(34, 199, 179, 0.16);
+    --side-active: rgba(63, 171, 156, 0.14);
     --side-border: rgba(255, 255, 255, 0.08);
 
-    --aura-1: rgba(34, 199, 179, 0.07);
+    --aura-1: rgba(63, 171, 156, 0.06);
     --aura-2: rgba(100, 116, 139, 0.09);
 }
 
@@ -144,16 +144,16 @@
         --color-canvas: #060a13;
         --color-surface: #131c2e;
         --color-line: rgba(255, 255, 255, 0.10);
-        --color-accent: #22c7b3;
-        --color-accent-dark: #7ff0e2;
-        --color-accent-soft: rgba(34, 199, 179, 0.16);
-        --color-accent-line: rgba(34, 199, 179, 0.34);
-        --color-focus: #5b8cff;
-        --color-info: #5b8cff;
-        --color-info-soft: rgba(91, 140, 255, 0.16);
-        --color-warn: #fbbf24;
-        --color-warn-soft: rgba(251, 191, 36, 0.14);
-        --color-warn-line: rgba(251, 191, 36, 0.32);
+        --color-accent: #3fab9c;
+        --color-accent-dark: #97cec5;
+        --color-accent-soft: rgba(63, 171, 156, 0.16);
+        --color-accent-line: rgba(63, 171, 156, 0.30);
+        --color-focus: #7c93d6;
+        --color-info: #7c93d6;
+        --color-info-soft: rgba(124, 147, 214, 0.16);
+        --color-warn: #cf9f4a;
+        --color-warn-soft: rgba(207, 159, 74, 0.14);
+        --color-warn-line: rgba(207, 159, 74, 0.30);
         --color-slate-soft: rgba(255, 255, 255, 0.07);
 
         --glass-bg: rgba(22, 32, 52, 0.55);
@@ -173,9 +173,9 @@
         --side-dim: #8595ad;
         --side-faint: #5c6b83;
         --side-hover: rgba(255, 255, 255, 0.06);
-        --side-active: rgba(34, 199, 179, 0.16);
+        --side-active: rgba(63, 171, 156, 0.14);
         --side-border: rgba(255, 255, 255, 0.08);
-        --aura-1: rgba(34, 199, 179, 0.07);
+        --aura-1: rgba(63, 171, 156, 0.06);
         --aura-2: rgba(100, 116, 139, 0.09);
     }
 }
@@ -464,9 +464,23 @@ body::before {
     }
 
     #sidebar {
-        @apply fixed inset-y-0 left-0 z-40 flex -translate-x-full flex-col overflow-hidden
+        /*
+         * height (not inset-y-0/bottom-0) on purpose: a fixed element pinned
+         * by top+bottom is sized against the layout viewport, which mobile
+         * browsers keep at its shortest (address-bar-visible) height. When
+         * the address bar auto-hides on scroll, the visual viewport grows
+         * taller than that and the sidebar's bottom edge stops short of the
+         * real screen edge, revealing page content in the gap. 100dvh tracks
+         * the live visual viewport instead, so the sidebar always reaches
+         * the actual bottom. The plain 100vh line is the fallback for
+         * browsers without dvh support — kept before the dvh line so dvh
+         * overrides it where supported.
+         */
+        @apply fixed left-0 top-0 z-40 flex -translate-x-full flex-col overflow-hidden
                transition-transform duration-200 ease-in-out;
         width: 280px;
+        height: 100vh;
+        height: 100dvh;
     }
 
     #sidebar.is-open {
@@ -475,7 +489,11 @@ body::before {
 
     .sidebar-backdrop {
         position: fixed;
-        inset: 0;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 100vh;
+        height: 100dvh;
         z-index: 30;
         display: none;
         background: var(--scrim);
@@ -536,7 +554,14 @@ body::before {
     }
 
     /* ---- Drawer ---- */
+    /* top/left/right + height (not the inset-0 utility) for the same dvh
+       reason as .sidebar-backdrop above. */
     .drawer-backdrop {
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 100vh;
+        height: 100dvh;
         display: none;
         background: var(--scrim);
         -webkit-backdrop-filter: blur(3px);
@@ -545,6 +570,13 @@ body::before {
 
     .drawer-backdrop.is-open {
         display: block;
+    }
+
+    /* h-screen (100vh) on the drawer itself has the same mobile
+       address-bar gap problem as #sidebar — see the comment there. */
+    #detail-drawer {
+        height: 100vh;
+        height: 100dvh;
     }
 
     .drawer {
