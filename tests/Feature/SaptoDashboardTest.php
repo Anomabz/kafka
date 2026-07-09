@@ -103,6 +103,32 @@ class SaptoDashboardTest extends TestCase
         $this->assertNotEmpty($cardWithProdi['metrics']);
     }
 
+    public function test_dosen_tetap_and_ipk_cards_report_seeded_metric_values(): void
+    {
+        // Dashboard cards look up sibling repositories' metrics by label string
+        // (e.g. $byLabel['Total dosen tetap']) rather than a stable key. If a
+        // sibling repo ever renames a label, the lookup silently falls back to
+        // 0 with error:false. These assertions on real seeded values would
+        // catch that — a rename would fail this test instead of shipping
+        // silently-wrong data on an accreditation surface.
+        $response = $this->withHeaders([
+            'X-SAPTO-Role' => 'prodi',
+            'X-SAPTO-Program-Studi-Id' => 'P1',
+        ])->getJson('/api/sapto/dashboard/summary?ts=2025')
+            ->assertOk();
+
+        $cards = collect($response->json('cards'))->keyBy('id');
+
+        $dosenTetapMetrics = collect($cards['dosen-tetap-pt']['metrics'])->pluck('value', 'label');
+        $this->assertSame(1, $dosenTetapMetrics['Total dosen tetap']);
+        $this->assertSame(1, $dosenTetapMetrics['Perempuan']);
+        $this->assertSame(0, $dosenTetapMetrics['Laki-laki']);
+
+        $ipkMetrics = collect($cards['ipk-lulusan']['metrics'])->pluck('value', 'label');
+        $this->assertSame(1, $ipkMetrics['Jumlah lulusan (TS)']);
+        $this->assertEquals(3.5, $ipkMetrics['IPK rata-rata (TS)']);
+    }
+
     public function test_one_domain_failure_does_not_break_other_cards(): void
     {
         $this->mock(SaptoIpkLulusanRepository::class, function ($mock): void {
