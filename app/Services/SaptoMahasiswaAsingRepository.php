@@ -3,13 +3,15 @@
 namespace App\Services;
 
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 
 /**
  * Tabel 2.b) Mahasiswa Asing (format BAN-PT LKPS). Extracted from
  * MahasiswaController::data_mahasiswa_asing() (2026-07-09) so
  * SaptoDashboardRepository can reuse the same query + faculty mapping
  * instead of duplicating it.
+ *
+ * Pemetaan fakultas sekarang diambil dari SaptoProgramStudiRepository
+ * (cached) daripada parsing CSV di sini setiap kali dipanggil.
  *
  * Beda dari repository tabel lain: TS TIDAK dibaca dari request — window
  * TS-2/TS-1/TS masih hardcode 2023/2024/2025, sudah keterbatasan yang ada
@@ -21,6 +23,8 @@ use Illuminate\Support\Str;
  */
 class SaptoMahasiswaAsingRepository
 {
+    public function __construct(private readonly SaptoProgramStudiRepository $client) {}
+
     /**
      * @return array{tahun_akademik: array{ts_2: string, ts_1: string, ts: string}, total_prodi: int, data: array<int, object>}
      */
@@ -72,12 +76,12 @@ class SaptoMahasiswaAsingRepository
                 ps.nama_program_studi ASC
         ");
 
-        $facultyMap = $this->facultyByProdiCode();
+        $programIndex = $this->client->programStudis()->keyBy('id');
 
-        $rows = array_map(function (object $row) use ($facultyMap): object {
-            $faculty = $facultyMap[$row->kode_program_studi] ?? 'Belum Dipetakan';
-            $row->fakultas = $faculty;
-            $row->fakultas_id = Str::slug($faculty) ?: 'belum-dipetakan';
+        $rows = array_map(function (object $row) use ($programIndex): object {
+            $program = $programIndex->get((string) $row->id_prodi);
+            $row->fakultas = $program['fakultas'] ?? 'Belum Dipetakan';
+            $row->fakultas_id = $program['fakultas_id'] ?? 'belum-dipetakan';
 
             return $row;
         }, $data);
@@ -107,75 +111,4 @@ class SaptoMahasiswaAsingRepository
         ];
     }
 
-    /**
-     * Peta kode_program_studi -> nama fakultas, dibaca dari
-     * database/data/program_studi.csv (satu-satunya sumber pemetaan
-     * fakultas yang tersedia lokal; tabel program_studi tidak menyimpannya).
-     *
-     * @return array<string, string>
-     */
-    private function facultyByProdiCode(): array
-    {
-        $path = database_path('data/program_studi.csv');
-
-        if (! is_file($path)) {
-            return [];
-        }
-
-        $handle = fopen($path, 'r');
-
-        if ($handle === false) {
-            return [];
-        }
-
-        $headers = fgetcsv($handle, 0, ',', '"', '') ?: [];
-        $map = [];
-
-        while (($values = fgetcsv($handle, 0, ',', '"', '')) !== false) {
-            if (count($headers) !== count($values)) {
-                continue;
-            }
-
-            $record = array_combine($headers, $values);
-            $code = trim((string) ($record['kode'] ?? ''));
-
-            if ($code === '') {
-                continue;
-            }
-
-            $map[$code] = $this->normalizeFaculty((string) ($record['fakultas'] ?? ''));
-        }
-
-        fclose($handle);
-
-        return $map;
-    }
-
-    /**
-     * Rapikan nama fakultas mentah dari CSV menjadi label yang konsisten,
-     * mis. "KEDOKTERANM" -> "Fakultas Kedokteran", "PASCASARJANA" ->
-     * "Pascasarjana". Selaras dengan PangkalanDataApiClient::normalizeFaculty().
-     */
-    private function normalizeFaculty(string $faculty): string
-    {
-        $faculty = trim((string) preg_replace('/\s+/', ' ', Str::upper(Str::ascii($faculty))));
-
-        if ($faculty === 'KEDOKTERANM') {
-            $faculty = 'KEDOKTERAN';
-        }
-
-        if ($faculty === '') {
-            return 'Belum Dipetakan';
-        }
-
-        if ($faculty === 'PASCASARJANA') {
-            return 'Pascasarjana';
-        }
-
-        if (str_starts_with($faculty, 'FAKULTAS ')) {
-            $faculty = trim(substr($faculty, 9));
-        }
-
-        return 'Fakultas '.Str::title(Str::lower($faculty));
-    }
 }
