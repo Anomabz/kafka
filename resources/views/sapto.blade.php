@@ -13,7 +13,9 @@
 @endphp
 
 @section('content')
-    <section id="table-page">
+    @include('components.dashboard-page')
+
+    <section id="table-page" class="hidden">
         @include('components.filter-bar')
 
         <div class="mb-4 grid grid-cols-2 gap-2.5 sm:mb-5 sm:gap-3 lg:grid-cols-4">
@@ -76,6 +78,9 @@
         tablePage: document.getElementById('table-page'),
         placeholderPage: document.getElementById('placeholder-page'),
         placeholderTitle: document.getElementById('placeholder-title'),
+        dashboardPage: document.getElementById('dashboard-page'),
+        dashboardStatus: document.getElementById('dashboard-status'),
+        dashboardCards: document.querySelectorAll('.dashboard-card'),
         pageTitle: document.getElementById('page-title'),
         pageDescription: document.getElementById('page-description'),
         tableStatus: document.getElementById('table-status'),
@@ -124,7 +129,7 @@
     const metricEls = [els.metricDosen, els.metricPs, els.metricPsLain, els.metricTs];
     const maMetricEls = [els.maMetricProdi, els.maMetricAktif, els.maMetricFt, els.maMetricPt];
     let maSummary = null;
-    let currentTableId = @json($activeTableId ?? 'dosen-pembimbing-ta');
+    let currentTableId = @json($activeTableId ?? 'dashboard');
 
     // Filter mahasiswa asing (role diambil dari state.role yang dibagi topbar).
     const maFilter = {
@@ -1060,6 +1065,13 @@
     }
 
     const TABLE_HANDLERS = {
+        'dashboard': {
+            description: 'Ringkasan angka kunci dari 5 tabel BAN-PT yang sudah tersedia datanya.',
+            show() {
+                els.dashboardPage.classList.remove('hidden');
+                loadDashboard();
+            },
+        },
         'dosen-pembimbing-ta': {
             description: 'Data jumlah mahasiswa yang dibimbing oleh dosen sebagai pembimbing utama tugas akhir berdasarkan program studi dan tahun TS.',
             show() {
@@ -1094,12 +1106,15 @@
             button.classList.toggle('is-active', button.dataset.tableId === tableId);
         });
 
+        // 'dashboard' bukan salah satu dari 46 tabel BAN-PT di array `tables`,
+        // jadi judulnya di-hardcode, tidak dicari lewat tables.find().
         const table = tables.find((item) => item.id === tableId);
-        els.pageTitle.textContent = table?.name || 'SAPTO';
+        els.pageTitle.textContent = tableId === 'dashboard' ? 'Dashboard' : (table?.name || 'SAPTO');
 
         els.tablePage.classList.add('hidden');
         els.maPage.classList.add('hidden');
         els.placeholderPage.classList.add('hidden');
+        els.dashboardPage.classList.add('hidden');
 
         const handler = TABLE_HANDLERS[tableId];
 
@@ -1148,6 +1163,125 @@
     function escapeAttr(value) {
         return escapeHtml(value).replaceAll('`', '&#096;');
     }
+
+    function dashboardUrl() {
+        const params = new URLSearchParams();
+
+        if (state.ts !== null) {
+            params.set('ts', state.ts);
+        }
+
+        if (state.role === 'universitas' && state.fakultasId !== 'all') {
+            params.set('fakultas_id', state.fakultasId);
+        }
+
+        if (state.role !== 'prodi' && state.programStudiId !== 'all') {
+            params.set('program_studi_id', state.programStudiId);
+        }
+
+        return `/api/sapto/dashboard/summary?${params}`;
+    }
+
+    async function loadDashboard() {
+        setDashboardLoading();
+
+        try {
+            const payload = await fetchJson(dashboardUrl());
+            renderDashboard(payload);
+        } catch (error) {
+            renderDashboardError(error.message);
+        }
+    }
+
+    function setDashboardLoading() {
+        els.dashboardStatus.textContent = 'Memuat ringkasan...';
+
+        els.dashboardCards.forEach((card) => {
+            card.querySelector('.dashboard-card-metrics').innerHTML = Array.from({ length: 3 }).map(() => `
+                <div class="dashboard-metric">
+                    <div class="dashboard-metric-value is-loading">0</div>
+                    <div class="dashboard-metric-label">&nbsp;</div>
+                </div>
+            `).join('');
+            card.querySelector('.dashboard-card-trend').innerHTML = '';
+        });
+    }
+
+    function renderDashboard(payload) {
+        if (payload.ts !== null && payload.ts !== undefined) {
+            state.ts = payload.ts;
+        }
+
+        els.dashboardStatus.textContent = '';
+
+        const cardsById = new Map((payload.cards || []).map((card) => [card.id, card]));
+
+        els.dashboardCards.forEach((el) => {
+            const card = cardsById.get(el.dataset.cardId);
+
+            if (card) {
+                renderDashboardCard(el, card);
+            }
+        });
+    }
+
+    function renderDashboardCard(el, card) {
+        el.querySelector('.dashboard-card-title').textContent = card.title;
+        const metricsEl = el.querySelector('.dashboard-card-metrics');
+        const trendEl = el.querySelector('.dashboard-card-trend');
+
+        if (card.error) {
+            metricsEl.innerHTML = '<p class="dashboard-card-notice dashboard-card-notice-error">Data belum bisa ditampilkan.</p>';
+            trendEl.innerHTML = '';
+            return;
+        }
+
+        if (card.notice) {
+            metricsEl.innerHTML = `<p class="dashboard-card-notice">${escapeHtml(card.notice)}</p>`;
+            trendEl.innerHTML = '';
+            return;
+        }
+
+        metricsEl.innerHTML = card.metrics.map((metric) => `
+            <div class="dashboard-metric">
+                <div class="dashboard-metric-value">${formatNumber(metric.value)}</div>
+                <div class="dashboard-metric-label">${escapeHtml(metric.label)}</div>
+            </div>
+        `).join('');
+
+        trendEl.innerHTML = card.trend ? dashboardSparkline(card.trend) : '';
+    }
+
+    function dashboardSparkline(trend) {
+        const values = trend.values.map(Number);
+        const min = Math.min(...values);
+        const max = Math.max(...values);
+        const range = max - min || 1;
+        const width = 120;
+        const height = 32;
+        const step = width / (values.length - 1 || 1);
+
+        const points = values
+            .map((value, index) => `${(index * step).toFixed(1)},${(height - ((value - min) / range) * height).toFixed(1)}`)
+            .join(' ');
+
+        return `
+            <svg class="dashboard-sparkline" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-hidden="true">
+                <polyline points="${points}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <div class="dashboard-sparkline-labels">
+                ${trend.labels.map((label) => `<span>${escapeHtml(label)}</span>`).join('')}
+            </div>
+        `;
+    }
+
+    function renderDashboardError(message) {
+        els.dashboardStatus.innerHTML = `<span class="font-medium text-warn">${escapeHtml(message)}</span>`;
+    }
+
+    els.dashboardCards.forEach((card) => {
+        card.addEventListener('click', () => activateTable(card.dataset.tableId));
+    });
 
     els.role.addEventListener('change', async () => {
         state.role = els.role.value;
@@ -1321,7 +1455,7 @@
     initTsOptions();
     loadFakultas()
         .then(loadProgramStudi)
-        .then(loadSummary)
+        .then(() => activateTable(currentTableId))
         .catch((error) => renderError(error.message));
 </script>
 @endsection
