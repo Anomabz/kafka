@@ -1202,6 +1202,12 @@
         }
     }
 
+    // Filter bar is shared antara dashboard & table-page; dispatch ke loader
+    // yang sesuai halaman aktif alih-alih selalu memanggil loadSummary().
+    function loadActivePage() {
+        return currentTableId === 'dashboard' ? loadDashboard() : loadSummary();
+    }
+
     function setDashboardLoading() {
         els.dashboardStatus.textContent = 'Memuat ringkasan...';
 
@@ -1319,7 +1325,7 @@
 
         await loadFakultas();
         await loadProgramStudi();
-        await loadSummary();
+        await loadActivePage();
     });
 
     els.maFakultas.addEventListener('change', () => {
@@ -1345,7 +1351,7 @@
 
     els.ts.addEventListener('change', () => {
         state.ts = Number(els.ts.value);
-        loadSummary();
+        loadActivePage();
     });
 
     els.fakultas.addEventListener('change', async () => {
@@ -1353,13 +1359,13 @@
         state.programStudiId = 'all';
         renderFakultasSelect();
         await loadProgramStudi();
-        await loadSummary();
+        await loadActivePage();
     });
 
     els.programStudi.addEventListener('change', () => {
         state.programStudiId = els.programStudi.value;
         renderProgramStudiSelect();
-        loadSummary();
+        loadActivePage();
     });
 
     els.tableBody.addEventListener('click', (event) => {
