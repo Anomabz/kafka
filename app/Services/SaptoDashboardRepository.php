@@ -174,7 +174,9 @@ class SaptoDashboardRepository
 
         try {
             return array_merge($base, $resolve());
-        } catch (Throwable) {
+        } catch (Throwable $e) {
+            report($e);
+
             return array_merge($base, ['metrics' => [], 'trend' => null, 'notice' => null, 'error' => true]);
         }
     }
