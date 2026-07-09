@@ -9,7 +9,9 @@ use App\Http\Controllers\Api\Sapto\ProgramStudiController;
 use App\Http\Controllers\Api\Sapto\MahasiswaController;
 use Illuminate\Support\Facades\Route;
 
-Route::prefix('sapto')->group(function (): void {
+// 'web' adds the session/cookie stack so the SSO login (session-based) is
+// visible here; 'sso.auth' rejects unauthenticated calls with 401.
+Route::middleware(['web', 'sso.auth'])->prefix('sapto')->group(function (): void {
     Route::get('/fakultas', FakultasController::class);
     Route::get('/program-studi', ProgramStudiController::class);
 

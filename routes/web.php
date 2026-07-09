@@ -2,6 +2,13 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\Sapto\MahasiswaController; // <-- 1. Import Controllernya di sini
+use App\Http\Controllers\Auth\SsoController;
+
+Route::get('/auth/login', [SsoController::class, 'login'])->name('sso.login');
+Route::get('/auth/callback', [SsoController::class, 'callback'])->name('sso.callback');
+Route::get('/auth/logout', [SsoController::class, 'logout'])->name('sso.logout');
+
+Route::middleware('sso.auth')->group(function () {
 
 Route::get('/', function () {
     return view('sapto', [
@@ -58,5 +65,7 @@ Route::get('/', function () {
 // 2. Taruh jalur web tanpa prefix API lu di sini (Sesuai arahan pembimbing)
 Route::prefix('sapto')->group(function () {
     Route::get('/mahasiswa-asing', [MahasiswaController::class, 'data_mahasiswa_asing']);
-    Route::get('/mahasiswa-asing/detail', [MahasiswaController::class, 'detail_mahasiswa_asing']); 
+    Route::get('/mahasiswa-asing/detail', [MahasiswaController::class, 'detail_mahasiswa_asing']);
 });
+
+}); // sso.auth group
