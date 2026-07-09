@@ -21,6 +21,7 @@ class SaptoNewTablesTest extends TestCase
         parent::setUp();
 
         Cache::flush();
+        $this->withSession(['sso_user' => ['sub' => 'test', 'name' => 'Test', 'email' => 'test@example.test']]);
         $this->seedReference();
         $this->seedLulusan();
         $this->seedIntake();
