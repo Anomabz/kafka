@@ -24,17 +24,25 @@ class SaptoDashboardTest extends TestCase
     {
         parent::setUp();
 
-        $this->withSession(['sso_user' => ['sub' => 'test', 'name' => 'Test', 'email' => 'test@example.test']]);
+        $this->withSession(['sso_user' => [
+            'sub' => 'test', 'name' => 'Test', 'email' => 'test@example.test',
+            'nomor_identitas' => '199999999999999001',
+        ]]);
         Cache::flush();
         $this->seedAllFiveDomains();
+
+        // Auto-scopes this session to P1 (kode 55201) via the korprodi
+        // mapping — X-SAPTO-* headers are no longer trusted for scope.
+        \App\Models\Korprodi::create([
+            'nip' => '199999999999999001',
+            'nama' => 'Test Korprodi',
+            'kode_program_studi' => '55201',
+        ]);
     }
 
     public function test_dashboard_returns_five_cards_in_order(): void
     {
-        $response = $this->withHeaders([
-            'X-SAPTO-Role' => 'prodi',
-            'X-SAPTO-Program-Studi-Id' => 'P1',
-        ])->getJson('/api/sapto/dashboard/summary?ts=2025')
+        $response = $this->getJson('/api/sapto/dashboard/summary?ts=2025')
             ->assertOk();
 
         $ids = collect($response->json('cards'))->pluck('id')->all();
@@ -50,10 +58,7 @@ class SaptoDashboardTest extends TestCase
 
     public function test_dashboard_resolves_ts_and_returns_available_years_when_ts_omitted(): void
     {
-        $response = $this->withHeaders([
-            'X-SAPTO-Role' => 'prodi',
-            'X-SAPTO-Program-Studi-Id' => 'P1',
-        ])->getJson('/api/sapto/dashboard/summary')
+        $response = $this->getJson('/api/sapto/dashboard/summary')
             ->assertOk();
 
         $ts = $response->json('ts');
@@ -66,8 +71,7 @@ class SaptoDashboardTest extends TestCase
 
     public function test_dosen_pembimbing_card_has_metrics_and_three_point_trend(): void
     {
-        $response = $this->withHeader('X-SAPTO-Role', 'universitas')
-            ->getJson('/api/sapto/dashboard/summary?ts=2025')
+        $response = $this->getJson('/api/sapto/dashboard/summary?ts=2025')
             ->assertOk();
 
         $card = collect($response->json('cards'))->firstWhere('id', 'dosen-pembimbing-ta');
@@ -83,24 +87,11 @@ class SaptoDashboardTest extends TestCase
 
     public function test_masa_studi_card_shows_notice_without_program_studi_then_real_data_when_selected(): void
     {
-        $withoutProdi = $this->withHeader('X-SAPTO-Role', 'universitas')
-            ->getJson('/api/sapto/dashboard/summary?ts=2025')
-            ->assertOk();
-
-        $card = collect($withoutProdi->json('cards'))->firstWhere('id', 'masa-studi');
-        $this->assertNotNull($card['notice']);
-        $this->assertStringContainsString('program studi', $card['notice']);
-        $this->assertSame([], $card['metrics']);
-
-        $withProdi = $this->withHeaders([
-            'X-SAPTO-Role' => 'prodi',
-            'X-SAPTO-Program-Studi-Id' => 'P1',
-        ])->getJson('/api/sapto/dashboard/summary?ts=2025')
-            ->assertOk();
-
-        $cardWithProdi = collect($withProdi->json('cards'))->firstWhere('id', 'masa-studi');
-        $this->assertNull($cardWithProdi['notice']);
-        $this->assertNotEmpty($cardWithProdi['metrics']);
+        // Every authenticated user is now always locked to their own korprodi
+        // scope (see SaptoUserContext::fromRequest) — the "universitas viewer
+        // with no prodi selected" case this test compared against no longer
+        // exists as a reachable state.
+        $this->markTestSkipped('Every session now always resolves to a specific program studi — see SaptoUserContext::fromRequest().');
     }
 
     public function test_dosen_tetap_and_ipk_cards_report_seeded_metric_values(): void
@@ -111,18 +102,15 @@ class SaptoDashboardTest extends TestCase
         // 0 with error:false. These assertions on real seeded values would
         // catch that — a rename would fail this test instead of shipping
         // silently-wrong data on an accreditation surface.
-        $response = $this->withHeaders([
-            'X-SAPTO-Role' => 'prodi',
-            'X-SAPTO-Program-Studi-Id' => 'P1',
-        ])->getJson('/api/sapto/dashboard/summary?ts=2025')
+        $response = $this->getJson('/api/sapto/dashboard/summary?ts=2025')
             ->assertOk();
 
         $cards = collect($response->json('cards'))->keyBy('id');
 
         $dosenTetapMetrics = collect($cards['dosen-tetap-pt']['metrics'])->pluck('value', 'label');
-        $this->assertSame(1, $dosenTetapMetrics['Total dosen tetap']);
-        $this->assertSame(1, $dosenTetapMetrics['Perempuan']);
-        $this->assertSame(0, $dosenTetapMetrics['Laki-laki']);
+        $this->assertSame(2, $dosenTetapMetrics['Total dosen tetap']);
+        $this->assertSame(1, $dosenTetapMetrics['Pendidikan S2 (Magister)']);
+        $this->assertSame(1, $dosenTetapMetrics['Pendidikan S3 (Doktor)']);
 
         $ipkMetrics = collect($cards['ipk-lulusan']['metrics'])->pluck('value', 'label');
         $this->assertSame(1, $ipkMetrics['Jumlah lulusan (TS)']);
@@ -135,10 +123,7 @@ class SaptoDashboardTest extends TestCase
             $mock->shouldReceive('summary')->andThrow(new \RuntimeException('DB down'));
         });
 
-        $response = $this->withHeaders([
-            'X-SAPTO-Role' => 'prodi',
-            'X-SAPTO-Program-Studi-Id' => 'P1',
-        ])->getJson('/api/sapto/dashboard/summary?ts=2025')
+        $response = $this->getJson('/api/sapto/dashboard/summary?ts=2025')
             ->assertOk();
 
         $cards = collect($response->json('cards'))->keyBy('id');
@@ -158,10 +143,7 @@ class SaptoDashboardTest extends TestCase
             $mock->shouldReceive('availableYears')->andThrow(new \RuntimeException('DB down'));
         });
 
-        $response = $this->withHeaders([
-            'X-SAPTO-Role' => 'prodi',
-            'X-SAPTO-Program-Studi-Id' => 'P1',
-        ])->getJson('/api/sapto/dashboard/summary?ts=2025')
+        $response = $this->getJson('/api/sapto/dashboard/summary?ts=2025')
             ->assertOk();
 
         $this->assertSame(2025, $response->json('ts'));
@@ -183,9 +165,16 @@ class SaptoDashboardTest extends TestCase
             ['id_prodi' => 'P1', 'kode_program_studi' => '55201', 'nama_program_studi' => 'Teknik Informatika', 'status' => 'AKTIF', 'id_jenjang_pendidikan' => 1, 'nama_jenjang_pendidikan' => 'S1'],
         ]);
 
-        // Dosen Tetap PT (3.a.1)
+        // Dosen Tetap PT (3.a.1) — D1 punya S2+S3 (dihitung S3 saja), D2 hanya
+        // S2; nilai non-nol ini yang menjaga lookup label di dashboard card.
         DB::table('list_penugasan_dosen')->insert([
             ['id_dosen' => 'D1', 'nama_dosen' => 'Dr. Ana', 'nidn' => '111', 'jk' => 'P', 'id_prodi' => 'P1', 'nama_program_studi' => 'Teknik Informatika', 'a_sp_homebase' => '1', 'nama_tahun_ajaran' => '2025/2026'],
+            ['id_dosen' => 'D2', 'nama_dosen' => 'Dr. Budi', 'nidn' => '222', 'jk' => 'L', 'id_prodi' => 'P1', 'nama_program_studi' => 'Teknik Informatika', 'a_sp_homebase' => '1', 'nama_tahun_ajaran' => '2025/2026'],
+        ]);
+        DB::table('riwayat_pendidikan_dosen')->insert([
+            ['id_dosen' => 'D1', 'nama_jenjang_pendidikan' => 'S2', 'nama_bidang_studi' => 'Ilmu Komputer', 'nama_perguruan_tinggi' => 'Universitas Indonesia', 'tahun_lulus' => '2009'],
+            ['id_dosen' => 'D1', 'nama_jenjang_pendidikan' => 'S3', 'nama_bidang_studi' => 'Ilmu Komputer', 'nama_perguruan_tinggi' => 'Universitas Gadjah Mada', 'tahun_lulus' => '2015'],
+            ['id_dosen' => 'D2', 'nama_jenjang_pendidikan' => 'S2', 'nama_bidang_studi' => 'Manajemen', 'nama_perguruan_tinggi' => 'Universitas Sriwijaya', 'tahun_lulus' => '2012'],
         ]);
 
         // Dosen Pembimbing TA (3.a.2) — satu mahasiswa per tahun TS-2/TS-1/TS.

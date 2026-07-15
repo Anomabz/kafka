@@ -20,12 +20,15 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        // /sapto/mahasiswa-asing* juga endpoint JSON walau di-routing lewat
+        // web.php, bukan api.php (lihat EnsureSsoAuthenticated yang sudah
+        // pakai expectsJson() untuk alasan yang sama) — jangan cuma is('api/*').
         $exceptions->shouldRenderJsonWhen(
-            fn (Request $request) => $request->is('api/*'),
+            fn (Request $request) => $request->expectsJson() || $request->is('api/*'),
         );
 
         $exceptions->render(function (HttpExceptionInterface $exception, Request $request) {
-            if (! $request->is('api/*')) {
+            if (! $request->expectsJson() && ! $request->is('api/*')) {
                 return null;
             }
 
@@ -35,7 +38,7 @@ return Application::configure(basePath: dirname(__DIR__))
         });
 
         $exceptions->render(function (QueryException|PDOException $exception, Request $request) {
-            if (! $request->is('api/*')) {
+            if (! $request->expectsJson() && ! $request->is('api/*')) {
                 return null;
             }
 

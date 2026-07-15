@@ -16,28 +16,38 @@ class SaptoApiTest extends TestCase
         parent::setUp();
 
         Cache::flush();
-        $this->withSession(['sso_user' => ['sub' => 'test', 'name' => 'Test', 'email' => 'test@example.test']]);
+        $this->withSession(['sso_user' => [
+            'sub' => 'test', 'name' => 'Test', 'email' => 'test@example.test',
+            'nomor_identitas' => '199999999999999001',
+        ]]);
 
         $this->seedLocalData();
+
+        // Auto-scopes this session to P1 (kode 55201, Teknik Informatika) via
+        // the korprodi mapping SaptoUserContext now derives scope from —
+        // X-SAPTO-* headers are no longer trusted for role/scope.
+        \App\Models\Korprodi::create([
+            'nip' => '199999999999999001',
+            'nama' => 'Test Korprodi',
+            'kode_program_studi' => '55201',
+        ]);
     }
 
+    /**
+     * Fakultas/universitas-wide access (seeing beyond one's own korprodi
+     * scope) is intentionally disabled until that entitlement data exists —
+     * see SaptoUserContext::fromRequest(). These tests exercised that old,
+     * header-trusting behavior; skipped rather than deleted so the coverage
+     * is easy to restore once fakultas/universitas entitlements land.
+     */
     public function test_universitas_can_read_program_studi_reference_data_from_local_db(): void
     {
-        $this->withHeader('X-SAPTO-Role', 'universitas')
-            ->getJson('/api/sapto/program-studi')
-            ->assertOk()
-            ->assertJsonPath('can_select_program_studi', true)
-            ->assertJsonCount(2, 'data')
-            ->assertJsonFragment(['id' => 'P1'])
-            ->assertJsonFragment(['id' => 'P2']);
+        $this->markTestSkipped('Universitas-wide scope is pending entitlement data — see SaptoUserContext::fromRequest().');
     }
 
     public function test_prodi_role_uses_account_program_studi_context_from_local_db(): void
     {
-        $this->withHeaders([
-            'X-SAPTO-Role' => 'prodi',
-            'X-SAPTO-Program-Studi-Id' => 'P1',
-        ])->getJson('/api/sapto/tables/dosen-pembimbing-ta/summary?ts=2026&program_studi_id=P2')
+        $this->getJson('/api/sapto/tables/dosen-pembimbing-ta/summary?ts=2026&program_studi_id=P2')
             ->assertOk()
             ->assertJsonPath('program_studi.id', 'P1')
             ->assertJsonPath('rows.0.dosen_id', 'D1')
@@ -47,56 +57,14 @@ class SaptoApiTest extends TestCase
 
     public function test_fakultas_role_limits_program_studi_and_summary_scope(): void
     {
-        $this->withHeaders([
-            'X-SAPTO-Role' => 'fakultas',
-            'X-SAPTO-Fakultas-Id' => 'fakultas-ilmu-komputer',
-        ])->getJson('/api/sapto/program-studi')
-            ->assertOk()
-            ->assertJsonPath('can_select_program_studi', true)
-            ->assertJsonCount(1, 'data')
-            ->assertJsonPath('data.0.id', 'P1')
-            ->assertJsonPath('data.0.fakultas', 'Fakultas Ilmu Komputer');
-
-        // Scope fakultas: "PS yang Diakreditasi" = mahasiswa di prodi fakultas
-        // itu (M1 di P1), "PS Lain di PT" = mahasiswa dosen yang sama di prodi
-        // luar fakultas (M2 di P2/Ekonomi). Sebelumnya keliru selalu 0.
-        $this->withHeaders([
-            'X-SAPTO-Role' => 'fakultas',
-            'X-SAPTO-Fakultas-Id' => 'fakultas-ilmu-komputer',
-        ])->getJson('/api/sapto/tables/dosen-pembimbing-ta/summary?ts=2026')
-            ->assertOk()
-            ->assertJsonPath('fakultas.id', 'fakultas-ilmu-komputer')
-            ->assertJsonPath('rows.0.dosen_id', 'D1')
-            ->assertJsonPath('rows.0.ps_diakreditasi.ts', 1)
-            ->assertJsonPath('rows.0.ps_lain_pt.ts', 1);
-
-        // Detail "PS Lain di PT" untuk fakultas Ilmu Komputer harus berisi M2
-        // (mahasiswa Manajemen/Ekonomi) — di luar scope fakultas.
-        $this->withHeaders([
-            'X-SAPTO-Role' => 'fakultas',
-            'X-SAPTO-Fakultas-Id' => 'fakultas-ilmu-komputer',
-        ])->getJson('/api/sapto/tables/dosen-pembimbing-ta/detail?ts=2026&dosen_id=D1&scope=ps_lain_pt&year_key=ts')
-            ->assertOk()
-            ->assertJsonCount(1, 'items')
-            ->assertJsonPath('items.0.nama_mahasiswa', 'Mhs Dua')
-            ->assertJsonPath('items.0.program_studi_id', 'P2');
-
-        // Detail "PS yang Diakreditasi" berisi M1 (Teknik Informatika).
-        $this->withHeaders([
-            'X-SAPTO-Role' => 'fakultas',
-            'X-SAPTO-Fakultas-Id' => 'fakultas-ilmu-komputer',
-        ])->getJson('/api/sapto/tables/dosen-pembimbing-ta/detail?ts=2026&dosen_id=D1&scope=ps_diakreditasi&year_key=ts')
-            ->assertOk()
-            ->assertJsonCount(1, 'items')
-            ->assertJsonPath('items.0.program_studi_id', 'P1');
+        $this->markTestSkipped('Fakultas-wide scope is pending entitlement data — see SaptoUserContext::fromRequest().');
     }
 
     public function test_summary_defaults_ts_to_latest_academic_year_in_database(): void
     {
         // Tanpa parameter ts, TS harus mengikuti tahun akademik terbaru yang
         // benar-benar ada di database (di seeder: 2026), bukan tahun kalender.
-        $this->withHeader('X-SAPTO-Role', 'universitas')
-            ->getJson('/api/sapto/tables/dosen-pembimbing-ta/summary')
+        $this->getJson('/api/sapto/tables/dosen-pembimbing-ta/summary')
             ->assertOk()
             ->assertJsonPath('ts', 2026)
             ->assertJsonPath('year_columns.ts', 2026)
@@ -105,55 +73,17 @@ class SaptoApiTest extends TestCase
 
     public function test_university_scope_splits_by_dominant_prodi(): void
     {
-        // Di tingkat universitas, "PS yang Diakreditasi" = prodi utama dosen
-        // (prodi tempat ia paling banyak membimbing) dan "PS Lain di PT" =
-        // bimbingan di prodi lain. D1 membimbing M1 di P1 dan M2 di P2 (seri),
-        // jadi prodi utama = P1 (id terkecil): diakreditasi=1, PS lain=1.
-        $response = $this->withHeader('X-SAPTO-Role', 'universitas')
-            ->getJson('/api/sapto/tables/dosen-pembimbing-ta/summary?ts=2026')
-            ->assertOk();
-
-        $d1 = collect($response->json('rows'))->firstWhere('dosen_id', 'D1');
-
-        $this->assertSame(1, $d1['ps_diakreditasi']['ts']);
-        $this->assertSame(1, $d1['ps_lain_pt']['ts']);
-
-        // Detail "PS Lain di PT" tingkat universitas berisi M2 (prodi P2, bukan
-        // prodi utama). Sebelumnya selalu kosong.
-        $this->withHeader('X-SAPTO-Role', 'universitas')
-            ->getJson('/api/sapto/tables/dosen-pembimbing-ta/detail?ts=2026&dosen_id=D1&scope=ps_lain_pt&year_key=ts')
-            ->assertOk()
-            ->assertJsonCount(1, 'items')
-            ->assertJsonPath('items.0.program_studi_id', 'P2');
-
-        // Detail "PS yang Diakreditasi" berisi M1 (prodi utama P1).
-        $this->withHeader('X-SAPTO-Role', 'universitas')
-            ->getJson('/api/sapto/tables/dosen-pembimbing-ta/detail?ts=2026&dosen_id=D1&scope=ps_diakreditasi&year_key=ts')
-            ->assertOk()
-            ->assertJsonCount(1, 'items')
-            ->assertJsonPath('items.0.program_studi_id', 'P1');
+        $this->markTestSkipped('Universitas-wide scope is pending entitlement data — see SaptoUserContext::fromRequest().');
     }
 
     public function test_universitas_can_filter_by_fakultas(): void
     {
-        $this->withHeader('X-SAPTO-Role', 'universitas')
-            ->getJson('/api/sapto/fakultas')
-            ->assertOk()
-            ->assertJsonPath('can_select_fakultas', true)
-            ->assertJsonFragment(['id' => 'fakultas-ilmu-komputer'])
-            ->assertJsonFragment(['id' => 'fakultas-ekonomi']);
-
-        $this->withHeader('X-SAPTO-Role', 'universitas')
-            ->getJson('/api/sapto/program-studi?fakultas_id=fakultas-ekonomi')
-            ->assertOk()
-            ->assertJsonCount(1, 'data')
-            ->assertJsonPath('data.0.id', 'P2');
+        $this->markTestSkipped('Universitas-wide scope is pending entitlement data — see SaptoUserContext::fromRequest().');
     }
 
     public function test_summary_rejects_invalid_ts(): void
     {
-        $this->withHeader('X-SAPTO-Role', 'universitas')
-            ->getJson('/api/sapto/tables/dosen-pembimbing-ta/summary?ts=abc')
+        $this->getJson('/api/sapto/tables/dosen-pembimbing-ta/summary?ts=abc')
             ->assertBadRequest()
             ->assertJsonPath('message', 'Parameter TS tidak valid.');
     }
@@ -187,8 +117,7 @@ class SaptoApiTest extends TestCase
             'status_sync' => 'sudah sync',
         ]);
 
-        $response = $this->withHeader('X-SAPTO-Role', 'universitas')
-            ->getJson('/api/sapto/tables/dosen-pembimbing-ta/summary?ts=2026')
+        $response = $this->getJson('/api/sapto/tables/dosen-pembimbing-ta/summary?ts=2026')
             ->assertOk();
 
         $rows = collect($response->json('rows'));
@@ -203,8 +132,7 @@ class SaptoApiTest extends TestCase
 
         // Detail "PS yang Diakreditasi" berisi M1 saja — dua baris aktivitasnya
         // menyatu jadi satu mahasiswa.
-        $this->withHeader('X-SAPTO-Role', 'universitas')
-            ->getJson('/api/sapto/tables/dosen-pembimbing-ta/detail?ts=2026&dosen_id=D1&scope=ps_diakreditasi&year_key=ts')
+        $this->getJson('/api/sapto/tables/dosen-pembimbing-ta/detail?ts=2026&dosen_id=D1&scope=ps_diakreditasi&year_key=ts')
             ->assertOk()
             ->assertJsonCount(1, 'items')
             ->assertJsonPath('items.0.program_studi_id', 'P1');
@@ -239,8 +167,7 @@ class SaptoApiTest extends TestCase
             'status_sync' => 'sudah sync',
         ]);
 
-        $d1 = collect($this->withHeader('X-SAPTO-Role', 'universitas')
-            ->getJson('/api/sapto/tables/dosen-pembimbing-ta/summary?ts=2026')
+        $d1 = collect($this->getJson('/api/sapto/tables/dosen-pembimbing-ta/summary?ts=2026')
             ->assertOk()
             ->json('rows'))->firstWhere('dosen_id', 'D1');
 
@@ -248,8 +175,7 @@ class SaptoApiTest extends TestCase
         $this->assertSame(1, $d1['ps_diakreditasi']['ts']);
 
         // Detail juga tidak memuat M9 / judul "Kerja Praktik".
-        $items = collect($this->withHeader('X-SAPTO-Role', 'universitas')
-            ->getJson('/api/sapto/tables/dosen-pembimbing-ta/detail?ts=2026&dosen_id=D1&scope=ps_diakreditasi&year_key=ts')
+        $items = collect($this->getJson('/api/sapto/tables/dosen-pembimbing-ta/detail?ts=2026&dosen_id=D1&scope=ps_diakreditasi&year_key=ts')
             ->assertOk()
             ->json('items'));
 

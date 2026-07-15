@@ -112,10 +112,6 @@ class SaptoProgramStudiRepository
     {
         $faculty = trim((string) preg_replace('/\s+/', ' ', Str::upper(Str::ascii($faculty))));
 
-        if ($faculty === 'KEDOKTERANM') {
-            $faculty = 'KEDOKTERAN';
-        }
-
         if ($faculty === '') {
             return 'Belum Dipetakan';
         }

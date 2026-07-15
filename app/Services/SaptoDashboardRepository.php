@@ -61,8 +61,8 @@ class SaptoDashboardRepository
             return [
                 'metrics' => [
                     ['label' => 'Total dosen tetap', 'value' => $byLabel['Total dosen tetap'] ?? 0],
-                    ['label' => 'Laki-laki', 'value' => $byLabel['Laki-laki'] ?? 0],
-                    ['label' => 'Perempuan', 'value' => $byLabel['Perempuan'] ?? 0],
+                    ['label' => 'Pendidikan S2 (Magister)', 'value' => $byLabel['Pendidikan S2 (Magister)'] ?? 0],
+                    ['label' => 'Pendidikan S3 (Doktor)', 'value' => $byLabel['Pendidikan S3 (Doktor)'] ?? 0],
                 ],
                 'trend' => null,
                 'notice' => null,

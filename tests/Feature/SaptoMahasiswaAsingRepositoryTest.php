@@ -22,21 +22,35 @@ class SaptoMahasiswaAsingRepositoryTest extends TestCase
     {
         parent::setUp();
 
-        $this->withSession(['sso_user' => ['sub' => 'test', 'name' => 'Test', 'email' => 'test@example.test']]);
+        $this->withSession(['sso_user' => [
+            'sub' => 'test', 'name' => 'Test', 'email' => 'test@example.test',
+            'nomor_identitas' => '199999999999999001',
+        ]]);
         Cache::flush();
         $this->seedMahasiswaAsingData();
+
+        // Auto-scopes this session to P1 (kode 61101, Manajemen) via the
+        // korprodi mapping — MahasiswaController::data_mahasiswa_asing is now
+        // gated by SaptoUserContext like every other table endpoint.
+        \App\Models\Korprodi::create([
+            'nip' => '199999999999999001',
+            'nama' => 'Test Korprodi',
+            'kode_program_studi' => '61101',
+        ]);
     }
 
     public function test_endpoint_still_returns_identical_shape_after_extraction(): void
     {
+        // Endpoint kini selalu discope ke satu prodi akun (P1) — P2 (Teknik
+        // Elektro) di luar scope, jadi total_prodi/data cuma 1, bukan 2.
         $this->getJson('/sapto/mahasiswa-asing')
             ->assertOk()
             ->assertJsonPath('success', true)
             ->assertJsonPath('tahun_akademik.ts_2', '2023')
             ->assertJsonPath('tahun_akademik.ts_1', '2024')
             ->assertJsonPath('tahun_akademik.ts', '2025')
-            ->assertJsonPath('total_prodi', 2)
-            ->assertJsonCount(2, 'data');
+            ->assertJsonPath('total_prodi', 1)
+            ->assertJsonCount(1, 'data');
     }
 
     public function test_repository_computes_active_and_foreign_counts_per_prodi(): void
