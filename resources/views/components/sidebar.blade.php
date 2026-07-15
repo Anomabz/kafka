@@ -17,7 +17,12 @@
 
     $ssoUser = session('sso_user');
     $userName = $ssoUser['name'] ?? ($ssoUser['preferred_username'] ?? 'Pengguna');
-    $userInitial = Illuminate\Support\Str::upper(Illuminate\Support\Str::substr($userName, 0, 1));
+
+    // Avatar deterministik dari DiceBear — seed pakai identitas stabil
+    // (nomor_identitas/nama) supaya tiap orang dapat wajah yang konsisten,
+    // bukan cuma huruf inisial.
+    $avatarSeed = $ssoUser['nomor_identitas'] ?? $userName;
+    $avatarUrl = 'https://api.dicebear.com/9.x/avataaars/svg?seed='.urlencode($avatarSeed);
 @endphp
 
 <aside id="sidebar" class="sidebar side-glass flex flex-col">
@@ -72,19 +77,6 @@
     </div>
 
     <nav id="menu" class="menu flex-1 space-y-4 overflow-y-auto px-3 py-3" aria-label="Menu tabel SAPTO">
-        <div class="space-y-0.5">
-            <button
-                type="button"
-                data-table-id="dashboard"
-                class="menu-item {{ ($activeTableId ?? 'dashboard') === 'dashboard' ? 'is-active' : '' }}"
-            >
-                <svg class="mr-2 h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M3 9.5 12 3l9 6.5V21a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z" />
-                </svg>
-                Dashboard
-            </button>
-        </div>
-
         @foreach ($groups as $groupKey => $items)
             <div class="menu-group" data-menu-group>
                 <div class="mb-1 flex items-center gap-2 px-3">
@@ -111,18 +103,33 @@
 
     @if ($ssoUser)
         <div class="px-3 py-3" style="border-top:1px solid var(--side-border)">
+            @if ($ssoUser['is_admin'] ?? false)
+                <a href="{{ route('admin.login-as') }}"
+                   class="mb-2.5 flex items-center gap-2 rounded-lg px-2.5 py-2 text-[12px] font-semibold"
+                   style="color:var(--side-text);background:var(--color-accent-soft)">
+                    <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 11l-3 3-2-2"/>
+                    </svg>
+                    Login sebagai (uji role)
+                </a>
+            @endif
             <div class="flex items-center gap-2.5">
-                <div
-                    class="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[12px] font-bold"
-                    style="background:var(--color-accent-soft);color:var(--color-accent-dark)"
-                    aria-hidden="true"
-                >{{ $userInitial }}</div>
+                <img
+                    src="{{ ($ssoUser['is_admin'] ?? false) ? 'https://media4.giphy.com/media/v1.Y2lkPTc5MGI3NjExbm9tYnYycGxkemswYWFkam42cGVxdmx5bDd5bjMxeXRmMHVrZmo4cyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/JLYQnbND9gkYU/giphy.gif' : $avatarUrl }}"
+                    alt="{{ $userName }}"
+                    class="h-8 w-8 shrink-0 rounded-full object-cover"
+                    style="background:var(--color-accent-soft)"
+                >
                 <div class="min-w-0 flex-1 leading-tight">
                     <div class="truncate text-[12px] font-semibold" style="color:var(--side-text)" title="{{ $ssoUser['email'] ?? '' }}">
                         {{ $userName }}
                     </div>
                     <div class="truncate text-[11px]" style="color:var(--side-faint)" title="{{ $ssoUser['unit_kerja'] ?? '' }}">
-                        Pengelola Program Studi{{ isset($ssoUser['unit_kerja']) ? ' — '.$ssoUser['unit_kerja'] : '' }}
+                        @if ($ssoUser['is_admin'] ?? false)
+                            Developer SAPTO
+                        @else
+                            Pengelola Program Studi{{ isset($ssoUser['unit_kerja']) ? ' — '.$ssoUser['unit_kerja'] : '' }}
+                        @endif
                     </div>
                 </div>
                 <a

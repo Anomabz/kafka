@@ -2,13 +2,12 @@
 
 namespace App\Http\Controllers\Api\Sapto;
 
-use App\Http\Controllers\Controller;
 use App\Services\SaptoMahasiswaAsingRepository;
 use App\Support\SaptoUserContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
-class MahasiswaController extends Controller
+class MahasiswaController extends SaptoTableController
 {
     /**
      * FUNGSI 1: Rekapitulasi Matriks Angka (Sesuai 11 Kolom Borang Excel BAN-PT)
@@ -16,11 +15,14 @@ class MahasiswaController extends Controller
      */
     public function data_mahasiswa_asing(Request $request, SaptoMahasiswaAsingRepository $repository)
     {
+        $ts = $this->validateTs($request);
         $context = SaptoUserContext::fromRequest($request);
-        $summary = $repository->summary($context->resolveFakultasId($request), $context->resolveProgramStudiId($request));
+        $summary = $repository->summary($context->resolveFakultasId($request), $context->resolveProgramStudiId($request), $ts);
 
         return response()->json([
             'success' => true,
+            'ts' => $summary['ts'],
+            'available_years' => $summary['available_years'],
             'tahun_akademik' => $summary['tahun_akademik'],
             'total_prodi' => $summary['total_prodi'],
             'data' => $summary['data'],
@@ -47,7 +49,8 @@ class MahasiswaController extends Controller
             SELECT
                 lrpm.nim,
                 lrpm.nama_mahasiswa AS nama,
-                CONCAT(ps.nama_jenjang_pendidikan, ' ', ps.nama_program_studi) AS program_studi,
+                ps.nama_jenjang_pendidikan AS jenjang,
+                ps.nama_program_studi AS nama_prodi,
                 SUBSTRING(lrpm.id_periode_masuk, 1, 4) AS angkatan,
                 CASE
                     WHEN lrpm.id_periode_keluar IS NULL OR lrpm.id_periode_keluar = '' THEN 'Aktif'
@@ -93,7 +96,14 @@ class MahasiswaController extends Controller
 
         $query .= " ORDER BY lrpm.id_periode_masuk DESC, lrpm.nama_mahasiswa ASC ";
         
-        $data = DB::select($query, $params);
+        $data = array_map(function (object $row): object {
+            // Label prodi bersih (tanpa "Profesi Profesi ..." / jenjang
+            // placeholder), konsisten dengan tabel ringkasannya.
+            $row->program_studi = \App\Services\SaptoProgramStudiRepository::composeLabel($row->jenjang ?? '', $row->nama_prodi ?? '');
+            unset($row->jenjang, $row->nama_prodi);
+
+            return $row;
+        }, DB::select($query, $params));
 
         return response()->json([
             'success' => true,

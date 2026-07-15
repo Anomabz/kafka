@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Services\SaptoMahasiswaAsingRepository;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -22,6 +23,11 @@ class SaptoMahasiswaAsingRepositoryTest extends TestCase
     {
         parent::setUp();
 
+        // TS-2/TS-1/TS di repository ini ikut tahun berjalan (now()->year),
+        // bukan dibaca dari request — fixture di bawah ditulis dengan asumsi
+        // TS=2025/TS-1=2024/TS-2=2023, jadi bekukan waktunya di sini.
+        Carbon::setTestNow('2025-06-01');
+
         $this->withSession(['sso_user' => [
             'sub' => 'test', 'name' => 'Test', 'email' => 'test@example.test',
             'nomor_identitas' => '199999999999999001',
@@ -37,6 +43,12 @@ class SaptoMahasiswaAsingRepositoryTest extends TestCase
             'nama' => 'Test Korprodi',
             'kode_program_studi' => '61101',
         ]);
+    }
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+        parent::tearDown();
     }
 
     public function test_endpoint_still_returns_identical_shape_after_extraction(): void

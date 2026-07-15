@@ -4,7 +4,10 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\Korprodi;
+use App\Models\User;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 
@@ -54,6 +57,10 @@ class SsoController extends Controller
             'username' => ['required', 'string'],
             'password' => ['required', 'string'],
         ]);
+
+        if ($adminRedirect = $this->attemptLocalAdminLogin($request, $data)) {
+            return $adminRedirect;
+        }
 
         $token = Http::asForm()->post($this->base().'/token', [
             'grant_type' => 'password',
@@ -155,6 +162,37 @@ class SsoController extends Controller
         $nip = trim((string) ($userinfo['nomor_identitas'] ?? ''));
 
         return $nip !== '' && Korprodi::query()->where('nip', $nip)->exists();
+    }
+
+    /**
+     * Login lokal khusus developer SAPTO — bukan lewat Keycloak sama sekali
+     * (akunnya memang tidak ada di SSO kampus). Kredensial dicek terhadap
+     * hash bcrypt di kolom users.password (Hash::check), bukan Keycloak.
+     * Akun dengan is_admin=true dapat akses penuh semua fakultas/prodi —
+     * lihat SaptoUserContext::fromRequest(), yang mengenali sesi ini lewat
+     * flag 'is_admin' dan memberi role 'universitas' tanpa cek tabel korprodi.
+     */
+    private function attemptLocalAdminLogin(Request $request, array $data): ?RedirectResponse
+    {
+        $admin = User::query()
+            ->where('is_admin', true)
+            ->where('nomor_identitas', $data['username'])
+            ->first();
+
+        if (! $admin || ! Hash::check($data['password'], $admin->password)) {
+            return null;
+        }
+
+        $request->session()->regenerate();
+        $request->session()->put('sso_user', [
+            'sub' => 'local-admin-'.$admin->id,
+            'name' => $admin->name,
+            'email' => $admin->email,
+            'nomor_identitas' => $admin->nomor_identitas,
+            'is_admin' => true,
+        ]);
+
+        return redirect()->intended('/');
     }
 
     public function logout(Request $request)

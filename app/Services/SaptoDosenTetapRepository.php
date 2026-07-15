@@ -58,7 +58,7 @@ class SaptoDosenTetapRepository
                     'nidn' => (string) ($row['nidn'] ?? ''),
                     'nuptk' => (string) ($row['nuptk'] ?? ''),
                     'jenis_kelamin' => $this->jenisKelamin((string) ($row['jk'] ?? '')),
-                    'program_studi' => (string) ($program['label'] ?? $row['nama_program_studi'] ?? 'Belum Dipetakan'),
+                    'program_studi' => SaptoProgramStudiRepository::cleanLabel($program['label'] ?? $row['nama_program_studi'] ?? 'Belum Dipetakan'),
                     'fakultas' => (string) ($program['fakultas'] ?? 'Belum Dipetakan'),
                     'pendidikan_magister' => $edu['magister'],
                     'pendidikan_doktor' => $edu['doktor'],
@@ -193,7 +193,10 @@ class SaptoDosenTetapRepository
             $jenjang = (string) $row->nama_jenjang_pendidikan;
             // "*" adalah konvensi feeder PDDIKTI untuk bidang studi "tidak diisi".
             $bidangStudi = ($row->nama_bidang_studi && $row->nama_bidang_studi !== '*') ? (string) $row->nama_bidang_studi : null;
-            $label = trim(($bidangStudi ?? '-').' - '.($row->nama_perguruan_tinggi ?: '-'));
+            $perguruanTinggi = trim((string) ($row->nama_perguruan_tinggi ?? ''));
+            // Hindari "- - Universitas X" saat bidang studi kosong: tampilkan
+            // hanya yang ada (bidang, PT, atau "-" jika dua-duanya kosong).
+            $label = trim(implode(' - ', array_filter([$bidangStudi, $perguruanTinggi ?: null]))) ?: '-';
 
             $byDosen[$dosenId] ??= ['magister' => null, 'doktor' => null, 'bidang_keahlian' => null, 'rank' => 0];
 

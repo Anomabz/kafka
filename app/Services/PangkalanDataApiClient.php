@@ -273,7 +273,7 @@ class PangkalanDataApiClient
 
     private function programStudiPayload(array $row): array
     {
-        $jenjang = (string) data_get($row, 'nama_jenjang_pendidikan', '');
+        $jenjang = SaptoProgramStudiRepository::cleanJenjang((string) data_get($row, 'nama_jenjang_pendidikan', ''));
         $nama = (string) data_get($row, 'nama_program_studi', '');
         $mapping = $this->studyProgramMappingFor($row);
         $fakultas = (string) ($mapping['faculty'] ?? '');
@@ -286,7 +286,7 @@ class PangkalanDataApiClient
             'fakultas' => $fakultas === '' ? 'Belum Dipetakan' : $fakultas,
             'nama' => $nama,
             'jenjang' => $jenjang,
-            'label' => trim("{$jenjang} {$nama}"),
+            'label' => SaptoProgramStudiRepository::composeLabel($jenjang, $nama),
         ];
     }
 

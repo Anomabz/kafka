@@ -412,6 +412,16 @@ body::before {
         @apply min-h-[38px] w-full rounded-xl px-3 text-[13px] transition;
     }
 
+    /* Popup <option> dibuka native oleh browser dengan latar OPAQUE — kalau
+       cuma mewarisi warna teks --color-ink (terang di dark mode) di atas
+       latar putih default browser, teksnya jadi tak terlihat. Set latar +
+       teks eksplisit dari token surface yang solid (bukan --input-bg yang
+       semi-transparan) supaya kontras di light & dark. */
+    .filter-select option {
+        background: var(--color-surface);
+        color: var(--color-ink);
+    }
+
     .filter-select:focus {
         outline: none;
         border-color: var(--color-focus);

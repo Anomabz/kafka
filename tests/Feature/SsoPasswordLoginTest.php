@@ -45,7 +45,7 @@ class SsoPasswordLoginTest extends TestCase
 
         $follow = $this->get(route('login'));
         $follow->assertOk();
-        $follow->assertSee('Akses SAPTO ditolak');
+        $follow->assertSee('Akses ditolak');
         $follow->assertSee('Firdaus Masdung');
     }
 

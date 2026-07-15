@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" id="theme-color-meta" content="#e7ecf5">
     <title>Masuk — SAPTO</title>
+    <link rel="icon" href="{{ asset('images/logo-unsri.png') }}" type="image/png">
     <script>
         (function () {
             try {
@@ -623,9 +624,9 @@
                         <path d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/>
                     </svg>
                 </div>
-                <h2 id="not-korprodi-title" class="auth-modal-title">Akses SAPTO ditolak</h2>
+                <h2 id="not-korprodi-title" class="auth-modal-title">Akses ditolak</h2>
                 <p id="not-korprodi-desc" class="auth-modal-desc">
-                    Akun {{ $notKorprodiHint }} valid di SSO, tapi belum terdaftar sebagai koordinator program studi (korprodi) di SAPTO. Hubungi admin SAPTO jika ini keliru.
+                    Akun <strong>{{ $notKorprodiHint }}</strong> belum terdaftar sebagai koordinator program studi (korprodi) di SAPTO.
                 </p>
             </div>
         </div>

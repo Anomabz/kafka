@@ -209,8 +209,11 @@ class SaptoKerjasamaPendidikanTest extends TestCase
         $response = $this->getJson('/api/sapto/tables/kerjasama-pendidikan/summary')
             ->assertOk();
 
-        $this->assertSame((int) now()->year, $response->json('ts'));
-        $this->assertContains((int) now()->year, $response->json('available_years'));
+        // Dibatasi ke maksimum 2025 selama data sinkronisasi tabel lain belum
+        // sampai tahun ajaran 2026 (lihat SaptoKerjasamaRepository::latestYear()).
+        $expectedYear = min((int) now()->year, 2025);
+        $this->assertSame($expectedYear, $response->json('ts'));
+        $this->assertContains($expectedYear, $response->json('available_years'));
         $this->assertContains(2018, $response->json('available_years'));
     }
 }

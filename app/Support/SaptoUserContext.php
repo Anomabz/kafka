@@ -18,16 +18,26 @@ class SaptoUserContext
 
     /**
      * Scope is derived from the logged-in SSO identity, never trusted from
-     * the client. Only prodi-level access exists right now (via the korprodi
-     * table, keyed by NIP) — fakultas/universitas-wide roles will plug in
-     * here the same way once that entitlement data exists; until then an
-     * unmatched NIP is denied entirely rather than falling back to full
-     * ("universitas") access, which is what the old header-trusting version
-     * effectively defaulted to for anyone.
+     * the client. Only prodi-level access exists for regular accounts (via
+     * the korprodi table, keyed by NIP) — an unmatched NIP is denied
+     * entirely rather than falling back to full ("universitas") access,
+     * which is what the old header-trusting version effectively defaulted
+     * to for anyone.
+     *
+     * The one exception: accounts flagged is_admin=true in the local `users`
+     * table (SsoController::attemptLocalAdminLogin — a small, deliberate set
+     * of developer/maintainer accounts outside SSO, not a general role) get
+     * full 'universitas' access, same as any query-driven fakultas_id/
+     * program_studi_id below.
      */
     public static function fromRequest(Request $request): self
     {
         $ssoUser = (array) $request->session()->get('sso_user', []);
+
+        if ($ssoUser['is_admin'] ?? false) {
+            return new self('universitas');
+        }
+
         $nip = trim((string) ($ssoUser['nomor_identitas'] ?? ''));
 
         if ($nip === '') {

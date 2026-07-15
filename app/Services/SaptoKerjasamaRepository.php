@@ -77,7 +77,17 @@ abstract class SaptoKerjasamaRepository
         $programStudis = $this->client->programStudis();
         [$programStudi, $fakultas] = $this->validateScope($programStudis, $fakultasId, $programStudiId);
 
-        $ts ??= $this->latestYear();
+        $availableYears = $this->availableYears();
+
+        // TS yang dibawa dari tabel lain (mis. Dosen Pembimbing TS-nya 2025)
+        // bisa jadi bukan tahun yang ada MoU/PKS-nya di sini — kalau dipakai
+        // apa adanya, respons balik ts=2025 tapi 2025 tak ada di
+        // available_years, dropdown TS di klien jadi tak punya opsi buat
+        // dipilih (terlihat seperti "belum kepilih"). Jatuhkan ke tahun
+        // terbaru yang benar-benar ada di sini, sama seperti kalau ts kosong.
+        if ($ts === null || ! in_array($ts, $availableYears, true)) {
+            $ts = $this->latestYear();
+        }
 
         $rows = collect($this->mouRows($ts))
             ->concat($this->pksRows($ts))
@@ -95,7 +105,7 @@ abstract class SaptoKerjasamaRepository
             'table_code' => $this->tableCode(),
             'table_name' => $this->tableName(),
             'ts' => $ts,
-            'available_years' => $this->availableYears(),
+            'available_years' => $availableYears,
             'fakultas' => $fakultas,
             'program_studi' => $programStudi,
             'columns' => [
@@ -315,7 +325,7 @@ abstract class SaptoKerjasamaRepository
             return DB::table('daftar_mou')->whereNotNull('tahun')->distinct()->pluck('tahun')
                 ->merge(DB::table('daftar_pks')->whereNotNull('tahun')->distinct()->pluck('tahun'))
                 ->map(fn (mixed $year): int => (int) $year)
-                ->push((int) now()->year)
+                ->push($this->latestYear())
                 ->unique()
                 ->filter(fn (int $year): bool => $year >= 2000 && $year <= 2100)
                 ->sortDesc()
@@ -327,8 +337,14 @@ abstract class SaptoKerjasamaRepository
     private function latestYear(): int
     {
         // Kerjasama tak "lulus per tahun ajaran" seperti tabel lain; default
-        // yang paling relevan adalah tahun berjalan (kerjasama yang masih aktif sekarang).
-        return (int) now()->year;
+        // yang paling relevan adalah tahun berjalan (kerjasama yang masih
+        // aktif sekarang).
+        // ponytail: data sinkronisasi tabel-tabel lain (dosen, mahasiswa)
+        // belum sampai tahun ajaran 2026 — kalau ini dibiarkan now()->year
+        // apa adanya, TS-nya "lebih maju" dari tabel lain dan keliatan
+        // nyeleneh. Batasi ke 2025 dulu; naikkan angka ini (atau ganti jadi
+        // deteksi otomatis dari tabel lain) begitu data 2026 benar-benar ada.
+        return min((int) now()->year, 2025);
     }
 
     private function sourcePayload(): array

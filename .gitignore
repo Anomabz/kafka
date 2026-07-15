@@ -33,3 +33,6 @@ Thumbs.db
 
 # Local git worktrees (superpowers:using-git-worktrees)
 /.worktrees/
+
+# Claude Code local tooling
+/.claude

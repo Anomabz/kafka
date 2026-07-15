@@ -60,18 +60,29 @@
     const tables = @json($tables);
     const currentYear = new Date().getFullYear();
     const PAGE_SIZE = 15; // baris dosen per halaman pada tabel 3.a.2
-    // Akses selalu dikunci ke satu program studi milik akun yang login
-    // (lihat SaptoUserContext::fromRequest) — tidak ada lagi role atau
-    // fakultas/program-studi yang bisa dipilih klien, cuma tampilan.
+    // Akses korprodi biasa selalu dikunci ke satu program studi (lihat
+    // SaptoUserContext::fromRequest) — canSelectFakultas/canSelectProgramStudi
+    // datang dari API (/api/sapto/fakultas, /api/sapto/program-studi), bukan
+    // dari pilihan klien; true hanya untuk akun admin (is_admin=true).
     const state = {
         ts: null, // diisi dari available_years hasil summary (mengikuti isi database)
+        maTs: null, // TS khusus halaman Mahasiswa Asing (filter-nya terpisah dari #ts)
+        fakultasId: 'all',
+        programStudiId: 'all',
+        fakultas: [],
         programStudi: [],
+        canSelectFakultas: false,
+        canSelectProgramStudi: false,
         summary: null,
         page: 1, // halaman aktif tabel dosen pembimbing
     };
 
     const els = {
         ts: document.getElementById('ts'),
+        fakultas: document.getElementById('fakultas'),
+        fakultasWrap: document.getElementById('fakultas-wrap'),
+        programStudi: document.getElementById('program-studi'),
+        programStudiWrap: document.getElementById('program-studi-wrap'),
         tableCardTitle: document.getElementById('table-card-title'),
         activeUnit: document.getElementById('active-unit'),
         tablePage: document.getElementById('table-page'),
@@ -120,26 +131,39 @@
         maMetricFt: document.getElementById('ma-metric-ft'),
         maMetricPt: document.getElementById('ma-metric-pt'),
         maActiveUnit: document.getElementById('ma-active-unit'),
+        maTs: document.getElementById('ma-ts'),
+        maFakultas: document.getElementById('ma-fakultas'),
+        maFakultasWrap: document.getElementById('ma-fakultas-wrap'),
+        maProgramStudi: document.getElementById('ma-program-studi'),
+        maProgramStudiWrap: document.getElementById('ma-program-studi-wrap'),
     };
 
     const metricEls = [els.metricDosen, els.metricPs, els.metricPsLain, els.metricTs];
     const maMetricEls = [els.maMetricProdi, els.maMetricAktif, els.maMetricFt, els.maMetricPt];
     let maSummary = null;
-    let currentTableId = @json($activeTableId ?? 'dashboard');
+
+    // Filter halaman Mahasiswa Asing — khusus admin, dan cuma memuat prodi/
+    // fakultas yang benar-benar punya mahasiswa asing (dibangun dari data
+    // maSummary, bukan katalog penuh). Korprodi biasa tak melihat dropdown ini
+    // (server sudah scope ke satu prodi mereka).
+    const maFilter = { fakultasId: 'all', prodiId: 'all' };
+
+    let currentTableId = @json($activeTableId ?? 'kerjasama-pendidikan');
 
     // TS awal belum diketahui sampai summary pertama memberi tahu tahun akademik
     // apa saja yang ada di database. Tampilkan placeholder dulu.
     function initTsOptions() {
         els.ts.innerHTML = '<option value="">Memuat...</option>';
+        els.maTs.innerHTML = '<option value="">Memuat...</option>';
     }
 
     // Isi dropdown TS dari daftar tahun akademik yang benar-benar ada di
     // database (available_years), lalu pilih tahun aktif.
-    function populateTsOptions(years, selected) {
+    function populateTsOptions(el, years, selected) {
         const list = Array.isArray(years) && years.length ? years : [selected];
 
-        els.ts.innerHTML = list.map((year) => `<option value="${year}">${year}</option>`).join('');
-        els.ts.value = String(selected);
+        el.innerHTML = list.map((year) => `<option value="${year}">${year}</option>`).join('');
+        el.value = String(selected);
     }
 
     // Scope (fakultas/prodi) selalu ditentukan server-side dari akun yang
@@ -168,17 +192,105 @@
         return payload;
     }
 
-    // Program studi akun (selalu tepat satu — atau kosong kalau data
-    // referensinya tidak ditemukan, lihat SaptoUserContext::fromRequest).
+    // Fakultas: cuma admin (is_admin=true) yang can_select_fakultas=true dari
+    // API — korprodi biasa tak pernah lihat field ini (lihat filter-bar.blade.php).
+    async function loadFakultas() {
+        const payload = await fetchJson('/api/sapto/fakultas');
+        state.canSelectFakultas = Boolean(payload.can_select_fakultas);
+        state.fakultas = payload.data || [];
+
+        els.fakultasWrap.classList.toggle('hidden', !state.canSelectFakultas);
+
+        if (state.canSelectFakultas) {
+            renderFakultasSelect();
+        }
+    }
+
+    // Program studi: satu-satunya untuk korprodi biasa (kosong kalau data
+    // referensinya tidak ditemukan, lihat SaptoUserContext::fromRequest), atau
+    // daftar penuh + pilihan bebas untuk admin (can_select_program_studi=true).
     async function loadProgramStudi() {
-        const payload = await fetchJson('/api/sapto/program-studi');
+        const params = new URLSearchParams();
+
+        if (state.canSelectFakultas && state.fakultasId !== 'all') {
+            params.set('fakultas_id', state.fakultasId);
+        }
+
+        const payload = await fetchJson(`/api/sapto/program-studi${params.size ? `?${params}` : ''}`);
+        state.canSelectProgramStudi = Boolean(payload.can_select_program_studi);
         state.programStudi = payload.data || [];
+
+        els.programStudiWrap.classList.toggle('hidden', !state.canSelectProgramStudi);
+
+        if (state.canSelectProgramStudi) {
+            const exists = state.programStudi.some((item) => String(item.id) === String(state.programStudiId));
+
+            if (state.programStudiId !== 'all' && !exists) {
+                state.programStudiId = 'all';
+            }
+
+            renderProgramStudiSelect();
+        } else {
+            renderActiveUnit();
+        }
+    }
+
+    // Filter bar utama (dashboard + tabel dosen/kerjasama) — daftar penuh
+    // katalog prodi. Halaman Mahasiswa Asing punya dropdown sendiri (ma-*)
+    // yang cuma memuat prodi yang benar-benar punya mahasiswa asing.
+    function renderFakultasSelect() {
+        els.fakultas.innerHTML = [
+            '<option value="all">Semua Fakultas</option>',
+            ...state.fakultas.map((item) => `<option value="${item.id}">${escapeHtml(item.nama)}</option>`),
+        ].join('');
+        els.fakultas.value = state.fakultasId;
+    }
+
+    function renderProgramStudiSelect() {
+        els.programStudi.innerHTML = [
+            '<option value="all">Semua Program Studi</option>',
+            ...state.programStudi.map((item) => `<option value="${item.id}">${escapeHtml(item.jenjang)} ${escapeHtml(item.nama)} - ${escapeHtml(item.fakultas)}</option>`),
+        ].join('');
+        els.programStudi.value = state.programStudiId;
+
         renderActiveUnit();
     }
 
-    function renderActiveUnit() {
+    // Dipakai oleh filter bar utama (activeUnit) dan filter Mahasiswa Asing
+    // (maActiveUnit) — sama-sama turunan dari state fakultas/prodi terpilih.
+    function activeUnitLabel(fallbackText) {
+        if (!state.canSelectFakultas && !state.canSelectProgramStudi) {
+            return fallbackText || 'Program studi akun tidak ditemukan';
+        }
+
+        if (state.canSelectProgramStudi && state.programStudiId !== 'all') {
+            const selected = state.programStudi.find((item) => String(item.id) === String(state.programStudiId));
+
+            if (selected) {
+                return `${selected.jenjang} ${selected.nama}`;
+            }
+        }
+
+        if (state.canSelectFakultas && state.fakultasId !== 'all') {
+            const fakultas = state.fakultas.find((item) => String(item.id) === String(state.fakultasId));
+
+            if (fakultas) {
+                return fakultas.nama;
+            }
+        }
+
+        return 'Universitas Sriwijaya';
+    }
+
+    // Untuk korprodi: nama prodi tunggal akun; untuk admin: null (activeUnitLabel
+    // yang menentukan dari fakultas/prodi terpilih).
+    function activeUnitFallback() {
         const selected = state.programStudi[0];
-        els.activeUnit.textContent = selected ? `${selected.jenjang} ${selected.nama}` : 'Program studi akun tidak ditemukan';
+        return selected ? `${selected.jenjang} ${selected.nama}` : null;
+    }
+
+    function renderActiveUnit() {
+        els.activeUnit.textContent = activeUnitLabel(activeUnitFallback());
     }
 
     function summaryUrl() {
@@ -187,6 +299,14 @@
         // TS null pada load pertama -> backend memakai tahun akademik terbaru.
         if (state.ts !== null) {
             params.set('ts', state.ts);
+        }
+
+        if (state.canSelectFakultas && state.fakultasId !== 'all') {
+            params.set('fakultas_id', state.fakultasId);
+        }
+
+        if (state.canSelectProgramStudi && state.programStudiId !== 'all') {
+            params.set('program_studi_id', state.programStudiId);
         }
 
         const slug = isGeneric(currentTableId) ? GENERIC_TABLES[currentTableId].endpoint : 'dosen-pembimbing-ta';
@@ -251,7 +371,7 @@
 
         // Sinkronkan TS aktif + dropdown dengan tahun yang ada di database.
         state.ts = summary.ts;
-        populateTsOptions(summary.available_years, summary.ts);
+        populateTsOptions(els.ts, summary.available_years, summary.ts);
 
         metricEls.forEach((el) => el.classList.remove('is-loading'));
 
@@ -528,6 +648,14 @@
             year_key: button.dataset.yearKey,
         });
 
+        if (state.canSelectFakultas && state.fakultasId !== 'all') {
+            params.set('fakultas_id', state.fakultasId);
+        }
+
+        if (state.canSelectProgramStudi && state.programStudiId !== 'all') {
+            params.set('program_studi_id', state.programStudiId);
+        }
+
         els.detailTitle.textContent = button.dataset.dosenName || 'Detail Data';
         els.detailSubtitle.textContent = `${scopeLabel(button.dataset.scope)} - ${yearLabel(button.dataset.yearKey)}`;
         els.detailBody.innerHTML = '<div class="text-sm text-muted">Memuat detail...</div>';
@@ -564,22 +692,84 @@
         `).join('');
     }
 
+    // Admin melihat semua prodi yang punya mahasiswa asing (server tidak
+    // discope), lalu disaring di klien lewat dropdown ma-*. Korprodi biasa:
+    // server hanya mengembalikan satu prodi mereka, dropdown disembunyikan.
+    const maCanSelect = () => state.canSelectFakultas || state.canSelectProgramStudi;
+
     async function loadMahasiswaAsing() {
         setMaLoading();
 
         try {
-            const payload = await fetchJson('/sapto/mahasiswa-asing');
+            const params = new URLSearchParams();
+            if (state.maTs !== null) {
+                params.set('ts', state.maTs);
+            }
+
+            const payload = await fetchJson(`/sapto/mahasiswa-asing?${params}`);
 
             if (!payload.success) {
                 throw new Error(payload.message || 'Permintaan data gagal.');
             }
 
             maSummary = payload;
+            state.maTs = payload.ts;
+            populateTsOptions(els.maTs, payload.available_years, payload.ts);
+            renderMaFilters();
             renderMaActiveUnit();
             renderMaSummary();
         } catch (error) {
             renderMaError(error.message);
         }
+    }
+
+    // Bangun dropdown Fakultas/Program Studi khusus halaman ini dari prodi
+    // yang benar-benar punya mahasiswa asing (bukan katalog penuh) — supaya
+    // admin tidak dibingungkan opsi prodi tanpa data.
+    function renderMaFilters() {
+        els.maFakultasWrap.classList.toggle('hidden', !maCanSelect());
+        els.maProgramStudiWrap.classList.toggle('hidden', !maCanSelect());
+
+        if (!maCanSelect()) {
+            return;
+        }
+
+        const all = maSummary.data || [];
+
+        const fakultas = [...new Map(all.map((r) => [r.fakultas_id, r.fakultas])).entries()]
+            .map(([id, nama]) => ({ id, nama }))
+            .sort((a, b) => a.nama.localeCompare(b.nama, 'id'));
+
+        els.maFakultas.innerHTML = [
+            '<option value="all">Semua Fakultas</option>',
+            ...fakultas.map((f) => `<option value="${escapeAttr(f.id)}">${escapeHtml(f.nama)}</option>`),
+        ].join('');
+        els.maFakultas.value = maFilter.fakultasId;
+
+        const prodi = all
+            .filter((r) => maFilter.fakultasId === 'all' || r.fakultas_id === maFilter.fakultasId)
+            .map((r) => ({ id: r.id_prodi, label: r.program_studi }))
+            .sort((a, b) => a.label.localeCompare(b.label, 'id'));
+
+        els.maProgramStudi.innerHTML = [
+            '<option value="all">Semua Program Studi</option>',
+            ...prodi.map((p) => `<option value="${escapeAttr(p.id)}">${escapeHtml(p.label)}</option>`),
+        ].join('');
+        els.maProgramStudi.value = maFilter.prodiId;
+    }
+
+    function maVisibleRows() {
+        return (maSummary.data || []).filter((row) => {
+            if (maFilter.fakultasId !== 'all' && row.fakultas_id !== maFilter.fakultasId) {
+                return false;
+            }
+
+            if (maFilter.prodiId !== 'all' && row.id_prodi !== maFilter.prodiId) {
+                return false;
+            }
+
+            return true;
+        });
     }
 
     function setMaLoading() {
@@ -594,16 +784,30 @@
         els.maTableFoot.innerHTML = '';
     }
 
-    // Data dari /sapto/mahasiswa-asing sudah discope server-side ke satu
-    // program studi akun (lihat MahasiswaController::data_mahasiswa_asing),
-    // jadi tidak ada lagi filter fakultas/prodi di klien.
     function renderMaActiveUnit() {
-        const row = (maSummary.data || [])[0];
-        els.maActiveUnit.textContent = row ? row.program_studi : 'Program studi akun tidak ditemukan';
+        if (!maCanSelect()) {
+            const row = (maSummary.data || [])[0];
+            els.maActiveUnit.textContent = row ? row.program_studi : 'Program studi akun tidak ditemukan';
+            return;
+        }
+
+        if (maFilter.prodiId !== 'all') {
+            const row = (maSummary.data || []).find((r) => r.id_prodi === maFilter.prodiId);
+            els.maActiveUnit.textContent = row ? row.program_studi : 'Universitas Sriwijaya';
+            return;
+        }
+
+        if (maFilter.fakultasId !== 'all') {
+            const row = (maSummary.data || []).find((r) => r.fakultas_id === maFilter.fakultasId);
+            els.maActiveUnit.textContent = row ? row.fakultas : 'Universitas Sriwijaya';
+            return;
+        }
+
+        els.maActiveUnit.textContent = 'Universitas Sriwijaya';
     }
 
     function renderMaSummary() {
-        const rows = maSummary.data || [];
+        const rows = maVisibleRows();
         const totals = maRowTotals(rows);
 
         maMetricEls.forEach((el) => el.classList.remove('is-loading'));
@@ -740,14 +944,16 @@
     async function openMaDetail(button) {
         const params = new URLSearchParams({ tahun: button.dataset.tahun });
 
+        // Prodi yang diklik. Server memvalidasi ini terhadap hak akses akun
+        // (lihat SaptoUserContext::resolveProgramStudiId) — admin bebas pilih
+        // prodi manapun, korprodi tetap dikunci ke prodinya sendiri.
         if (button.dataset.idProdi) {
-            params.set('id_prodi', button.dataset.idProdi);
-        } else {
-            params.set('nama_prodi', button.dataset.programStudi);
+            params.set('program_studi_id', button.dataset.idProdi);
         }
 
+        const tahun = button.dataset.tahun;
         els.detailTitle.textContent = button.dataset.programStudi || 'Detail Data';
-        els.detailSubtitle.textContent = `Mahasiswa Asing Penuh Waktu - TS ${button.dataset.tahun}`;
+        els.detailSubtitle.textContent = `Mahasiswa asing aktif pada TS ${tahun}`;
         els.detailBody.innerHTML = '<div class="text-sm text-muted">Memuat detail...</div>';
         showDrawer();
 
@@ -758,13 +964,13 @@
                 throw new Error(payload.message || 'Permintaan detail gagal.');
             }
 
-            renderMaDetail(payload);
+            renderMaDetail(payload, tahun);
         } catch (error) {
             els.detailBody.innerHTML = `<div class="text-sm text-warn">${escapeHtml(error.message)}</div>`;
         }
     }
 
-    function renderMaDetail(payload) {
+    function renderMaDetail(payload, tahun) {
         const items = payload.data || [];
 
         if (!items.length) {
@@ -772,7 +978,15 @@
             return;
         }
 
-        els.detailBody.innerHTML = items.map((item) => `
+        // Perjelas bahwa ini "mahasiswa aktif pada tahun X" (stok, sesuai
+        // BAN-PT) — jadi angkatan lama yang belum lulus wajar ikut muncul,
+        // dan mahasiswa yang sama bisa tampil di beberapa TS. Bukan data ganda.
+        const note = `
+            <div class="mb-3 rounded-xl px-3 py-2 text-[12px] leading-relaxed text-muted" style="background:var(--glass-2);border:1px solid var(--color-line)">
+                ${items.length} mahasiswa asing yang <strong>masih aktif pada tahun ${escapeHtml(String(tahun))}</strong> (termasuk angkatan sebelumnya yang belum lulus). Mahasiswa yang belum lulus akan tetap terhitung pada tahun-tahun berikutnya.
+            </div>`;
+
+        els.detailBody.innerHTML = note + items.map((item) => `
             <article class="rounded-2xl p-3.5" style="background:var(--glass-2);border:1px solid var(--color-line)">
                 <strong class="mb-1.5 block text-[14px] text-ink">${escapeHtml(item.nama || '-')}</strong>
                 <div class="grid grid-cols-2 gap-x-3 gap-y-2 text-[13px] text-muted">
@@ -795,6 +1009,11 @@
         els.drawer.classList.remove('is-open');
         els.drawerBackdrop.classList.remove('is-open');
     }
+
+    // Kerjasama (Tabel 1) bersifat institusi — repository mengabaikan
+    // fakultas/prodi (lihat SaptoKerjasamaRepository), jadi dropdown itu tak
+    // menyaring apa-apa dan disembunyikan untuk tabel-tabel ini.
+    const INSTITUTION_WIDE_TABLES = ['kerjasama-pendidikan', 'kerjasama-penelitian', 'kerjasama-pkm'];
 
     // Tabel generik: memakai kembali #table-page (filter, kartu metrik, panel,
     // pagination) tapi render dari envelope {columns, rows, metrics} backend.
@@ -887,21 +1106,34 @@
             button.classList.toggle('is-active', button.dataset.tableId === tableId);
         });
 
-        // 'dashboard' bukan salah satu dari 46 tabel BAN-PT di array `tables`,
-        // jadi judulnya di-hardcode, tidak dicari lewat tables.find().
         const table = tables.find((item) => item.id === tableId);
-        els.pageTitle.textContent = tableId === 'dashboard' ? 'Dashboard' : (table?.name || 'SAPTO');
+        els.pageTitle.textContent = table?.name || 'SAPTO';
 
         els.tablePage.classList.add('hidden');
         els.maPage.classList.add('hidden');
         els.placeholderPage.classList.add('hidden');
         els.dashboardPage.classList.add('hidden');
 
-        // Filter bar dipakai bersama dashboard + keluarga tabel "table-page"
+        // Filter bar dipakai bersama keluarga tabel "table-page"
         // (dosen-pembimbing-ta + tabel generik); mahasiswa-asing punya filter
         // sendiri, placeholder tidak butuh filter sama sekali.
-        const usesSharedFilterBar = tableId === 'dashboard' || tableId === 'dosen-pembimbing-ta' || isGeneric(tableId);
+        const usesSharedFilterBar = tableId === 'dosen-pembimbing-ta' || isGeneric(tableId);
         els.sharedFilterBar.classList.toggle('hidden', !usesSharedFilterBar);
+
+        // Kerjasama (Tabel 1) bersifat institusi — datanya tidak per fakultas/
+        // prodi, jadi dropdown itu tak berpengaruh apa-apa (bikin pengelola
+        // bingung). Sembunyikan buat tabel ini dan kunci Unit Aktif ke tingkat
+        // universitas; tabel lain tetap bisa discope oleh admin.
+        const institutionWide = INSTITUTION_WIDE_TABLES.includes(tableId);
+        if (state.canSelectFakultas) {
+            els.fakultasWrap.classList.toggle('hidden', institutionWide);
+        }
+        if (state.canSelectProgramStudi) {
+            els.programStudiWrap.classList.toggle('hidden', institutionWide);
+        }
+        if (usesSharedFilterBar) {
+            els.activeUnit.textContent = institutionWide ? 'Universitas Sriwijaya' : activeUnitLabel(activeUnitFallback());
+        }
 
         const handler = TABLE_HANDLERS[tableId];
 
@@ -958,6 +1190,14 @@
             params.set('ts', state.ts);
         }
 
+        if (state.canSelectFakultas && state.fakultasId !== 'all') {
+            params.set('fakultas_id', state.fakultasId);
+        }
+
+        if (state.canSelectProgramStudi && state.programStudiId !== 'all') {
+            params.set('program_studi_id', state.programStudiId);
+        }
+
         return `/api/sapto/dashboard/summary?${params}`;
     }
 
@@ -975,7 +1215,10 @@
     // Filter bar is shared antara dashboard & table-page; dispatch ke loader
     // yang sesuai halaman aktif alih-alih selalu memanggil loadSummary().
     function loadActivePage() {
-        return currentTableId === 'dashboard' ? loadDashboard() : loadSummary();
+        if (currentTableId === 'dashboard') return loadDashboard();
+        if (currentTableId === 'mahasiswa-asing') return loadMahasiswaAsing();
+
+        return loadSummary();
     }
 
     function setDashboardLoading() {
@@ -997,7 +1240,7 @@
             state.ts = payload.ts;
         }
 
-        populateTsOptions(payload.available_years, payload.ts);
+        populateTsOptions(els.ts, payload.available_years, payload.ts);
 
         els.dashboardStatus.textContent = '';
 
@@ -1073,6 +1316,40 @@
     els.ts.addEventListener('change', () => {
         state.ts = Number(els.ts.value);
         loadActivePage();
+    });
+
+    els.maTs.addEventListener('change', () => {
+        state.maTs = Number(els.maTs.value);
+        loadMahasiswaAsing();
+    });
+
+    els.fakultas.addEventListener('change', async () => {
+        state.fakultasId = els.fakultas.value;
+        state.programStudiId = 'all';
+        await loadProgramStudi();
+        await loadActivePage();
+    });
+
+    els.programStudi.addEventListener('change', () => {
+        state.programStudiId = els.programStudi.value;
+        renderProgramStudiSelect();
+        loadActivePage();
+    });
+
+    // Data Mahasiswa Asing sudah lengkap di klien (maSummary tak discope untuk
+    // admin), jadi ganti fakultas/prodi cukup filter ulang — tanpa refetch.
+    els.maFakultas.addEventListener('change', () => {
+        maFilter.fakultasId = els.maFakultas.value;
+        maFilter.prodiId = 'all';
+        renderMaFilters();
+        renderMaActiveUnit();
+        renderMaSummary();
+    });
+
+    els.maProgramStudi.addEventListener('change', () => {
+        maFilter.prodiId = els.maProgramStudi.value;
+        renderMaActiveUnit();
+        renderMaSummary();
     });
 
     els.tableBody.addEventListener('click', (event) => {
@@ -1177,7 +1454,8 @@
     }
 
     initTsOptions();
-    loadProgramStudi()
+    loadFakultas()
+        .then(loadProgramStudi)
         .then(() => activateTable(currentTableId))
         .catch((error) => renderError(error.message));
 </script>

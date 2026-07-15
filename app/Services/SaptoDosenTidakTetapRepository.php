@@ -53,7 +53,7 @@ class SaptoDosenTidakTetapRepository
                     'nidn' => (string) ($row['nidn'] ?? ''),
                     'nuptk' => (string) ($row['nuptk'] ?? ''),
                     'jenis_kelamin' => $this->jenisKelamin((string) ($row['jk'] ?? '')),
-                    'program_studi' => (string) ($program['label'] ?? $row['nama_program_studi'] ?? 'Belum Dipetakan'),
+                    'program_studi' => SaptoProgramStudiRepository::cleanLabel($program['label'] ?? $row['nama_program_studi'] ?? 'Belum Dipetakan'),
                     'fakultas' => (string) ($program['fakultas'] ?? 'Belum Dipetakan'),
                 ];
             })

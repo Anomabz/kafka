@@ -29,7 +29,7 @@ class SaptoProgramStudiRepository
                 ->map(function (object $row) use ($facultyMap): array {
                     $fakultas = $facultyMap[(string) $row->kode_program_studi] ?? 'Belum Dipetakan';
                     $fakultasId = Str::slug($fakultas) ?: 'belum-dipetakan';
-                    $jenjang = (string) $row->nama_jenjang_pendidikan;
+                    $jenjang = self::cleanJenjang((string) $row->nama_jenjang_pendidikan);
                     $nama = (string) $row->nama_program_studi;
 
                     return [
@@ -39,7 +39,7 @@ class SaptoProgramStudiRepository
                         'fakultas' => $fakultas,
                         'nama' => $nama,
                         'jenjang' => $jenjang,
-                        'label' => trim("{$jenjang} {$nama}"),
+                        'label' => self::composeLabel($jenjang, $nama),
                     ];
                 })
                 ->filter(fn (array $row): bool => $row['id'] !== '' && $row['nama'] !== '')
@@ -52,6 +52,52 @@ class SaptoProgramStudiRepository
                 ->values()
                 ->all();
         }));
+    }
+
+    /**
+     * Jenjang mentah dari Pangkalan Data kadang berisi placeholder ("(tidak
+     * diisi)", "-", "*", kosong) untuk unit non-prodi (mis. dosen homebase di
+     * Biro). Anggap itu tidak ada supaya tidak jadi prefix aneh di label.
+     */
+    public static function cleanJenjang(?string $jenjang): string
+    {
+        $jenjang = trim((string) $jenjang);
+
+        if ($jenjang === '' || in_array(Str::lower($jenjang), ['(tidak diisi)', 'tidak diisi', '-', '*', 'null'], true)) {
+            return '';
+        }
+
+        return $jenjang;
+    }
+
+    /**
+     * Gabungkan jenjang + nama tanpa menggandakan kata (data sumber sudah
+     * memuat "Profesi Dokter" sebagai nama, jadi "Profesi" + itu = "Profesi
+     * Profesi Dokter") dan tanpa prefix jenjang placeholder.
+     */
+    public static function composeLabel(?string $jenjang, ?string $nama): string
+    {
+        $jenjang = self::cleanJenjang($jenjang);
+        $nama = trim((string) $nama);
+
+        if ($jenjang === '' || Str::startsWith(Str::lower($nama), Str::lower($jenjang).' ') || Str::lower($nama) === Str::lower($jenjang)) {
+            return $nama;
+        }
+
+        return trim("{$jenjang} {$nama}");
+    }
+
+    /**
+     * Bersihkan label prodi yang sudah jadi string (mis. fallback dari
+     * list_penugasan_dosen yang menyimpan "(tidak diisi) Biro Akademik ...")
+     * dengan membuang prefix jenjang placeholder yang menempel.
+     */
+    public static function cleanLabel(?string $label): string
+    {
+        $label = trim((string) $label);
+        $stripped = trim((string) preg_replace('/^\(?\s*tidak diisi\s*\)?[\s\-]+/i', '', $label));
+
+        return $stripped !== '' ? $stripped : ($label !== '' ? $label : 'Belum Dipetakan');
     }
 
     public function faculties(): Collection

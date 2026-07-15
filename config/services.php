@@ -28,7 +28,12 @@ return [
         'password' => env('PANGKALAN_DATA_PASSWORD'),
         'timeout' => (int) env('PANGKALAN_DATA_TIMEOUT', 30),
         'connect_timeout' => (int) env('PANGKALAN_DATA_CONNECT_TIMEOUT', 10),
-        'cache_ttl' => (int) env('PANGKALAN_DATA_CACHE_TTL', 3600),
+        // ponytail: data mahasiswa/dosen/kerjasama disinkron jarang (harian/
+        // mingguan/manual), bukan tiap jam — cache pendek cuma bikin request
+        // pertama tiap jam kena query berat (lihat SaptoMahasiswaAsingRepository).
+        // Naikkan ini kalau sync makin sering, atau php artisan cache:clear
+        // manual sesudah sync kalau butuh data langsung fresh.
+        'cache_ttl' => (int) env('PANGKALAN_DATA_CACHE_TTL', 86400),
         'token_cache_ttl' => (int) env('PANGKALAN_DATA_TOKEN_CACHE_TTL', 3300),
     ],
 
