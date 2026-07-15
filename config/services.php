@@ -32,6 +32,15 @@ return [
         'token_cache_ttl' => (int) env('PANGKALAN_DATA_TOKEN_CACHE_TTL', 3300),
     ],
 
+    'sso' => [
+        'base_url' => env('SSO_BASE_URL', 'https://portal-sso.unsri.ac.id'),
+        'realm' => env('SSO_REALM', 'unsri'),
+        'client_id' => env('SSO_CLIENT_ID', 'app-sapto'),
+        'client_secret' => env('SSO_CLIENT_SECRET'),
+        // Must exactly match a redirect URI registered in Keycloak for this client.
+        'redirect_uri' => env('SSO_REDIRECT_URI'),
+    ],
+
     'ses' => [
         'key' => env('AWS_ACCESS_KEY_ID'),
         'secret' => env('AWS_SECRET_ACCESS_KEY'),

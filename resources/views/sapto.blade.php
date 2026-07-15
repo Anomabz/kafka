@@ -8,24 +8,42 @@
         'cap' => '<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m22 10-10-5L2 10l10 5 10-5Z"/><path d="M6 12v5c0 1.66 2.69 3 6 3s6-1.34 6-3v-5"/></svg>',
         'swap' => '<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/></svg>',
         'calendar' => '<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>',
+        'globe' => '<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z"/></svg>',
     ];
 @endphp
 
 @section('content')
-    <section id="table-page">
+    <div id="shared-filter-bar">
         @include('components.filter-bar')
+    </div>
 
-        <div class="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            @include('components.metric-card', ['id' => 'metric-dosen', 'label' => 'Total dosen pembimbing', 'icon' => $icons['users'], 'tint' => 'accent'])
-            @include('components.metric-card', ['id' => 'metric-ps', 'label' => 'Total mahasiswa bimbingan PS diakreditasi', 'icon' => $icons['cap'], 'tint' => 'info'])
-            @include('components.metric-card', ['id' => 'metric-ps-lain', 'label' => 'Total mahasiswa bimbingan PS lain di PT', 'icon' => $icons['swap'], 'tint' => 'warn'])
-            @include('components.metric-card', ['id' => 'metric-ts', 'label' => 'TS aktif', 'icon' => $icons['calendar'], 'tint' => 'slate'])
+    @include('components.dashboard-page')
+
+    <section id="table-page" class="hidden">
+        <div class="mb-4 grid grid-cols-2 gap-2.5 sm:mb-5 sm:gap-3 lg:grid-cols-4">
+            @include('components.metric-card', ['id' => 'metric-dosen', 'labelId' => 'metric-dosen-label', 'label' => 'Total dosen pembimbing', 'icon' => $icons['users'], 'tint' => 'accent'])
+            @include('components.metric-card', ['id' => 'metric-ps', 'labelId' => 'metric-ps-label', 'label' => 'Total mahasiswa bimbingan PS diakreditasi', 'icon' => $icons['cap'], 'tint' => 'info'])
+            @include('components.metric-card', ['id' => 'metric-ps-lain', 'labelId' => 'metric-ps-lain-label', 'label' => 'Total mahasiswa bimbingan PS lain di PT', 'icon' => $icons['swap'], 'tint' => 'warn'])
+            @include('components.metric-card', ['id' => 'metric-ts', 'labelId' => 'metric-ts-label', 'label' => 'TS aktif', 'icon' => $icons['calendar'], 'tint' => 'slate'])
         </div>
 
         @include('components.table-panel')
     </section>
 
-    <section id="placeholder-page" class="hidden rounded-xl border border-line bg-surface p-6">
+    <section id="mahasiswa-asing-page" class="hidden">
+        @include('components.mahasiswa-asing-filter')
+
+        <div class="mb-4 grid grid-cols-2 gap-2.5 sm:mb-5 sm:gap-3 lg:grid-cols-4">
+            @include('components.metric-card', ['id' => 'ma-metric-prodi', 'label' => 'Total program studi', 'icon' => $icons['cap'], 'tint' => 'accent'])
+            @include('components.metric-card', ['id' => 'ma-metric-aktif', 'label' => 'Total mahasiswa asing aktif (TS)', 'icon' => $icons['users'], 'tint' => 'info'])
+            @include('components.metric-card', ['id' => 'ma-metric-ft', 'label' => 'Mahasiswa asing penuh waktu (TS)', 'icon' => $icons['globe'], 'tint' => 'warn'])
+            @include('components.metric-card', ['id' => 'ma-metric-pt', 'label' => 'Mahasiswa asing paruh waktu (TS)', 'icon' => $icons['calendar'], 'tint' => 'slate'])
+        </div>
+
+        @include('components.mahasiswa-asing-panel')
+    </section>
+
+    <section id="placeholder-page" class="glass hidden rounded-2xl p-6">
         <h2 id="placeholder-title" class="text-[16px] font-bold text-ink"></h2>
         <p class="mt-2 text-[13px] text-muted">
             Halaman ini belum dikembangkan pada tahap pertama. Fokus tahap pertama adalah Tabel 3.a.2) Dosen Pembimbing Utama Tugas Akhir.
@@ -40,101 +58,103 @@
 @section('scripts')
 <script>
     const tables = @json($tables);
-    const activeTableId = 'dosen-pembimbing-ta';
     const currentYear = new Date().getFullYear();
+    const PAGE_SIZE = 15; // baris dosen per halaman pada tabel 3.a.2
+    // Akses selalu dikunci ke satu program studi milik akun yang login
+    // (lihat SaptoUserContext::fromRequest) — tidak ada lagi role atau
+    // fakultas/program-studi yang bisa dipilih klien, cuma tampilan.
     const state = {
-        role: 'universitas',
-        ts: currentYear,
-        fakultasId: 'all',
-        programStudiId: 'all',
-        fakultas: [],
+        ts: null, // diisi dari available_years hasil summary (mengikuti isi database)
         programStudi: [],
         summary: null,
+        page: 1, // halaman aktif tabel dosen pembimbing
     };
 
     const els = {
-        role: document.getElementById('role'),
         ts: document.getElementById('ts'),
-        fakultas: document.getElementById('fakultas'),
-        programStudi: document.getElementById('program-studi'),
+        tableCardTitle: document.getElementById('table-card-title'),
         activeUnit: document.getElementById('active-unit'),
         tablePage: document.getElementById('table-page'),
         placeholderPage: document.getElementById('placeholder-page'),
         placeholderTitle: document.getElementById('placeholder-title'),
+        dashboardPage: document.getElementById('dashboard-page'),
+        dashboardStatus: document.getElementById('dashboard-status'),
+        dashboardCards: document.querySelectorAll('.dashboard-card'),
+        sharedFilterBar: document.getElementById('shared-filter-bar'),
         pageTitle: document.getElementById('page-title'),
         pageDescription: document.getElementById('page-description'),
         tableStatus: document.getElementById('table-status'),
         tableHead: document.getElementById('table-head'),
         tableBody: document.getElementById('table-body'),
         tableFoot: document.getElementById('table-foot'),
+        tablePagination: document.getElementById('table-pagination'),
         metricDosen: document.getElementById('metric-dosen'),
         metricPs: document.getElementById('metric-ps'),
         metricPsLain: document.getElementById('metric-ps-lain'),
         metricTs: document.getElementById('metric-ts'),
+        metricDosenLabel: document.getElementById('metric-dosen-label'),
+        metricPsLabel: document.getElementById('metric-ps-label'),
+        metricPsLainLabel: document.getElementById('metric-ps-lain-label'),
+        metricTsLabel: document.getElementById('metric-ts-label'),
         drawer: document.getElementById('detail-drawer'),
         drawerBackdrop: document.getElementById('drawer-backdrop'),
         detailTitle: document.getElementById('detail-title'),
         detailSubtitle: document.getElementById('detail-subtitle'),
         detailBody: document.getElementById('detail-body'),
         closeDrawer: document.getElementById('close-drawer'),
+        menuSearch: document.getElementById('menu-search'),
+        menuGroups: document.querySelectorAll('[data-menu-group]'),
+        menuEmpty: document.getElementById('menu-empty'),
+        appShell: document.getElementById('app-shell'),
+        sidebar: document.getElementById('sidebar'),
+        sidebarBackdrop: document.getElementById('sidebar-backdrop'),
+        sidebarToggle: document.getElementById('sidebar-toggle'),
+        sidebarClose: document.getElementById('sidebar-close'),
+        maPage: document.getElementById('mahasiswa-asing-page'),
+        maTableStatus: document.getElementById('ma-table-status'),
+        maTableHead: document.getElementById('ma-table-head'),
+        maTableBody: document.getElementById('ma-table-body'),
+        maTableFoot: document.getElementById('ma-table-foot'),
+        maMetricProdi: document.getElementById('ma-metric-prodi'),
+        maMetricAktif: document.getElementById('ma-metric-aktif'),
+        maMetricFt: document.getElementById('ma-metric-ft'),
+        maMetricPt: document.getElementById('ma-metric-pt'),
+        maActiveUnit: document.getElementById('ma-active-unit'),
     };
 
+    const metricEls = [els.metricDosen, els.metricPs, els.metricPsLain, els.metricTs];
+    const maMetricEls = [els.maMetricProdi, els.maMetricAktif, els.maMetricFt, els.maMetricPt];
+    let maSummary = null;
+    let currentTableId = @json($activeTableId ?? 'dashboard');
+
+    // TS awal belum diketahui sampai summary pertama memberi tahu tahun akademik
+    // apa saja yang ada di database. Tampilkan placeholder dulu.
     function initTsOptions() {
-        const years = [];
-
-        for (let year = currentYear + 1; year >= currentYear - 6; year--) {
-            years.push(year);
-        }
-
-        els.ts.innerHTML = years.map((year) => `<option value="${year}">${year}</option>`).join('');
-        els.ts.value = String(state.ts);
+        els.ts.innerHTML = '<option value="">Memuat...</option>';
     }
 
+    // Isi dropdown TS dari daftar tahun akademik yang benar-benar ada di
+    // database (available_years), lalu pilih tahun aktif.
+    function populateTsOptions(years, selected) {
+        const list = Array.isArray(years) && years.length ? years : [selected];
+
+        els.ts.innerHTML = list.map((year) => `<option value="${year}">${year}</option>`).join('');
+        els.ts.value = String(selected);
+    }
+
+    // Scope (fakultas/prodi) selalu ditentukan server-side dari akun yang
+    // login (lihat SaptoUserContext::fromRequest) — header ini cuma
+    // membantu disambiguasi akun dengan dua program studi (co-koordinator);
+    // server mengabaikannya kalau tidak cocok dengan entitlement akun.
     function contextHeaders() {
-        const headers = {
-            Accept: 'application/json',
-            'X-SAPTO-Role': state.role,
-        };
+        const headers = { Accept: 'application/json' };
+        const prodiId = state.programStudi[0]?.id;
 
-        if (state.role === 'fakultas') {
-            const fakultasId = selectedFakultasId();
-
-            if (fakultasId && fakultasId !== 'all') {
-                headers['X-SAPTO-Fakultas-Id'] = fakultasId;
-            }
-        }
-
-        if (state.role === 'prodi') {
-            const prodiId = selectedProgramStudiId();
-
-            if (prodiId && prodiId !== 'all') {
-                headers['X-SAPTO-Program-Studi-Id'] = prodiId;
-            }
+        if (prodiId) {
+            headers['X-SAPTO-Program-Studi-Id'] = String(prodiId);
         }
 
         return headers;
-    }
-
-    function selectedFakultasId() {
-        if (state.role === 'fakultas' && state.fakultasId === 'all') {
-            return state.fakultas[0]?.id ? String(state.fakultas[0].id) : 'all';
-        }
-
-        if (state.role === 'prodi') {
-            const selected = state.programStudi.find((item) => String(item.id) === String(selectedProgramStudiId()));
-
-            return selected?.fakultas_id ? String(selected.fakultas_id) : state.fakultasId;
-        }
-
-        return state.fakultasId;
-    }
-
-    function selectedProgramStudiId() {
-        if (state.role === 'prodi' && state.programStudiId === 'all') {
-            return state.programStudi[0]?.id ? String(state.programStudi[0].id) : 'all';
-        }
-
-        return state.programStudiId;
     }
 
     async function fetchJson(url) {
@@ -148,115 +168,30 @@
         return payload;
     }
 
-    async function loadFakultas() {
-        const payload = await fetchJson('/api/sapto/fakultas');
-        state.fakultas = payload.data || [];
-
-        if (state.role === 'fakultas' && state.fakultas.length > 0) {
-            state.fakultasId = String(state.fakultas[0].id);
-        }
-
-        if (state.role === 'universitas' && state.fakultasId !== 'all') {
-            const exists = state.fakultas.some((item) => String(item.id) === String(state.fakultasId));
-
-            if (!exists) {
-                state.fakultasId = 'all';
-            }
-        }
-
-        renderFakultasSelect();
-    }
-
+    // Program studi akun (selalu tepat satu — atau kosong kalau data
+    // referensinya tidak ditemukan, lihat SaptoUserContext::fromRequest).
     async function loadProgramStudi() {
-        const params = new URLSearchParams();
-
-        if (state.role === 'universitas' && state.fakultasId !== 'all') {
-            params.set('fakultas_id', state.fakultasId);
-        }
-
-        const payload = await fetchJson(`/api/sapto/program-studi${params.size ? `?${params}` : ''}`);
+        const payload = await fetchJson('/api/sapto/program-studi');
         state.programStudi = payload.data || [];
-
-        if (state.role === 'prodi' && state.programStudi.length > 0) {
-            state.programStudiId = String(state.programStudi[0].id);
-        }
-
-        if (state.role !== 'prodi' && state.programStudiId !== 'all') {
-            const exists = state.programStudi.some((item) => String(item.id) === String(state.programStudiId));
-
-            if (!exists) {
-                state.programStudiId = 'all';
-            }
-        }
-
-        renderProgramStudiSelect();
-    }
-
-    function renderFakultasSelect() {
-        if (state.role === 'universitas') {
-            const options = [
-                '<option value="all">Semua Fakultas</option>',
-                ...state.fakultas.map((item) => `<option value="${item.id}">${escapeHtml(item.nama)}</option>`),
-            ];
-
-            els.fakultas.innerHTML = options.join('');
-            els.fakultas.disabled = false;
-            els.fakultas.value = state.fakultasId;
-        } else {
-            const selected = state.fakultas.find((item) => String(item.id) === String(selectedFakultasId()));
-            els.fakultas.innerHTML = selected ? `<option value="${selected.id}">${escapeHtml(selected.nama)}</option>` : '<option value="">Fakultas akun tidak ditemukan</option>';
-            els.fakultas.disabled = true;
-        }
-    }
-
-    function renderProgramStudiSelect() {
-        if (state.role !== 'prodi') {
-            const options = [
-                '<option value="all">Semua Program Studi</option>',
-                ...state.programStudi.map((item) => `<option value="${item.id}">${escapeHtml(item.jenjang)} ${escapeHtml(item.nama)} - ${escapeHtml(item.fakultas)}</option>`),
-            ];
-
-            els.programStudi.innerHTML = options.join('');
-            els.programStudi.disabled = false;
-            els.programStudi.value = state.programStudiId;
-        } else {
-            const item = state.programStudi[0];
-            els.programStudi.innerHTML = item ? `<option value="${item.id}">${escapeHtml(item.jenjang)} ${escapeHtml(item.nama)} - ${escapeHtml(item.fakultas)}</option>` : '<option value="">Program studi akun tidak ditemukan</option>';
-            els.programStudi.disabled = true;
-        }
-
         renderActiveUnit();
     }
 
     function renderActiveUnit() {
-        const fakultas = state.fakultas.find((item) => String(item.id) === String(selectedFakultasId()));
-        const selected = state.programStudi.find((item) => String(item.id) === String(selectedProgramStudiId()));
-
-        if (selected) {
-            els.activeUnit.textContent = `${selected.jenjang} ${selected.nama}`;
-            return;
-        }
-
-        if (fakultas) {
-            els.activeUnit.textContent = fakultas.nama;
-            return;
-        }
-
-        els.activeUnit.textContent = 'Universitas Sriwijaya';
+        const selected = state.programStudi[0];
+        els.activeUnit.textContent = selected ? `${selected.jenjang} ${selected.nama}` : 'Program studi akun tidak ditemukan';
     }
 
     function summaryUrl() {
-        const params = new URLSearchParams({ ts: state.ts });
+        const params = new URLSearchParams();
 
-        if (state.role === 'universitas' && state.fakultasId !== 'all') {
-            params.set('fakultas_id', state.fakultasId);
+        // TS null pada load pertama -> backend memakai tahun akademik terbaru.
+        if (state.ts !== null) {
+            params.set('ts', state.ts);
         }
 
-        if (state.role !== 'prodi' && state.programStudiId !== 'all') {
-            params.set('program_studi_id', state.programStudiId);
-        }
+        const slug = isGeneric(currentTableId) ? GENERIC_TABLES[currentTableId].endpoint : 'dosen-pembimbing-ta';
 
-        return `/api/sapto/tables/dosen-pembimbing-ta/summary?${params}`;
+        return `/api/sapto/tables/${slug}/summary?${params}`;
     }
 
     async function loadSummary() {
@@ -271,27 +206,132 @@
     }
 
     function setLoading() {
+        metricEls.forEach((el) => el.classList.add('is-loading'));
         els.tableStatus.textContent = 'Memuat data...';
         els.tableHead.innerHTML = '';
-        els.tableBody.innerHTML = `<tr><td class="sp-empty-row" colspan="12">Memuat data...</td></tr>`;
+        els.tableBody.innerHTML = Array.from({ length: 6 }).map(() => `
+            <tr>
+                <td class="sp-skeleton-td" colspan="12"><div class="sp-skeleton-bar w-full max-w-md"></div></td>
+            </tr>
+        `).join('');
         els.tableFoot.innerHTML = '';
+        els.tablePagination.innerHTML = '';
+    }
+
+    // Label metric card default untuk tabel 3.a.2 (dipulihkan bila sebelumnya
+    // dipakai tabel generik yang mengubah label).
+    const DOSEN_METRIC_LABELS = [
+        'Total dosen pembimbing',
+        'Total mahasiswa bimbingan PS diakreditasi',
+        'Total mahasiswa bimbingan PS lain di PT',
+        'TS aktif',
+    ];
+    const metricValueEls = [els.metricDosen, els.metricPs, els.metricPsLain, els.metricTs];
+    const metricLabelEls = [els.metricDosenLabel, els.metricPsLabel, els.metricPsLainLabel, els.metricTsLabel];
+
+    function setMetricLabels(labels) {
+        metricLabelEls.forEach((el, i) => { if (el) el.textContent = labels[i] ?? ''; });
+    }
+
+    // Isi kartu metrik dari daftar {label, value} (tabel generik). Kartu sisa
+    // dikosongkan agar tidak menampilkan angka tabel sebelumnya.
+    function setMetricCards(metrics) {
+        metricValueEls.forEach((el, i) => {
+            const metric = metrics[i];
+            if (metricLabelEls[i]) metricLabelEls[i].textContent = metric ? metric.label : '';
+            el.textContent = metric ? String(metric.value) : '';
+        });
     }
 
     function renderSummary() {
         const summary = state.summary;
+
+        // Data baru -> kembali ke halaman pertama tabel.
+        state.page = 1;
+
+        // Sinkronkan TS aktif + dropdown dengan tahun yang ada di database.
+        state.ts = summary.ts;
+        populateTsOptions(summary.available_years, summary.ts);
+
+        metricEls.forEach((el) => el.classList.remove('is-loading'));
+
+        if (isGeneric(currentTableId)) {
+            renderGenericSummary(summary);
+        } else {
+            renderDosenSummary(summary);
+        }
+    }
+
+    function renderDosenSummary(summary) {
         const rows = summary.rows || [];
         const totals = summary.totals || {};
-        const psTotal = sumYearCounts(totals.ps_diakreditasi);
-        const psLainTotal = sumYearCounts(totals.ps_lain_pt);
 
+        els.tableCardTitle.textContent = 'Dosen Pembimbing Utama Tugas Akhir';
+        setMetricLabels(DOSEN_METRIC_LABELS);
         els.metricDosen.textContent = rows.length;
-        els.metricPs.textContent = psTotal;
-        els.metricPsLain.textContent = psLainTotal;
+        els.metricPs.textContent = sumYearCounts(totals.ps_diakreditasi);
+        els.metricPsLain.textContent = sumYearCounts(totals.ps_lain_pt);
         els.metricTs.textContent = summary.ts;
         els.tableStatus.textContent = rows.length
             ? `${rows.length} dosen${summary.source?.partial ? ' - data API parsial' : ''}`
             : 'Belum ada data';
         renderTable(summary);
+    }
+
+    function renderGenericSummary(summary) {
+        els.tableCardTitle.textContent = summary.table_name || 'Data Tabel';
+        setMetricCards(summary.metrics || []);
+        const unit = GENERIC_TABLES[currentTableId]?.unit || 'baris';
+        els.tableStatus.textContent = summary.notice
+            ? 'Pilih program studi'
+            : (summary.rows.length
+                ? `${summary.rows.length} ${unit}${summary.source?.partial ? ' - sebagian kolom belum tersedia' : ''}`
+                : 'Belum ada data');
+        renderGenericTable(summary);
+    }
+
+    // Render tabel generik dari definisi kolom + baris envelope backend.
+    function renderGenericTable(summary) {
+        const cols = summary.columns || [];
+
+        // Pesan pengarah (mis. Tabel 8.c minta pilih prodi dulu).
+        if (summary.notice) {
+            els.tableHead.innerHTML = '';
+            els.tableBody.innerHTML = `<tr><td class="sp-empty-row">${escapeHtml(summary.notice)}</td></tr>`;
+            els.tableFoot.innerHTML = '';
+            els.tablePagination.innerHTML = '';
+            return;
+        }
+
+        els.tableHead.innerHTML = `<tr>${cols.map((c) =>
+            `<th class="sp-th ${c.align === 'num' ? 'sp-th-num' : ''}">${escapeHtml(c.label)}</th>`).join('')}</tr>`;
+
+        if (!summary.rows.length) {
+            els.tableBody.innerHTML = `<tr><td class="sp-empty-row" colspan="${cols.length || 1}">Belum ada data untuk kombinasi filter ini.</td></tr>`;
+            els.tableFoot.innerHTML = '';
+            els.tablePagination.innerHTML = '';
+            return;
+        }
+
+        const pageCount = Math.max(1, Math.ceil(summary.rows.length / PAGE_SIZE));
+        state.page = Math.min(Math.max(state.page, 1), pageCount);
+        const startIndex = (state.page - 1) * PAGE_SIZE;
+        const pageRows = summary.rows.slice(startIndex, startIndex + PAGE_SIZE);
+
+        els.tableBody.innerHTML = pageRows.map((row) =>
+            `<tr class="sp-row">${cols.map((c) => genericCell(row, c)).join('')}</tr>`).join('');
+        els.tableFoot.innerHTML = '';
+        renderPagination(summary.rows.length, GENERIC_TABLES[currentTableId]?.unit || 'baris');
+    }
+
+    function genericCell(row, col) {
+        const value = row[col.key];
+
+        if (col.align === 'num') {
+            return `<td class="sp-td sp-td-num">${value === null || value === undefined ? '-' : formatNumber(value)}</td>`;
+        }
+
+        return `<td class="sp-td">${value === null || value === undefined || value === '' ? '-' : escapeHtml(String(value))}</td>`;
     }
 
     function renderTable(summary) {
@@ -320,10 +360,17 @@
         if (!summary.rows.length) {
             els.tableBody.innerHTML = `<tr><td class="sp-empty-row" colspan="12">Belum ada data dosen pembimbing utama tugas akhir untuk kombinasi filter ini.</td></tr>`;
             els.tableFoot.innerHTML = totalsRow(summary.totals, true);
+            els.tablePagination.innerHTML = '';
             return;
         }
 
-        els.tableBody.innerHTML = summary.rows.map((row) => `
+        // Jaga halaman aktif tetap valid bila jumlah baris berubah.
+        const pageCount = Math.max(1, Math.ceil(summary.rows.length / PAGE_SIZE));
+        state.page = Math.min(Math.max(state.page, 1), pageCount);
+        const startIndex = (state.page - 1) * PAGE_SIZE;
+        const pageRows = summary.rows.slice(startIndex, startIndex + PAGE_SIZE);
+
+        els.tableBody.innerHTML = pageRows.map((row) => `
             <tr class="sp-row">
                 <td class="sp-td">${row.no}</td>
                 <td class="sp-td">${escapeHtml(row.nama_dosen || '-')}</td>
@@ -340,6 +387,76 @@
             </tr>
         `).join('');
         els.tableFoot.innerHTML = totalsRow(summary.totals, false);
+        renderPagination(summary.rows.length, 'dosen');
+    }
+
+    // Deretan nomor halaman dengan pemadatan (…) bila halaman banyak.
+    function pageWindow(current, count) {
+        const wanted = new Set([1, count, current, current - 1, current + 1]);
+        const pages = [...wanted].filter((p) => p >= 1 && p <= count).sort((a, b) => a - b);
+        const out = [];
+        let prev = 0;
+
+        pages.forEach((p) => {
+            if (p - prev > 1) {
+                out.push('…');
+            }
+            out.push(p);
+            prev = p;
+        });
+
+        return out;
+    }
+
+    function renderPagination(total, unit = 'dosen') {
+        const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+        const start = total === 0 ? 0 : (state.page - 1) * PAGE_SIZE + 1;
+        const end = Math.min(state.page * PAGE_SIZE, total);
+
+        // Satu halaman saja: cukup tampilkan ringkasan jumlah.
+        if (pageCount <= 1) {
+            els.tablePagination.innerHTML = `<span class="text-[12px] text-muted">Menampilkan ${total} ${unit}</span>`;
+            return;
+        }
+
+        const navBtn = (label, page, disabled, active) => `
+            <button type="button"
+                    class="sp-page-btn ${active ? 'sp-page-btn-active' : ''}"
+                    data-page="${page}" ${disabled ? 'disabled' : ''}>${label}</button>
+        `;
+
+        const numbers = pageWindow(state.page, pageCount).map((p) =>
+            p === '…'
+                ? '<span class="px-2 text-[12px] text-muted">…</span>'
+                : navBtn(p, p, false, p === state.page)
+        ).join('');
+
+        els.tablePagination.innerHTML = `
+            <span class="text-[12px] text-muted">Menampilkan ${start}–${end} dari ${total} ${unit}</span>
+            <div class="flex items-center gap-1">
+                ${navBtn('Sebelumnya', state.page - 1, state.page === 1, false)}
+                ${numbers}
+                ${navBtn('Berikutnya', state.page + 1, state.page === pageCount, false)}
+            </div>
+        `;
+    }
+
+    function goToPage(page) {
+        const total = state.summary?.rows?.length || 0;
+        const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+        const target = Math.min(Math.max(page, 1), pageCount);
+
+        if (target === state.page) {
+            return;
+        }
+
+        state.page = target;
+
+        if (isGeneric(currentTableId)) {
+            renderGenericTable(state.summary);
+        } else {
+            renderTable(state.summary);
+        }
     }
 
     function yearButton(row, scope, yearKey) {
@@ -376,10 +493,11 @@
     }
 
     function renderError(message) {
+        metricEls.forEach((el) => el.classList.remove('is-loading'));
         els.metricDosen.textContent = '0';
         els.metricPs.textContent = '0';
         els.metricPsLain.textContent = '0';
-        els.metricTs.textContent = state.ts;
+        els.metricTs.textContent = state.ts ?? '-';
         els.tableStatus.innerHTML = `<span class="font-medium text-warn">Perlu perhatian</span>`;
         els.tableHead.innerHTML = '';
         els.tableBody.innerHTML = `
@@ -399,6 +517,7 @@
             </tr>
         `;
         els.tableFoot.innerHTML = '';
+        els.tablePagination.innerHTML = '';
     }
 
     async function openDetail(button) {
@@ -408,14 +527,6 @@
             scope: button.dataset.scope,
             year_key: button.dataset.yearKey,
         });
-
-        if (state.role === 'universitas' && state.fakultasId !== 'all') {
-            params.set('fakultas_id', state.fakultasId);
-        }
-
-        if (state.role !== 'prodi' && state.programStudiId !== 'all') {
-            params.set('program_studi_id', state.programStudiId);
-        }
 
         els.detailTitle.textContent = button.dataset.dosenName || 'Detail Data';
         els.detailSubtitle.textContent = `${scopeLabel(button.dataset.scope)} - ${yearLabel(button.dataset.yearKey)}`;
@@ -437,9 +548,9 @@
         }
 
         els.detailBody.innerHTML = payload.items.map((item) => `
-            <article class="rounded-xl border border-line p-3.5">
+            <article class="rounded-2xl p-3.5" style="background:var(--glass-2);border:1px solid var(--color-line)">
                 <strong class="mb-1.5 block text-[14px] text-ink">${escapeHtml(item.nama_mahasiswa || '-')}</strong>
-                <div class="grid grid-cols-2 gap-x-3 gap-y-2 text-[13px] text-slate-600">
+                <div class="grid grid-cols-2 gap-x-3 gap-y-2 text-[13px] text-muted">
                     <div><span class="block text-[11px] text-muted">NIM</span>${escapeHtml(item.nim || '-')}</div>
                     <div><span class="block text-[11px] text-muted">Fakultas</span>${escapeHtml(item.fakultas || '-')}</div>
                     <div><span class="block text-[11px] text-muted">Program Studi</span>${escapeHtml(item.program_studi || '-')}</div>
@@ -448,6 +559,228 @@
                     <div><span class="block text-[11px] text-muted">Tahun</span>${escapeHtml(String(item.tahun || '-'))}</div>
                     <div><span class="block text-[11px] text-muted">Status</span>${escapeHtml(item.status || '-')}</div>
                     <div><span class="block text-[11px] text-muted">Sumber Data</span>${escapeHtml(item.sumber_data || '-')}</div>
+                </div>
+            </article>
+        `).join('');
+    }
+
+    async function loadMahasiswaAsing() {
+        setMaLoading();
+
+        try {
+            const payload = await fetchJson('/sapto/mahasiswa-asing');
+
+            if (!payload.success) {
+                throw new Error(payload.message || 'Permintaan data gagal.');
+            }
+
+            maSummary = payload;
+            renderMaActiveUnit();
+            renderMaSummary();
+        } catch (error) {
+            renderMaError(error.message);
+        }
+    }
+
+    function setMaLoading() {
+        maMetricEls.forEach((el) => el.classList.add('is-loading'));
+        els.maTableStatus.textContent = 'Memuat data...';
+        els.maTableHead.innerHTML = '';
+        els.maTableBody.innerHTML = Array.from({ length: 6 }).map(() => `
+            <tr>
+                <td class="sp-skeleton-td" colspan="11"><div class="sp-skeleton-bar w-full max-w-md"></div></td>
+            </tr>
+        `).join('');
+        els.maTableFoot.innerHTML = '';
+    }
+
+    // Data dari /sapto/mahasiswa-asing sudah discope server-side ke satu
+    // program studi akun (lihat MahasiswaController::data_mahasiswa_asing),
+    // jadi tidak ada lagi filter fakultas/prodi di klien.
+    function renderMaActiveUnit() {
+        const row = (maSummary.data || [])[0];
+        els.maActiveUnit.textContent = row ? row.program_studi : 'Program studi akun tidak ditemukan';
+    }
+
+    function renderMaSummary() {
+        const rows = maSummary.data || [];
+        const totals = maRowTotals(rows);
+
+        maMetricEls.forEach((el) => el.classList.remove('is-loading'));
+        els.maMetricProdi.textContent = rows.length;
+        els.maMetricAktif.textContent = formatNumber(totals.aktif.ts);
+        els.maMetricFt.textContent = formatNumber(totals.ft.ts);
+        els.maMetricPt.textContent = formatNumber(totals.pt.ts);
+        els.maTableStatus.textContent = rows.length ? `${rows.length} program studi` : 'Belum ada data';
+
+        renderMaTable(rows, totals);
+    }
+
+    function maRowTotals(rows) {
+        const totals = {
+            aktif: { ts_2: 0, ts_1: 0, ts: 0 },
+            ft: { ts_2: 0, ts_1: 0, ts: 0 },
+            pt: { ts_2: 0, ts_1: 0, ts: 0 },
+        };
+
+        rows.forEach((row) => {
+            totals.aktif.ts_2 += Number(row.mhs_aktif_ts2 || 0);
+            totals.aktif.ts_1 += Number(row.mhs_aktif_ts1 || 0);
+            totals.aktif.ts += Number(row.mhs_aktif_ts || 0);
+            totals.ft.ts_2 += Number(row.asing_ft_ts2 || 0);
+            totals.ft.ts_1 += Number(row.asing_ft_ts1 || 0);
+            totals.ft.ts += Number(row.asing_ft_ts || 0);
+            totals.pt.ts_2 += Number(row.asing_pt_ts2 || 0);
+            totals.pt.ts_1 += Number(row.asing_pt_ts1 || 0);
+            totals.pt.ts += Number(row.asing_pt_ts || 0);
+        });
+
+        return totals;
+    }
+
+    function renderMaTable(rows, totals) {
+        const y = maSummary.tahun_akademik || { ts_2: '-', ts_1: '-', ts: '-' };
+
+        els.maTableHead.innerHTML = `
+            <tr>
+                <th rowspan="2" class="sp-th">No</th>
+                <th rowspan="2" class="sp-th">Program Studi</th>
+                <th class="sp-th sp-th-group" colspan="3">Jumlah Mahasiswa Aktif</th>
+                <th class="sp-th sp-th-group" colspan="3">Jumlah Mahasiswa Asing Penuh Waktu (Full-time)</th>
+                <th class="sp-th sp-th-group" colspan="3">Jumlah Mahasiswa Asing Paruh Waktu (Part-time)</th>
+            </tr>
+            <tr>
+                <th class="sp-th sp-th-num">TS-2 (${y.ts_2})</th>
+                <th class="sp-th sp-th-num">TS-1 (${y.ts_1})</th>
+                <th class="sp-th sp-th-num">TS (${y.ts})</th>
+                <th class="sp-th sp-th-num">TS-2 (${y.ts_2})</th>
+                <th class="sp-th sp-th-num">TS-1 (${y.ts_1})</th>
+                <th class="sp-th sp-th-num">TS (${y.ts})</th>
+                <th class="sp-th sp-th-num">TS-2 (${y.ts_2})</th>
+                <th class="sp-th sp-th-num">TS-1 (${y.ts_1})</th>
+                <th class="sp-th sp-th-num">TS (${y.ts})</th>
+            </tr>
+        `;
+
+        if (!rows.length) {
+            els.maTableBody.innerHTML = `<tr><td class="sp-empty-row" colspan="11">Belum ada data mahasiswa asing untuk periode ini.</td></tr>`;
+            els.maTableFoot.innerHTML = maTotalsRow(totals, true);
+            return;
+        }
+
+        els.maTableBody.innerHTML = rows.map((row, index) => `
+            <tr class="sp-row">
+                <td class="sp-td">${index + 1}</td>
+                <td class="sp-td">${escapeHtml(row.program_studi || '-')}</td>
+                <td class="sp-td sp-td-num">${formatNumber(row.mhs_aktif_ts2)}</td>
+                <td class="sp-td sp-td-num">${formatNumber(row.mhs_aktif_ts1)}</td>
+                <td class="sp-td sp-td-num">${formatNumber(row.mhs_aktif_ts)}</td>
+                ${maNumberChip(row, 'asing_ft_ts2', y.ts_2)}
+                ${maNumberChip(row, 'asing_ft_ts1', y.ts_1)}
+                ${maNumberChip(row, 'asing_ft_ts', y.ts)}
+                <td class="sp-td sp-td-num text-muted" title="Data paruh waktu belum tersedia di sumber data saat ini">${formatNumber(row.asing_pt_ts2)}</td>
+                <td class="sp-td sp-td-num text-muted" title="Data paruh waktu belum tersedia di sumber data saat ini">${formatNumber(row.asing_pt_ts1)}</td>
+                <td class="sp-td sp-td-num text-muted" title="Data paruh waktu belum tersedia di sumber data saat ini">${formatNumber(row.asing_pt_ts)}</td>
+            </tr>
+        `).join('');
+        els.maTableFoot.innerHTML = maTotalsRow(totals, false);
+    }
+
+    function maNumberChip(row, field, tahun) {
+        return `
+            <td class="sp-td sp-td-num">
+                <button type="button" class="sp-number-chip" data-id-prodi="${escapeAttr(row.id_prodi || '')}" data-program-studi="${escapeAttr(row.program_studi || '')}" data-tahun="${tahun}">
+                    ${formatNumber(row[field])}
+                </button>
+            </td>
+        `;
+    }
+
+    function maTotalsRow(totals, empty) {
+        return `
+            <tr>
+                <td class="sp-foot-td" colspan="2">${empty ? 'Ringkasan' : 'Total'}</td>
+                <td class="sp-foot-td sp-td-num">${formatNumber(totals.aktif.ts_2)}</td>
+                <td class="sp-foot-td sp-td-num">${formatNumber(totals.aktif.ts_1)}</td>
+                <td class="sp-foot-td sp-td-num">${formatNumber(totals.aktif.ts)}</td>
+                <td class="sp-foot-td sp-td-num">${formatNumber(totals.ft.ts_2)}</td>
+                <td class="sp-foot-td sp-td-num">${formatNumber(totals.ft.ts_1)}</td>
+                <td class="sp-foot-td sp-td-num">${formatNumber(totals.ft.ts)}</td>
+                <td class="sp-foot-td sp-td-num">${formatNumber(totals.pt.ts_2)}</td>
+                <td class="sp-foot-td sp-td-num">${formatNumber(totals.pt.ts_1)}</td>
+                <td class="sp-foot-td sp-td-num">${formatNumber(totals.pt.ts)}</td>
+            </tr>
+        `;
+    }
+
+    function renderMaError(message) {
+        maMetricEls.forEach((el) => el.classList.remove('is-loading'));
+        maMetricEls.forEach((el) => { el.textContent = '0'; });
+        els.maTableStatus.innerHTML = `<span class="font-medium text-warn">Perlu perhatian</span>`;
+        els.maTableHead.innerHTML = '';
+        els.maTableBody.innerHTML = `
+            <tr>
+                <td colspan="11" class="p-4">
+                    <div class="sp-alert-warn" role="alert">
+                        <svg class="mt-0.5 h-5 w-5 shrink-0 text-warn" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <path d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"
+                                  stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                        <div>
+                            <div class="font-semibold">Data belum bisa ditampilkan</div>
+                            <p class="mt-0.5 text-warn/90">${escapeHtml(message)}</p>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        `;
+        els.maTableFoot.innerHTML = '';
+    }
+
+    async function openMaDetail(button) {
+        const params = new URLSearchParams({ tahun: button.dataset.tahun });
+
+        if (button.dataset.idProdi) {
+            params.set('id_prodi', button.dataset.idProdi);
+        } else {
+            params.set('nama_prodi', button.dataset.programStudi);
+        }
+
+        els.detailTitle.textContent = button.dataset.programStudi || 'Detail Data';
+        els.detailSubtitle.textContent = `Mahasiswa Asing Penuh Waktu - TS ${button.dataset.tahun}`;
+        els.detailBody.innerHTML = '<div class="text-sm text-muted">Memuat detail...</div>';
+        showDrawer();
+
+        try {
+            const payload = await fetchJson(`/sapto/mahasiswa-asing/detail?${params}`);
+
+            if (!payload.success) {
+                throw new Error(payload.message || 'Permintaan detail gagal.');
+            }
+
+            renderMaDetail(payload);
+        } catch (error) {
+            els.detailBody.innerHTML = `<div class="text-sm text-warn">${escapeHtml(error.message)}</div>`;
+        }
+    }
+
+    function renderMaDetail(payload) {
+        const items = payload.data || [];
+
+        if (!items.length) {
+            els.detailBody.innerHTML = '<div class="text-sm text-muted">Tidak ada mahasiswa asing untuk program studi dan tahun ini.</div>';
+            return;
+        }
+
+        els.detailBody.innerHTML = items.map((item) => `
+            <article class="rounded-2xl p-3.5" style="background:var(--glass-2);border:1px solid var(--color-line)">
+                <strong class="mb-1.5 block text-[14px] text-ink">${escapeHtml(item.nama || '-')}</strong>
+                <div class="grid grid-cols-2 gap-x-3 gap-y-2 text-[13px] text-muted">
+                    <div><span class="block text-[11px] text-muted">NIM</span>${escapeHtml(item.nim || '-')}</div>
+                    <div><span class="block text-[11px] text-muted">Angkatan</span>${escapeHtml(String(item.angkatan || '-'))}</div>
+                    <div class="col-span-2"><span class="block text-[11px] text-muted">Program Studi</span>${escapeHtml(item.program_studi || '-')}</div>
+                    <div><span class="block text-[11px] text-muted">Status</span>${escapeHtml(item.status || '-')}</div>
+                    <div><span class="block text-[11px] text-muted">Kewarganegaraan</span>${escapeHtml(item.kewarganegaraan || '-')}</div>
                 </div>
             </article>
         `).join('');
@@ -463,22 +796,120 @@
         els.drawerBackdrop.classList.remove('is-open');
     }
 
+    // Tabel generik: memakai kembali #table-page (filter, kartu metrik, panel,
+    // pagination) tapi render dari envelope {columns, rows, metrics} backend.
+    const GENERIC_TABLES = {
+        'ipk-lulusan': {
+            endpoint: 'ipk-lulusan',
+            unit: 'tahun lulus',
+            description: 'Rata-rata IPK lulusan (minimum/rata-rata/maksimum) beserta jumlah lulusan per tahun lulus (TS-2/TS-1/TS) dalam cakupan terpilih, mengikuti format Tabel 8.a BAN-PT.',
+        },
+        'dosen-tetap-pt': {
+            endpoint: 'dosen-tetap-pt',
+            unit: 'dosen',
+            description: 'Daftar dosen tetap perguruan tinggi berdasarkan program studi homebase pada tahun ajaran terpilih (Tabel 3.a.1). Kolom mata kuliah dan kesesuaian kompetensi inti PS belum tersedia di sumber data.',
+        },
+        'dosen-tidak-tetap': {
+            endpoint: 'dosen-tidak-tetap',
+            unit: 'dosen',
+            description: 'Daftar dosen tidak tetap: dosen yang ditugaskan mengajar di program studi terpilih tanpa prodi itu menjadi homebase-nya, pada tahun ajaran terpilih (Tabel 3.a.4). Kolom pendidikan/jabatan/sertifikat/mata kuliah menyusul saat data tersedia.',
+        },
+        'masa-studi': {
+            endpoint: 'masa-studi',
+            unit: 'angkatan',
+            description: 'Matriks masa studi lulusan per angkatan (tahun masuk) untuk satu program studi: jumlah diterima, lulus di akhir tiap TS, dan rata-rata masa studi, mengikuti format Tabel 8.c BAN-PT.',
+        },
+        'kerjasama-pendidikan': {
+            endpoint: 'kerjasama-pendidikan',
+            unit: 'kerjasama',
+            description: 'Kerjasama tridharma bidang pendidikan (MoU institusi + PKS pelaksana) yang masih berlaku pada tahun terpilih, mengikuti format Tabel 1 BAN-PT. Kolom Tingkat dan filter "judul pendidikan" hasil inferensi teks (perlu diverifikasi manual); kolom Manfaat bagi PS wajib diisi manual karena narasinya tidak tersimpan di sistem.',
+        },
+        'kerjasama-penelitian': {
+            endpoint: 'kerjasama-penelitian',
+            unit: 'kerjasama',
+            description: 'Kerjasama tridharma bidang penelitian (MoU institusi + PKS pelaksana) yang masih berlaku pada tahun terpilih, mengikuti format Tabel 1 BAN-PT. Kolom Tingkat dan filter "judul penelitian" hasil inferensi teks (perlu diverifikasi manual); kolom Manfaat bagi PS wajib diisi manual karena narasinya tidak tersimpan di sistem.',
+        },
+        'kerjasama-pkm': {
+            endpoint: 'kerjasama-pkm',
+            unit: 'kerjasama',
+            description: 'Kerjasama tridharma bidang pengabdian kepada masyarakat (MoU institusi + PKS pelaksana) yang masih berlaku pada tahun terpilih, mengikuti format Tabel 1 BAN-PT. Kolom Tingkat dan filter "judul PkM" hasil inferensi teks (perlu diverifikasi manual); kolom Manfaat bagi PS wajib diisi manual karena narasinya tidak tersimpan di sistem.',
+        },
+        'penelitian-dtps': {
+            endpoint: 'penelitian-dtps',
+            unit: 'kategori sumber pembiayaan',
+            description: 'Jumlah judul penelitian dosen tetap program studi (DTPS) per sumber pembiayaan pada TS-2/TS-1/TS, mengikuti format Tabel 3.b.2 BAN-PT. Klasifikasi "Lembaga Luar Negeri" berbasis skema penelitian (heuristik teks, perlu diverifikasi manual); judul yang didanai lebih dari satu sumber dihitung di tiap kategori yang berlaku.',
+        },
+    };
+
+    function isGeneric(tableId) {
+        return Object.prototype.hasOwnProperty.call(GENERIC_TABLES, tableId);
+    }
+
+    const TABLE_HANDLERS = {
+        'dashboard': {
+            description: 'Ringkasan angka kunci dari 5 tabel BAN-PT yang sudah tersedia datanya.',
+            show() {
+                els.dashboardPage.classList.remove('hidden');
+                loadDashboard();
+            },
+        },
+        'dosen-pembimbing-ta': {
+            description: 'Data jumlah mahasiswa yang dibimbing oleh dosen sebagai pembimbing utama tugas akhir berdasarkan program studi dan tahun TS.',
+            show() {
+                els.tablePage.classList.remove('hidden');
+                loadSummary();
+            },
+        },
+        'mahasiswa-asing': {
+            description: 'Rekapitulasi jumlah mahasiswa aktif dan mahasiswa asing (penuh waktu/paruh waktu) per program studi, mengikuti format Tabel 2.b BAN-PT.',
+            show() {
+                els.maPage.classList.remove('hidden');
+                loadMahasiswaAsing();
+            },
+        },
+    };
+
+    // Tabel generik berbagi handler yang sama: tampilkan #table-page lalu muat.
+    Object.keys(GENERIC_TABLES).forEach((tableId) => {
+        TABLE_HANDLERS[tableId] = {
+            description: GENERIC_TABLES[tableId].description,
+            show() {
+                els.tablePage.classList.remove('hidden');
+                loadSummary();
+            },
+        };
+    });
+
     function activateTable(tableId) {
+        currentTableId = tableId;
+
         document.querySelectorAll('.menu-item').forEach((button) => {
             button.classList.toggle('is-active', button.dataset.tableId === tableId);
         });
 
+        // 'dashboard' bukan salah satu dari 46 tabel BAN-PT di array `tables`,
+        // jadi judulnya di-hardcode, tidak dicari lewat tables.find().
         const table = tables.find((item) => item.id === tableId);
-        els.pageTitle.textContent = table?.name || 'SAPTO';
+        els.pageTitle.textContent = tableId === 'dashboard' ? 'Dashboard' : (table?.name || 'SAPTO');
 
-        if (tableId === activeTableId) {
-            els.pageDescription.textContent = 'Data jumlah mahasiswa yang dibimbing oleh dosen sebagai pembimbing utama tugas akhir berdasarkan program studi dan tahun TS.';
-            els.tablePage.classList.remove('hidden');
-            els.placeholderPage.classList.add('hidden');
-            loadSummary();
+        els.tablePage.classList.add('hidden');
+        els.maPage.classList.add('hidden');
+        els.placeholderPage.classList.add('hidden');
+        els.dashboardPage.classList.add('hidden');
+
+        // Filter bar dipakai bersama dashboard + keluarga tabel "table-page"
+        // (dosen-pembimbing-ta + tabel generik); mahasiswa-asing punya filter
+        // sendiri, placeholder tidak butuh filter sama sekali.
+        const usesSharedFilterBar = tableId === 'dashboard' || tableId === 'dosen-pembimbing-ta' || isGeneric(tableId);
+        els.sharedFilterBar.classList.toggle('hidden', !usesSharedFilterBar);
+
+        const handler = TABLE_HANDLERS[tableId];
+
+        if (handler) {
+            els.pageDescription.textContent = handler.description;
+            handler.show();
         } else {
             els.pageDescription.textContent = 'Tahap pertama pengembangan SAPTO.';
-            els.tablePage.classList.add('hidden');
             els.placeholderPage.classList.remove('hidden');
             els.placeholderTitle.textContent = table?.name || 'Tabel SAPTO';
         }
@@ -520,40 +951,128 @@
         return escapeHtml(value).replaceAll('`', '&#096;');
     }
 
-    els.role.addEventListener('change', async () => {
-        state.role = els.role.value;
+    function dashboardUrl() {
+        const params = new URLSearchParams();
 
-        if (state.role === 'fakultas' && state.fakultasId === 'all' && state.fakultas[0]) {
-            state.fakultasId = String(state.fakultas[0].id);
-            state.programStudiId = 'all';
+        if (state.ts !== null) {
+            params.set('ts', state.ts);
         }
 
-        if (state.role === 'prodi' && state.programStudiId === 'all' && state.programStudi[0]) {
-            state.programStudiId = String(state.programStudi[0].id);
+        return `/api/sapto/dashboard/summary?${params}`;
+    }
+
+    async function loadDashboard() {
+        setDashboardLoading();
+
+        try {
+            const payload = await fetchJson(dashboardUrl());
+            renderDashboard(payload);
+        } catch (error) {
+            renderDashboardError(error.message);
+        }
+    }
+
+    // Filter bar is shared antara dashboard & table-page; dispatch ke loader
+    // yang sesuai halaman aktif alih-alih selalu memanggil loadSummary().
+    function loadActivePage() {
+        return currentTableId === 'dashboard' ? loadDashboard() : loadSummary();
+    }
+
+    function setDashboardLoading() {
+        els.dashboardStatus.textContent = 'Memuat ringkasan...';
+
+        els.dashboardCards.forEach((card) => {
+            card.querySelector('.dashboard-card-metrics').innerHTML = Array.from({ length: 3 }).map(() => `
+                <div class="dashboard-metric">
+                    <div class="dashboard-metric-value is-loading">0</div>
+                    <div class="dashboard-metric-label">&nbsp;</div>
+                </div>
+            `).join('');
+            card.querySelector('.dashboard-card-trend').innerHTML = '';
+        });
+    }
+
+    function renderDashboard(payload) {
+        if (payload.ts !== null && payload.ts !== undefined) {
+            state.ts = payload.ts;
         }
 
-        await loadFakultas();
-        await loadProgramStudi();
-        await loadSummary();
+        populateTsOptions(payload.available_years, payload.ts);
+
+        els.dashboardStatus.textContent = '';
+
+        const cardsById = new Map((payload.cards || []).map((card) => [card.id, card]));
+
+        els.dashboardCards.forEach((el) => {
+            const card = cardsById.get(el.dataset.cardId);
+
+            if (card) {
+                renderDashboardCard(el, card);
+            }
+        });
+    }
+
+    function renderDashboardCard(el, card) {
+        el.querySelector('.dashboard-card-title').textContent = card.title;
+        const metricsEl = el.querySelector('.dashboard-card-metrics');
+        const trendEl = el.querySelector('.dashboard-card-trend');
+
+        if (card.error) {
+            metricsEl.innerHTML = '<p class="dashboard-card-notice dashboard-card-notice-error">Data belum bisa ditampilkan.</p>';
+            trendEl.innerHTML = '';
+            return;
+        }
+
+        if (card.notice) {
+            metricsEl.innerHTML = `<p class="dashboard-card-notice">${escapeHtml(card.notice)}</p>`;
+            trendEl.innerHTML = '';
+            return;
+        }
+
+        metricsEl.innerHTML = card.metrics.map((metric) => `
+            <div class="dashboard-metric">
+                <div class="dashboard-metric-value">${formatNumber(metric.value)}</div>
+                <div class="dashboard-metric-label">${escapeHtml(metric.label)}</div>
+            </div>
+        `).join('');
+
+        trendEl.innerHTML = card.trend ? dashboardSparkline(card.trend) : '';
+    }
+
+    function dashboardSparkline(trend) {
+        const values = trend.values.map(Number);
+        const min = Math.min(...values);
+        const max = Math.max(...values);
+        const range = max - min || 1;
+        const width = 120;
+        const height = 32;
+        const step = width / (values.length - 1 || 1);
+
+        const points = values
+            .map((value, index) => `${(index * step).toFixed(1)},${(height - ((value - min) / range) * height).toFixed(1)}`)
+            .join(' ');
+
+        return `
+            <svg class="dashboard-sparkline" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-hidden="true">
+                <polyline points="${points}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <div class="dashboard-sparkline-labels">
+                ${trend.labels.map((label) => `<span>${escapeHtml(label)}</span>`).join('')}
+            </div>
+        `;
+    }
+
+    function renderDashboardError(message) {
+        els.dashboardStatus.innerHTML = `<span class="font-medium text-warn">${escapeHtml(message)}</span>`;
+    }
+
+    els.dashboardCards.forEach((card) => {
+        card.addEventListener('click', () => activateTable(card.dataset.tableId));
     });
 
     els.ts.addEventListener('change', () => {
         state.ts = Number(els.ts.value);
-        loadSummary();
-    });
-
-    els.fakultas.addEventListener('change', async () => {
-        state.fakultasId = els.fakultas.value;
-        state.programStudiId = 'all';
-        renderFakultasSelect();
-        await loadProgramStudi();
-        await loadSummary();
-    });
-
-    els.programStudi.addEventListener('change', () => {
-        state.programStudiId = els.programStudi.value;
-        renderProgramStudiSelect();
-        loadSummary();
+        loadActivePage();
     });
 
     els.tableBody.addEventListener('click', (event) => {
@@ -564,6 +1083,22 @@
         }
     });
 
+    els.tablePagination.addEventListener('click', (event) => {
+        const button = event.target.closest('.sp-page-btn');
+
+        if (button && !button.disabled) {
+            goToPage(Number(button.dataset.page));
+        }
+    });
+
+    els.maTableBody.addEventListener('click', (event) => {
+        const button = event.target.closest('.sp-number-chip');
+
+        if (button) {
+            openMaDetail(button);
+        }
+    });
+
     document.querySelectorAll('.menu-item').forEach((button) => {
         button.addEventListener('click', () => activateTable(button.dataset.tableId));
     });
@@ -571,10 +1106,79 @@
     els.closeDrawer.addEventListener('click', closeDrawer);
     els.drawerBackdrop.addEventListener('click', closeDrawer);
 
+    function toggleSidebar() {
+        els.sidebar.classList.toggle('is-open');
+        els.sidebarBackdrop.classList.toggle('is-open');
+        els.appShell.classList.toggle('sidebar-closed');
+        els.sidebarToggle.setAttribute('aria-expanded', String(els.sidebar.classList.contains('is-open') || !els.appShell.classList.contains('sidebar-closed')));
+    }
+
+    function closeSidebarOffCanvas() {
+        els.sidebar.classList.remove('is-open');
+        els.sidebarBackdrop.classList.remove('is-open');
+    }
+
+    els.sidebarToggle.addEventListener('click', toggleSidebar);
+    els.sidebarClose.addEventListener('click', closeSidebarOffCanvas);
+    els.sidebarBackdrop.addEventListener('click', closeSidebarOffCanvas);
+
+    els.menuSearch.addEventListener('input', () => {
+        const query = els.menuSearch.value.trim().toLowerCase();
+        let visibleCount = 0;
+
+        els.menuGroups.forEach((group) => {
+            let groupHasMatch = false;
+
+            group.querySelectorAll('.menu-item').forEach((button) => {
+                const matches = !query || button.dataset.search.includes(query);
+                button.classList.toggle('hidden', !matches);
+
+                if (matches) {
+                    groupHasMatch = true;
+                    visibleCount += 1;
+                }
+            });
+
+            group.classList.toggle('hidden', !groupHasMatch);
+        });
+
+        els.menuEmpty.classList.toggle('hidden', visibleCount > 0);
+    });
+
+    // Shortcut "/" fokus ke pencarian menu (kecuali sedang mengetik di field lain).
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey) {
+            return;
+        }
+
+        const tag = document.activeElement?.tagName;
+
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || document.activeElement?.isContentEditable) {
+            return;
+        }
+
+        event.preventDefault();
+        els.menuSearch.focus();
+    });
+
+    // Toggle mode terang/gelap. data-theme selalu di-set (lihat skrip anti-flash
+    // di <head>), jadi ikon matahari/bulan selalu cocok. Pilihan disimpan di
+    // localStorage supaya bertahan antar kunjungan.
+    const themeToggle = document.getElementById('theme-toggle');
+
+    if (themeToggle) {
+        themeToggle.addEventListener('click', () => {
+            const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', next);
+            const meta = document.getElementById('theme-color-meta');
+            if (meta) meta.setAttribute('content', next === 'dark' ? '#060a13' : '#e7ecf5');
+            try { localStorage.setItem('sapto-theme', next); } catch (e) {}
+        });
+    }
+
     initTsOptions();
-    loadFakultas()
-        .then(loadProgramStudi)
-        .then(loadSummary)
+    loadProgramStudi()
+        .then(() => activateTable(currentTableId))
         .catch((error) => renderError(error.message));
 </script>
 @endsection
