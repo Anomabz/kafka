@@ -25,18 +25,77 @@ class SsoController extends Controller
         return config('services.sso.redirect_uri') ?: route('sso.callback');
     }
 
+    public function showLoginForm(Request $request)
+    {
+        if ($request->session()->has('sso_user')) {
+            return redirect('/');
+        }
+
+        return view('auth.login', [
+            'unregisteredHint' => $request->session()->get('unregistered_hint'),
+        ]);
+    }
+
+    /**
+     * NIM/username + password typed on our own page, validated against
+     * Keycloak via the Resource Owner Password Credentials grant. Requires
+     * "Direct Access Grants" enabled on the app-sapto client. Any failure —
+     * wrong credentials, account needs something only Keycloak's hosted UI
+     * can do (required actions, MFA, ...), direct grants disabled — sends
+     * the visitor back to /login, which shows a popup that redirects to the
+     * hosted SSO login after a short countdown (or immediately via its
+     * "Register Sekarang" button).
+     */
+    public function authenticate(Request $request)
+    {
+        $data = $request->validate([
+            'username' => ['required', 'string'],
+            'password' => ['required', 'string'],
+        ]);
+
+        $token = Http::asForm()->post($this->base().'/token', [
+            'grant_type' => 'password',
+            'client_id' => config('services.sso.client_id'),
+            'client_secret' => config('services.sso.client_secret'),
+            'username' => $data['username'],
+            'password' => $data['password'],
+            'scope' => 'openid profile email',
+        ]);
+
+        if ($token->failed() || ! $token->json('access_token')) {
+            return redirect()->route('login')->with('unregistered_hint', $data['username']);
+        }
+
+        $userinfo = Http::withToken($token->json('access_token'))->get($this->base().'/userinfo');
+        if ($userinfo->failed()) {
+            return redirect()->route('login')->with('unregistered_hint', $data['username']);
+        }
+
+        $request->session()->regenerate();
+        $request->session()->put('sso_user', $userinfo->json());
+        $request->session()->put('sso_id_token', $token->json('id_token'));
+
+        return redirect()->intended('/');
+    }
+
     public function login(Request $request)
     {
         $state = Str::random(40);
         $request->session()->put('sso_state', $state);
 
-        return redirect()->away($this->base().'/auth?'.http_build_query([
+        $params = [
             'client_id' => config('services.sso.client_id'),
             'redirect_uri' => $this->redirectUri(),
             'response_type' => 'code',
             'scope' => 'openid profile email',
             'state' => $state,
-        ]));
+        ];
+
+        if ($request->filled('login_hint')) {
+            $params['login_hint'] = $request->string('login_hint');
+        }
+
+        return redirect()->away($this->base().'/auth?'.http_build_query($params));
     }
 
     public function callback(Request $request)

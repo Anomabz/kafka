@@ -4,9 +4,68 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\Sapto\MahasiswaController; // <-- 1. Import Controllernya di sini
 use App\Http\Controllers\Auth\SsoController;
 
+// Own SAPTO-branded login form. Credentials are validated against Keycloak
+// server-side (grant_type=password); only when that can't decide (direct
+// grants disabled, MFA/required actions pending, ...) do we fall back to
+// /auth/login's redirect to the hosted Keycloak page. Opening the app must
+// never bounce straight to the SSO domain without this page in between.
+Route::get('/login', [SsoController::class, 'showLoginForm'])->name('login');
+Route::post('/login', [SsoController::class, 'authenticate'])
+    ->middleware('throttle:6,1')
+    ->name('login.attempt');
+
 Route::get('/auth/login', [SsoController::class, 'login'])->name('sso.login');
 Route::get('/auth/callback', [SsoController::class, 'callback'])->name('sso.callback');
 Route::get('/auth/logout', [SsoController::class, 'logout'])->name('sso.logout');
+
+/**
+ * Dev-only session impersonation — lets a developer without real Keycloak
+ * credentials test korprodi scoping by picking a seeded NIP directly,
+ * skipping the SSO round-trip entirely. 404s outside app()->environment('local')
+ * so this can never be reachable in staging/production.
+ */
+Route::get('/dev/login-as', function (Illuminate\Http\Request $request) {
+    abort_unless(app()->environment('local'), 404);
+
+    $nip = $request->query('nip');
+
+    if (! $nip) {
+        $options = \App\Models\Korprodi::orderBy('nama')->get(['nip', 'nama', 'kode_program_studi']);
+
+        $links = $options->map(fn ($k) => sprintf(
+            '<li><a href="/dev/login-as?nip=%s">%s</a> — NIP %s, kode %s</li>',
+            urlencode($k->nip), e($k->nama), e($k->nip), e($k->kode_program_studi)
+        ))->implode('');
+
+        return response("<h1>Dev login-as korprodi</h1><ul>{$links}</ul>", 200)
+            ->header('Content-Type', 'text/html');
+    }
+
+    $korprodi = \App\Models\Korprodi::where('nip', $nip)->first();
+
+    if (! $korprodi && ! $request->boolean('any')) {
+        abort(404, 'NIP tidak ada di tabel korprodi. Tambahkan &any=1 untuk memaksa NIP sembarang (uji jalur tolak).');
+    }
+
+    $request->session()->regenerate();
+    $request->session()->put('sso_user', [
+        'sub' => 'dev-'.$nip,
+        'name' => $korprodi->nama ?? 'Dev Test User',
+        'email' => 'dev@example.test',
+        'nomor_identitas' => $nip,
+    ]);
+
+    return redirect('/');
+})->name('dev.login-as');
+
+Route::get('/dev/logout', function (Illuminate\Http\Request $request) {
+    abort_unless(app()->environment('local'), 404);
+
+    $request->session()->flush();
+    $request->session()->regenerate();
+
+    return redirect('/dev/login-as');
+})->name('dev.logout');
 
 Route::middleware('sso.auth')->group(function () {
 

@@ -52,15 +52,13 @@
             </a>
         @endif
 
-        <label for="role" class="shrink-0 text-[12px] font-semibold text-muted">Role</label>
-        <select
-            id="role"
-            aria-label="Role pengguna"
-            class="filter-select flex-1 sm:w-auto sm:flex-none"
-        >
-            <option value="universitas">Pengelola SAPTO Universitas</option>
-            <option value="fakultas">Pengelola Fakultas</option>
-            <option value="prodi">Pengelola Program Studi</option>
-        </select>
+        {{--
+            Akses selalu dikunci ke program studi milik akun (lihat
+            SaptoUserContext::fromRequest) — tidak ada lagi pilihan role,
+            cuma tampilan unit kerja akun yang login.
+        --}}
+        <span class="unit-pill shrink-0" title="{{ $ssoUser['unit_kerja'] ?? '' }}">
+            Pengelola Program Studi{{ isset($ssoUser['unit_kerja']) ? ' — '.$ssoUser['unit_kerja'] : '' }}
+        </span>
     </div>
 </header>

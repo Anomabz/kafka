@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Sapto;
 
 use App\Http\Controllers\Controller;
 use App\Services\SaptoMahasiswaAsingRepository;
+use App\Support\SaptoUserContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -15,7 +16,8 @@ class MahasiswaController extends Controller
      */
     public function data_mahasiswa_asing(Request $request, SaptoMahasiswaAsingRepository $repository)
     {
-        $summary = $repository->summary();
+        $context = SaptoUserContext::fromRequest($request);
+        $summary = $repository->summary($context->resolveFakultasId($request), $context->resolveProgramStudiId($request));
 
         return response()->json([
             'success' => true,
@@ -26,23 +28,20 @@ class MahasiswaController extends Controller
     }
 
     /**
-     * FUNGSI 2: Detail List Mahasiswa Pas Diklik (Mendukung filter id_prodi ATAU nama_prodi)
-     * URL Contoh 1: http://10.8.5.67:8001/sapto/mahasiswa-asing/detail?id_prodi=UUID_DISINI
-     * URL Contoh 2: http://10.8.5.67:8001/sapto/mahasiswa-asing/detail?nama_prodi=Administrasi Publik&tahun=2025
+     * FUNGSI 2: Detail List Mahasiswa Pas Diklik
+     * URL: http://10.8.5.67:8001/sapto/mahasiswa-asing/detail?tahun=2025
+     *
+     * Prodi diambil dari SaptoUserContext (akun yang login), bukan dari
+     * parameter klien — dulu endpoint ini menerima id_prodi/nama_prodi
+     * mentah dari request tanpa validasi sama sekali, jadi siapapun yang
+     * login bisa lihat data prodi manapun (termasuk lewat pencarian bebas
+     * nama_prodi). Lihat SaptoUserContext::fromRequest().
      */
     public function detail_mahasiswa_asing(Request $request)
     {
-        $idProdi   = $request->query('id_prodi');   // Menangkap parameter ID (UUID)
-        $namaProdi = $request->query('nama_prodi'); // Menangkap parameter Nama Prodi
-        $tahun     = $request->query('tahun');      // Menangkap parameter Tahun Angkatan (Opsional)
-
-        // Validasi awal: Harus mengirimkan salah satu parameter identitas prodi
-        if (!$idProdi && !$namaProdi) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Gagal, salah satu parameter id_prodi atau nama_prodi wajib dikirim!'
-            ], 400);
-        }
+        $context = SaptoUserContext::fromRequest($request);
+        $idProdi = $context->resolveProgramStudiId($request);
+        $tahun   = $request->query('tahun');
 
         $query = "
             SELECT
@@ -64,15 +63,9 @@ class MahasiswaController extends Controller
 
         $params = [];
 
-        // Pilihan Filter 1: Jika menggunakan ID Prodi (UUID)
-        if ($idProdi) {
+        if ($idProdi !== null) {
             $query .= " AND lrpm.id_prodi = ? ";
             $params[] = $idProdi;
-        }
-        // Pilihan Filter 2: Jika menggunakan Nama Prodi (Menggunakan klausa LIKE agar fleksibel)
-        elseif ($namaProdi) {
-            $query .= " AND CONCAT(ps.nama_jenjang_pendidikan, ' ', ps.nama_program_studi) LIKE ? ";
-            $params[] = '%' . $namaProdi . '%';
         }
 
         // Spesifik per tahun TS / TS-1 / TS-2 yang diklik. "Aktif pada tahun X"
@@ -107,8 +100,7 @@ class MahasiswaController extends Controller
             'total_mahasiswa' => count($data),
             'filter_digunakan' => [
                 'id_prodi' => $idProdi,
-                'nama_prodi' => $namaProdi,
-                'tahun' => $tahun
+                'tahun' => $tahun,
             ],
             'data' => $data
         ]);

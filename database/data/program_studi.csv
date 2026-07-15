@@ -42,8 +42,7 @@ kode,fakultas,nama,jenjang
 73201,KEDOKTERAN,Psikologi,S1
 11707,KEDOKTERAN,Ilmu Bedah,Sp-1
 11711,KEDOKTERAN,Ilmu Kesehatan Anak,Sp-1
-11704,KEDOKTERAN,"Ilmu Kesehatan Kulit dan Kelamin/
-Dermatologi dan Venereologi",Sp-1
+11704,KEDOKTERAN,"Ilmu Kesehatan Kulit dan Kelamin/Dermatologi dan Venereologi",Sp-1
 11901,KEDOKTERAN,Dokter,Profesi
 14901,KEDOKTERAN,Ners,Profesi
 12901,KEDOKTERAN,Dokter Gigi,Profesi
@@ -124,7 +123,7 @@ Dermatologi dan Venereologi",Sp-1
 13201,KESEHATAN MASYARAKAT,Kesehatan Masyarakat,S1
 13251,KESEHATAN MASYARAKAT,Kesehatan Lingkungan,S1
 13101,KESEHATAN MASYARAKAT,Ilmu Kesehatan Masyarakat,S2
-13003,KEDOKTERANM,Ilmu Kesehatan Masyarakat,S3
+13003,KESEHATAN MASYARAKAT,Ilmu Kesehatan Masyarakat,S3
 95029,PASCASARJANA,Ilmu Lingkungan,S3
 95129,PASCASARJANA,Pengelolaan Lingkungan,S2
 95102,PASCASARJANA,Kependudukan,S2
