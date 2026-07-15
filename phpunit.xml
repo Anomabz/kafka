@@ -18,7 +18,11 @@
         </include>
     </source>
     <php>
-        <env name="APP_ENV" value="testing"/>
+        <!-- APP_ENV must win over a real environment variable (docker-compose sets
+             APP_ENV=local). PHPUnit's <env> only writes $_ENV/putenv(), but Laravel's
+             Env reads $_SERVER first, so <server> is the one that actually takes. -->
+        <server name="APP_ENV" value="testing" force="true"/>
+        <env name="APP_ENV" value="testing" force="true"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="BROADCAST_CONNECTION" value="null"/>
