@@ -2,7 +2,10 @@
 
 namespace App\Support;
 
+use App\Models\Korprodi;
+use App\Services\SaptoProgramStudiRepository;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class SaptoUserContext
@@ -13,35 +16,66 @@ class SaptoUserContext
         public readonly ?string $fakultasId = null,
     ) {}
 
+    /**
+     * Scope is derived from the logged-in SSO identity, never trusted from
+     * the client. Only prodi-level access exists right now (via the korprodi
+     * table, keyed by NIP) — fakultas/universitas-wide roles will plug in
+     * here the same way once that entitlement data exists; until then an
+     * unmatched NIP is denied entirely rather than falling back to full
+     * ("universitas") access, which is what the old header-trusting version
+     * effectively defaulted to for anyone.
+     */
     public static function fromRequest(Request $request): self
     {
-        $role = self::normalizeRole((string) $request->header('X-SAPTO-Role', 'universitas'));
+        $ssoUser = (array) $request->session()->get('sso_user', []);
+        $nip = trim((string) ($ssoUser['nomor_identitas'] ?? ''));
 
-        if ($role === null) {
-            throw new HttpException(403, 'Role SAPTO tidak berhak mengakses data ini.');
+        if ($nip === '') {
+            throw new HttpException(403, 'Akun SSO tidak memiliki nomor identitas untuk menentukan hak akses SAPTO.');
         }
 
-        if ($role === 'prodi') {
-            $programStudiId = $request->header('X-SAPTO-Program-Studi-Id');
+        $entitlements = Korprodi::query()->where('nip', $nip)->get();
 
-            if (! self::isApiIdentifier($programStudiId)) {
-                throw new HttpException(403, 'Akun pengelola program studi belum memiliki program_studi_id.');
+        if ($entitlements->isEmpty()) {
+            throw new HttpException(403, 'Akun ini belum terdaftar sebagai koordinator program studi di SAPTO.');
+        }
+
+        $entitledProgramStudis = app(SaptoProgramStudiRepository::class)->programStudis()
+            ->whereIn('kode', $entitlements->pluck('kode_program_studi'));
+
+        if ($entitledProgramStudis->isEmpty()) {
+            throw new HttpException(403, 'Program studi akun ini tidak ditemukan pada data referensi SAPTO.');
+        }
+
+        $programStudi = self::chooseEntitledProgramStudi($request, $entitledProgramStudis);
+
+        return new self('prodi', (string) $programStudi['id'], (string) $programStudi['fakultas_id']);
+    }
+
+    /**
+     * Most korprodi coordinate a single prodi and need no choice. A few hold
+     * dual appointments (multiple korprodi rows for the same NIP) — for
+     * those, an optional selector is honoured, but only when it names a
+     * program studi this NIP actually holds; otherwise it's ignored rather
+     * than trusted, unlike the header this replaces.
+     */
+    private static function chooseEntitledProgramStudi(Request $request, Collection $entitledProgramStudis): array
+    {
+        if ($entitledProgramStudis->count() === 1) {
+            return $entitledProgramStudis->first();
+        }
+
+        $requestedId = $request->header('X-SAPTO-Program-Studi-Id') ?: $request->query('program_studi_id');
+
+        if ($requestedId !== null) {
+            $match = $entitledProgramStudis->firstWhere('id', (string) $requestedId);
+
+            if ($match !== null) {
+                return $match;
             }
-
-            return new self($role, (string) $programStudiId);
         }
 
-        if ($role === 'fakultas') {
-            $fakultasId = $request->header('X-SAPTO-Fakultas-Id');
-
-            if (! self::isApiIdentifier($fakultasId)) {
-                throw new HttpException(403, 'Akun pengelola fakultas belum memiliki fakultas_id.');
-            }
-
-            return new self($role, null, (string) $fakultasId);
-        }
-
-        return new self($role);
+        return $entitledProgramStudis->first();
     }
 
     public function canSelectFakultas(): bool
@@ -94,27 +128,6 @@ class SaptoUserContext
         }
 
         return (string) $programStudiId;
-    }
-
-    private static function normalizeRole(string $role): ?string
-    {
-        $normalized = str($role)->lower()->replace([' ', '-'], '_')->toString();
-
-        return match ($normalized) {
-            'universitas',
-            'sapto_universitas',
-            'pengelola_universitas',
-            'pengelola_sapto_universitas' => 'universitas',
-            'fakultas',
-            'pengelola_fakultas',
-            'sapto_fakultas',
-            'pengelola_sapto_fakultas' => 'fakultas',
-            'prodi',
-            'program_studi',
-            'pengelola_prodi',
-            'pengelola_program_studi' => 'prodi',
-            default => null,
-        };
     }
 
     private static function isApiIdentifier(mixed $value): bool

@@ -1,0 +1,99 @@
+nip,nama,kode_program_studi,confidence
+197205292006042001,"Dr. Aslamia Rosa, S.E., M.Si.",61102,high
+197802102001122001,"Dr. Ika Sasti Ferina, S.E.,Ak., M.Si.",62901,high
+197306072002121002,"Dr. Imam Asngari, S.E., M.Si.",60101,high
+196707011992032003,"Dr. Yulia Saftiana, S.E., Ak., M.Si.",62101,high
+198705302014042001,"Dr. Rika Henda Safitri, S.E., M.Acc.",62401,high
+196211121989111001,"Prof. Drs. Isnurhadi, M.B.A., Ph.D.",61101,medium
+196610141992031003,"Dr. Suhel, M.Si.",60001,high
+197608252002122004,"Prof. Dr. Yuliani, S.E., M.M.",61001,high
+198303112014042001,"Dr. Shelfi Malinda, S.E., M.M.",61201,high
+197007162008012015,"Dr. Anna Yulianita, S.E., M.Si.",60201,high
+198104012014092001,"Dr. Wita Farla WK,S.E.,M.M",63412,high
+196509181991022001,"Dr. Hj. Nashriana, S.H., M.H.",74101,high
+198109272008012013,"Dr. Iza Rumesten RS, S.H., M.Hum.",74102,high
+196210251987032002,"Prof. Dr. Annalisa Y., S.H., M.Hum.",74001,high
+198502072008122002,"Listen Prima, S.T., M.Sc. P.hD.",23201,high
+198407302008122001,"Dr. Eng. Suci Dwijayanti, S.T., M.Sc.",20201,high
+197311052000032003,"Prof. Dr. Novia, S.T., M.T.",24201,high
+198306262014042001,"Idarwati, S.T., M.T.",34201,medium
+197909272003121004,"Prof. Amir Arifin, S.T., M.Eng.Ph.D",21201,high
+199002102019031012,"Rosihan Pebrianto, S.T., M.T.",31201,high
+196210281989031002,"Prof. Dr. Ir. H. Anis Sagaff, MSCE.",23902,high
+195909251988111001,"Prof. Dr. Ir. Maulana Yusuf, M.S., M.T.",31101,high
+195903211987031001,"Prof. Dr. Ir. Nukman, M.T",21001,high
+197209021997021001,"Ismail Thamrin, S.T., M.T.",21101,high
+197809192003122001,"Dr. Selpiana, S.T., M.T.",24101,high
+198306082008122002,"Dhona Andhini, S.Kep., Ns., M.Kep.",14901,high
+197904112006042021,"dr. Ariesti Karmila, M.Kes., Sp.A., PhD",11711,high
+197511062002122002,"Dr. dr. Riani Erna, Sp.M.",11701,high
+197212291998031002,"Dr. dr. Zen Hafy, M. Biomed",11106,medium
+198509252010122005,"dr. Mayang Indah Lestari,Sp.An(K)",11901,high
+197810072008122001,"dr. Puspa Zuleika, Sp.THT-KL(K)., M.Kes,FICS",11705,high
+197802272010122001,"dr. Susilawati, M.Kes",11201,medium
+197406022005011001,"drg. Arya Prasetya Beumaputra, Sp.Ort.",12901,medium
+198401312010122002,"drg. Danica Anastasia,Sp.KG",12201,high
+198407012008122001,"Eka Yulia Fitri Y, S.Kep., Ns., M.Kep.",14201,medium
+198703192019032010,"Marisya Pratiwi, M. Psi., Psikolog.",73201,high
+197306131999031001,"Prof. Dr. dr. Irfannuddin, Sp.KO., M.Pd.Ked.",11006,medium
+197810152001122001,"Dr. Selly Oktarina, S.P., M.Si.",54201,medium
+198111012006042002,"Dr. Rodiana Nopianti, S.Pi., M.Sc.",54244,medium
+196808291993031002,"Dr. Ir. Agus Hermawan, MT",54249,medium
+196806141994012001,"Dr. Lifianthi, S.P., M.Si.",54101,high
+198203012003122002,"Dr. Merynda Indriyani Syafutri, S.TP., M.Si.",26106,high
+198203012003122002,"Dr. Merynda Indriyani Syafutri, S.TP., M.Si.",41231,high
+196205101988031002,"Dr. Ir. Muhammad Yazid, M.Sc.",54001,high
+196510201992032001,"Prof. Dr. Ir. Siti Herlinda, M.Si.",54295,medium
+196801111993021001,"Prof. Dr. Ir. Suwandi, M.Agr.",54104,high
+197803012002121003,"Prof. Dr. Muslim, S.Pi., M.Si.",54243,high
+197108012008012008,"Dr. Arjuna Neni Triana, S.TP., M.Si.",41201,high
+198208022008111001,"Dr. Fitra Gustiar, S.P., M.Si.",54204,medium
+198312192012122004,"Weri Herlin, S.P., M.Si., Ph.D.",54211,high
+199002122019031012,"Edwin Nurdiansyah, S.Pd., M.Pd.",87205,medium
+198706052014041001,"Dr. Reza Resah Pratama, S.Pd., M.Pd.",85201,medium
+197211111999032002,"Dr. Sofia, S.Pd., M.Si.",84204,high
+198303132014042001,"Edutivia Mardetini, S.Pd., M.Ak.",87203,high
+197905302002122002,"Dr. Hapizah, S.Pd., M.T.",84102,medium
+197608202002122001,"Dr. Hudaidah, S.Pd., M.Pd.",87201,medium
+197905222005011005,"Dr. Ketang Wiyono, S.Pd., M.Pd.",84203,medium
+196702121993032002,"Dr. Rahmi Susanti, M.Si.",86904,high
+198411302009121004,"Dr. Syarifuddin,S.Pd., M.Pd.",86103,medium
+197904132003121001,"Dr. Masagus Mhd. Tibrani, S.Pd., M.Si.",84205,high
+198010012002122001,"Dr. Santi Oktarina, S.Pd., M.Pd.",88201,high
+198801312019031011,"Dr. Wahyu Indra Bayu, S.Pd., M.Pd.",85101,medium
+198805162019031010,"Shomedran, S.Pd., M.Pd.",86205,medium
+197705292008121001,"Dr. Farhan Yadi, S.T., M.Pd.",83203,high
+198912022022031004,"Dr. Alrefi, S.Pd., M.Pd.",86201,medium
+195901011986032001,"Prof. Dr.Sri Sumarni, M.Pd.",86207,medium
+197605122006042006,"Dr. Esti Susiloningsih, S.Pd., M.Si.",86206,high
+196711041993031002,"Prof. Drs. Soni Mirizon, M.A.., Ph.D.",88203,high
+197708112002122003,"Sary Silvhiany, S.Pd., M.Pd., Ph.D.",88111,high
+198903102015042004,"Weni Dwi Pratiwi, S.Pd., M.Sc",84202,high
+195901171983031014,"Prof. Dr. Mulyadi Eko Purnomo, M.Pd.",86009,medium
+197708052001122001,"Dr. Leni Marlina, S.Pd., M.Si.",45102,medium
+196411101991022001,"Prof. Dra. Nyimas Aisyah, M.Pd., Ph.D.",84002,high
+197402052000032001,"Dr. Ferlinahayati, S.Si., M.Si.",47102,high
+197211252000122001,"Dr. Menik Ariani, S.Si., M.Si.",45102,high
+198605282012121005,"Dr. Shaum Shiyan, S.Farm., Apt., M.Sc.",48901,high
+197307261997021001,"Prof. Dr. rer.nat. Indra Yustian, M.Si.",46101,high
+196507121993031003,"Dr. Dadang Hikmah Purnama, M.Hum.",69101,high
+196406061992031001,"Dr. M. Husni Thamrin, M.Si.",70201,high
+197805122002121003,"Dr. Raniasa Putra, S.IP., M.Si.",63101,medium
+197705122003121003,"Sofyan Effendi, S.IP, M.Si.",84201,high
+197910202010121003,"Ahmad Rifai, S.T., M.T.",57201,high
+198410012009121005,"Dr. Abdiansah, S.Kom., M.Cs.",57401,high
+198004182020121001,"Hadipurnawan Satria, S.Kom., M.Sc., Ph.D.",55201,high
+199110102018032001,"Nabila Rizky Oktadini, S.S.I., M.T.",57402,high
+197802232006042002,"Dian Palupi Rini, S.Si., M.Kom., P. hD",55001,high
+198603212018032001,"Mastura Diana Marieska, S.T., M.T.",56401,high
+198507182012122003,"Ken Ditha Tania, S.Kom., M.Kom.,Ph.D",55101,high
+197811012010121003,"Sutarno, S.T., M.T.",56201,high
+197109271994032004,"Prof. Dr. Rostika Flora, S. Kep., M. Kes.",13101,high
+196704121992032002,"Dr. Nengyanti, M.Hum.",95102,high
+197408121998021001,"Prof. Aldes Lesbani, S.Si., M.Si., Ph.D.",28101,high
+196408041989032002,"Prof. Dr. Ir. Nuni Gofar, M.S.",95029,high
+196408041989032002,"Prof. Dr. Ir. Nuni Gofar, M.S.",95129,high
+196601221990031004,"Prof. Dr. Alfitri, M.Si.",63002,high
+198509252010122005,"dr. Mayang Indah Lestari,Sp.An(K)",11706,high
+197909152006042005,"Asmaripa Ainy, S.Si., M.Kes.",13201,medium
+197406152000032001,"Dr. Ratna Dewi, S.T., M.T.",22101,high

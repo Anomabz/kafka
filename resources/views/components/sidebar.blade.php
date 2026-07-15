@@ -14,6 +14,10 @@
         $groupKey = explode('.', $table['code'])[0] ?? $table['code'];
         $groups[$groupKey][] = $table;
     }
+
+    $ssoUser = session('sso_user');
+    $userName = $ssoUser['name'] ?? ($ssoUser['preferred_username'] ?? 'Pengguna');
+    $userInitial = Illuminate\Support\Str::upper(Illuminate\Support\Str::substr($userName, 0, 1));
 @endphp
 
 <aside id="sidebar" class="sidebar side-glass flex flex-col">
@@ -68,6 +72,19 @@
     </div>
 
     <nav id="menu" class="menu flex-1 space-y-4 overflow-y-auto px-3 py-3" aria-label="Menu tabel SAPTO">
+        <div class="space-y-0.5">
+            <button
+                type="button"
+                data-table-id="dashboard"
+                class="menu-item {{ ($activeTableId ?? 'dashboard') === 'dashboard' ? 'is-active' : '' }}"
+            >
+                <svg class="mr-2 h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 9.5 12 3l9 6.5V21a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z" />
+                </svg>
+                Dashboard
+            </button>
+        </div>
+
         @foreach ($groups as $groupKey => $items)
             <div class="menu-group" data-menu-group>
                 <div class="mb-1 flex items-center gap-2 px-3">
@@ -92,10 +109,50 @@
         <p id="menu-empty" class="hidden px-3 py-8 text-center text-[12px]" style="color:var(--side-faint)">Tidak ada tabel yang cocok dengan pencarian.</p>
     </nav>
 
-    <div class="px-5 py-3.5" style="border-top:1px solid var(--side-border)">
-        <div class="flex items-center gap-2 text-[11px]" style="color:var(--side-faint)">
-            <span class="inline-flex h-1.5 w-1.5 shrink-0 rounded-full bg-accent"></span>
-            <span>SAPTO &middot; Universitas Sriwijaya</span>
+    @if ($ssoUser)
+        <div class="px-3 py-3" style="border-top:1px solid var(--side-border)">
+            <div class="flex items-center gap-2.5">
+                <div
+                    class="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[12px] font-bold"
+                    style="background:var(--color-accent-soft);color:var(--color-accent-dark)"
+                    aria-hidden="true"
+                >{{ $userInitial }}</div>
+                <div class="min-w-0 flex-1 leading-tight">
+                    <div class="truncate text-[12px] font-semibold" style="color:var(--side-text)" title="{{ $ssoUser['email'] ?? '' }}">
+                        {{ $userName }}
+                    </div>
+                    <div class="truncate text-[11px]" style="color:var(--side-faint)" title="{{ $ssoUser['unit_kerja'] ?? '' }}">
+                        Pengelola Program Studi{{ isset($ssoUser['unit_kerja']) ? ' — '.$ssoUser['unit_kerja'] : '' }}
+                    </div>
+                </div>
+                <a
+                    href="{{ route('sso.logout') }}"
+                    class="sidebar-logout shrink-0"
+                    title="Logout"
+                    aria-label="Logout"
+                >
+                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>
+                    </svg>
+                </a>
+            </div>
         </div>
-    </div>
+    @endif
 </aside>
+
+<style>
+    .sidebar-logout {
+        display: grid;
+        place-items: center;
+        height: 26px;
+        width: 26px;
+        border-radius: 0.5rem;
+        color: var(--side-faint);
+        transition: background-color .15s ease, color .15s ease;
+    }
+
+    .sidebar-logout:hover {
+        background: var(--side-hover);
+        color: var(--side-text);
+    }
+</style>
