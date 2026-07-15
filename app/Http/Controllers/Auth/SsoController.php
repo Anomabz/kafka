@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Models\Korprodi;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -33,6 +34,7 @@ class SsoController extends Controller
 
         return view('auth.login', [
             'unregisteredHint' => $request->session()->get('unregistered_hint'),
+            'notKorprodiHint' => $request->session()->get('not_korprodi_hint'),
         ]);
     }
 
@@ -69,6 +71,10 @@ class SsoController extends Controller
         $userinfo = Http::withToken($token->json('access_token'))->get($this->base().'/userinfo');
         if ($userinfo->failed()) {
             return redirect()->route('login')->with('unregistered_hint', $data['username']);
+        }
+
+        if (! $this->isKorprodi($userinfo->json())) {
+            return redirect()->route('login')->with('not_korprodi_hint', $userinfo->json('name') ?: $data['username']);
         }
 
         $request->session()->regenerate();
@@ -126,11 +132,29 @@ class SsoController extends Controller
             abort(400, 'Gagal mengambil data pengguna dari SSO.');
         }
 
+        if (! $this->isKorprodi($userinfo->json())) {
+            return redirect()->route('login')->with('not_korprodi_hint', $userinfo->json('name') ?: $userinfo->json('preferred_username'));
+        }
+
         $request->session()->regenerate();
         $request->session()->put('sso_user', $userinfo->json());
         $request->session()->put('sso_id_token', $token->json('id_token'));
 
         return redirect()->intended('/');
+    }
+
+    /**
+     * SAPTO hanya bisa diakses koordinator program studi (korprodi) yang NIP
+     * (nomor_identitas)-nya terdaftar di tabel korprodi — deny-by-default yang
+     * sama dengan SaptoUserContext::fromRequest(), tapi ditegakkan sedini
+     * mungkin (saat login) alih-alih membiarkan akun yang valid di SSO tapi
+     * tak terdaftar sebagai korprodi masuk ke shell aplikasi lebih dulu.
+     */
+    private function isKorprodi(array $userinfo): bool
+    {
+        $nip = trim((string) ($userinfo['nomor_identitas'] ?? ''));
+
+        return $nip !== '' && Korprodi::query()->where('nip', $nip)->exists();
     }
 
     public function logout(Request $request)
