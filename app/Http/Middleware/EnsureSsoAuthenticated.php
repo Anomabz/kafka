@@ -16,7 +16,7 @@ class EnsureSsoAuthenticated
 
             $request->session()->put('url.intended', $request->fullUrl());
 
-            return redirect()->route('sso.login');
+            return redirect()->route('login');
         }
 
         return $next($request);

@@ -27,7 +27,7 @@
 <body class="bg-canvas text-ink font-sans text-[14px] antialiased">
     <div id="app-shell">
 
-        @include('components.sidebar', ['tables' => $tables, 'activeTableId' => $activeTableId ?? 'dosen-pembimbing-ta'])
+        @include('components.sidebar', ['tables' => $tables, 'activeTableId' => $activeTableId ?? 'dashboard'])
 
         <div id="sidebar-backdrop" class="sidebar-backdrop lg:hidden"></div>
 

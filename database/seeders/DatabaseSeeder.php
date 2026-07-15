@@ -21,5 +21,7 @@ class DatabaseSeeder extends Seeder
         // currently reads App\Models\ProgramStudi, so this is safe to skip
         // until that table is renamed to something collision-free.
         // $this->call(ProgramStudiSeeder::class);
+
+        $this->call(KorprodiSeeder::class);
     }
 }

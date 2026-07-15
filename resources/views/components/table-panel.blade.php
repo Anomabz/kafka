@@ -1,7 +1,7 @@
 {{-- resources/views/components/table-panel.blade.php --}}
 <section class="glass overflow-hidden rounded-2xl">
     <header class="flex items-center justify-between gap-3 px-4 py-3.5" style="border-bottom:1px solid var(--color-line)">
-        <h2 class="text-[15px] font-bold text-ink">Dosen Pembimbing Utama Tugas Akhir</h2>
+        <h2 id="table-card-title" class="text-[15px] font-bold text-ink">Dosen Pembimbing Utama Tugas Akhir</h2>
         <span id="table-status" class="text-[12px] text-muted">Memuat data...</span>
     </header>
 

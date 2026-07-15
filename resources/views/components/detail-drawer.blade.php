@@ -1,9 +1,9 @@
 {{-- resources/views/components/detail-drawer.blade.php --}}
-<div id="drawer-backdrop" class="drawer-backdrop fixed inset-0 z-20"></div>
+<div id="drawer-backdrop" class="drawer-backdrop fixed z-20"></div>
 
 <aside
     id="detail-drawer"
-    class="drawer glass-strong fixed right-0 top-0 z-30 h-screen w-full max-w-[620px] flex-col"
+    class="drawer glass-strong fixed right-0 top-0 z-30 w-full max-w-[620px] flex-col"
     aria-labelledby="detail-title"
     aria-modal="true"
     role="dialog"

@@ -13,9 +13,13 @@
 @endphp
 
 @section('content')
-    <section id="table-page">
+    <div id="shared-filter-bar">
         @include('components.filter-bar')
+    </div>
 
+    @include('components.dashboard-page')
+
+    <section id="table-page" class="hidden">
         <div class="mb-4 grid grid-cols-2 gap-2.5 sm:mb-5 sm:gap-3 lg:grid-cols-4">
             @include('components.metric-card', ['id' => 'metric-dosen', 'labelId' => 'metric-dosen-label', 'label' => 'Total dosen pembimbing', 'icon' => $icons['users'], 'tint' => 'accent'])
             @include('components.metric-card', ['id' => 'metric-ps', 'labelId' => 'metric-ps-label', 'label' => 'Total mahasiswa bimbingan PS diakreditasi', 'icon' => $icons['cap'], 'tint' => 'info'])
@@ -56,26 +60,27 @@
     const tables = @json($tables);
     const currentYear = new Date().getFullYear();
     const PAGE_SIZE = 15; // baris dosen per halaman pada tabel 3.a.2
+    // Akses selalu dikunci ke satu program studi milik akun yang login
+    // (lihat SaptoUserContext::fromRequest) — tidak ada lagi role atau
+    // fakultas/program-studi yang bisa dipilih klien, cuma tampilan.
     const state = {
-        role: 'universitas',
         ts: null, // diisi dari available_years hasil summary (mengikuti isi database)
-        fakultasId: 'all',
-        programStudiId: 'all',
-        fakultas: [],
         programStudi: [],
         summary: null,
         page: 1, // halaman aktif tabel dosen pembimbing
     };
 
     const els = {
-        role: document.getElementById('role'),
         ts: document.getElementById('ts'),
-        fakultas: document.getElementById('fakultas'),
-        programStudi: document.getElementById('program-studi'),
+        tableCardTitle: document.getElementById('table-card-title'),
         activeUnit: document.getElementById('active-unit'),
         tablePage: document.getElementById('table-page'),
         placeholderPage: document.getElementById('placeholder-page'),
         placeholderTitle: document.getElementById('placeholder-title'),
+        dashboardPage: document.getElementById('dashboard-page'),
+        dashboardStatus: document.getElementById('dashboard-status'),
+        dashboardCards: document.querySelectorAll('.dashboard-card'),
+        sharedFilterBar: document.getElementById('shared-filter-bar'),
         pageTitle: document.getElementById('page-title'),
         pageDescription: document.getElementById('page-description'),
         tableStatus: document.getElementById('table-status'),
@@ -114,24 +119,13 @@
         maMetricAktif: document.getElementById('ma-metric-aktif'),
         maMetricFt: document.getElementById('ma-metric-ft'),
         maMetricPt: document.getElementById('ma-metric-pt'),
-        maFakultas: document.getElementById('ma-fakultas'),
-        maFakultasWrap: document.getElementById('ma-fakultas-wrap'),
-        maProgramStudi: document.getElementById('ma-program-studi'),
-        maProdiWrap: document.getElementById('ma-prodi-wrap'),
         maActiveUnit: document.getElementById('ma-active-unit'),
     };
 
     const metricEls = [els.metricDosen, els.metricPs, els.metricPsLain, els.metricTs];
     const maMetricEls = [els.maMetricProdi, els.maMetricAktif, els.maMetricFt, els.maMetricPt];
     let maSummary = null;
-    let currentTableId = @json($activeTableId ?? 'dosen-pembimbing-ta');
-
-    // Filter mahasiswa asing (role diambil dari state.role yang dibagi topbar).
-    const maFilter = {
-        fakultasId: 'all',   // 'all' | fakultas_id
-        prodiId: 'all',      // 'all' | id_prodi
-        fakultas: [],        // [{ id, nama }]
-    };
+    let currentTableId = @json($activeTableId ?? 'dashboard');
 
     // TS awal belum diketahui sampai summary pertama memberi tahu tahun akademik
     // apa saja yang ada di database. Tampilkan placeholder dulu.
@@ -148,51 +142,19 @@
         els.ts.value = String(selected);
     }
 
+    // Scope (fakultas/prodi) selalu ditentukan server-side dari akun yang
+    // login (lihat SaptoUserContext::fromRequest) — header ini cuma
+    // membantu disambiguasi akun dengan dua program studi (co-koordinator);
+    // server mengabaikannya kalau tidak cocok dengan entitlement akun.
     function contextHeaders() {
-        const headers = {
-            Accept: 'application/json',
-            'X-SAPTO-Role': state.role,
-        };
+        const headers = { Accept: 'application/json' };
+        const prodiId = state.programStudi[0]?.id;
 
-        if (state.role === 'fakultas') {
-            const fakultasId = selectedFakultasId();
-
-            if (fakultasId && fakultasId !== 'all') {
-                headers['X-SAPTO-Fakultas-Id'] = fakultasId;
-            }
-        }
-
-        if (state.role === 'prodi') {
-            const prodiId = selectedProgramStudiId();
-
-            if (prodiId && prodiId !== 'all') {
-                headers['X-SAPTO-Program-Studi-Id'] = prodiId;
-            }
+        if (prodiId) {
+            headers['X-SAPTO-Program-Studi-Id'] = String(prodiId);
         }
 
         return headers;
-    }
-
-    function selectedFakultasId() {
-        if (state.role === 'fakultas' && state.fakultasId === 'all') {
-            return state.fakultas[0]?.id ? String(state.fakultas[0].id) : 'all';
-        }
-
-        if (state.role === 'prodi') {
-            const selected = state.programStudi.find((item) => String(item.id) === String(selectedProgramStudiId()));
-
-            return selected?.fakultas_id ? String(selected.fakultas_id) : state.fakultasId;
-        }
-
-        return state.fakultasId;
-    }
-
-    function selectedProgramStudiId() {
-        if (state.role === 'prodi' && state.programStudiId === 'all') {
-            return state.programStudi[0]?.id ? String(state.programStudi[0].id) : 'all';
-        }
-
-        return state.programStudiId;
     }
 
     async function fetchJson(url) {
@@ -206,101 +168,17 @@
         return payload;
     }
 
-    async function loadFakultas() {
-        const payload = await fetchJson('/api/sapto/fakultas');
-        state.fakultas = payload.data || [];
-
-        if (state.role === 'fakultas' && state.fakultas.length > 0) {
-            state.fakultasId = String(state.fakultas[0].id);
-        }
-
-        if (state.role === 'universitas' && state.fakultasId !== 'all') {
-            const exists = state.fakultas.some((item) => String(item.id) === String(state.fakultasId));
-
-            if (!exists) {
-                state.fakultasId = 'all';
-            }
-        }
-
-        renderFakultasSelect();
-    }
-
+    // Program studi akun (selalu tepat satu — atau kosong kalau data
+    // referensinya tidak ditemukan, lihat SaptoUserContext::fromRequest).
     async function loadProgramStudi() {
-        const params = new URLSearchParams();
-
-        if (state.role === 'universitas' && state.fakultasId !== 'all') {
-            params.set('fakultas_id', state.fakultasId);
-        }
-
-        const payload = await fetchJson(`/api/sapto/program-studi${params.size ? `?${params}` : ''}`);
+        const payload = await fetchJson('/api/sapto/program-studi');
         state.programStudi = payload.data || [];
-
-        if (state.role === 'prodi' && state.programStudi.length > 0) {
-            state.programStudiId = String(state.programStudi[0].id);
-        }
-
-        if (state.role !== 'prodi' && state.programStudiId !== 'all') {
-            const exists = state.programStudi.some((item) => String(item.id) === String(state.programStudiId));
-
-            if (!exists) {
-                state.programStudiId = 'all';
-            }
-        }
-
-        renderProgramStudiSelect();
-    }
-
-    function renderFakultasSelect() {
-        if (state.role === 'universitas') {
-            const options = [
-                '<option value="all">Semua Fakultas</option>',
-                ...state.fakultas.map((item) => `<option value="${item.id}">${escapeHtml(item.nama)}</option>`),
-            ];
-
-            els.fakultas.innerHTML = options.join('');
-            els.fakultas.disabled = false;
-            els.fakultas.value = state.fakultasId;
-        } else {
-            const selected = state.fakultas.find((item) => String(item.id) === String(selectedFakultasId()));
-            els.fakultas.innerHTML = selected ? `<option value="${selected.id}">${escapeHtml(selected.nama)}</option>` : '<option value="">Fakultas akun tidak ditemukan</option>';
-            els.fakultas.disabled = true;
-        }
-    }
-
-    function renderProgramStudiSelect() {
-        if (state.role !== 'prodi') {
-            const options = [
-                '<option value="all">Semua Program Studi</option>',
-                ...state.programStudi.map((item) => `<option value="${item.id}">${escapeHtml(item.jenjang)} ${escapeHtml(item.nama)} - ${escapeHtml(item.fakultas)}</option>`),
-            ];
-
-            els.programStudi.innerHTML = options.join('');
-            els.programStudi.disabled = false;
-            els.programStudi.value = state.programStudiId;
-        } else {
-            const item = state.programStudi[0];
-            els.programStudi.innerHTML = item ? `<option value="${item.id}">${escapeHtml(item.jenjang)} ${escapeHtml(item.nama)} - ${escapeHtml(item.fakultas)}</option>` : '<option value="">Program studi akun tidak ditemukan</option>';
-            els.programStudi.disabled = true;
-        }
-
         renderActiveUnit();
     }
 
     function renderActiveUnit() {
-        const fakultas = state.fakultas.find((item) => String(item.id) === String(selectedFakultasId()));
-        const selected = state.programStudi.find((item) => String(item.id) === String(selectedProgramStudiId()));
-
-        if (selected) {
-            els.activeUnit.textContent = `${selected.jenjang} ${selected.nama}`;
-            return;
-        }
-
-        if (fakultas) {
-            els.activeUnit.textContent = fakultas.nama;
-            return;
-        }
-
-        els.activeUnit.textContent = 'Universitas Sriwijaya';
+        const selected = state.programStudi[0];
+        els.activeUnit.textContent = selected ? `${selected.jenjang} ${selected.nama}` : 'Program studi akun tidak ditemukan';
     }
 
     function summaryUrl() {
@@ -309,14 +187,6 @@
         // TS null pada load pertama -> backend memakai tahun akademik terbaru.
         if (state.ts !== null) {
             params.set('ts', state.ts);
-        }
-
-        if (state.role === 'universitas' && state.fakultasId !== 'all') {
-            params.set('fakultas_id', state.fakultasId);
-        }
-
-        if (state.role !== 'prodi' && state.programStudiId !== 'all') {
-            params.set('program_studi_id', state.programStudiId);
         }
 
         const slug = isGeneric(currentTableId) ? GENERIC_TABLES[currentTableId].endpoint : 'dosen-pembimbing-ta';
@@ -396,6 +266,7 @@
         const rows = summary.rows || [];
         const totals = summary.totals || {};
 
+        els.tableCardTitle.textContent = 'Dosen Pembimbing Utama Tugas Akhir';
         setMetricLabels(DOSEN_METRIC_LABELS);
         els.metricDosen.textContent = rows.length;
         els.metricPs.textContent = sumYearCounts(totals.ps_diakreditasi);
@@ -408,6 +279,7 @@
     }
 
     function renderGenericSummary(summary) {
+        els.tableCardTitle.textContent = summary.table_name || 'Data Tabel';
         setMetricCards(summary.metrics || []);
         const unit = GENERIC_TABLES[currentTableId]?.unit || 'baris';
         els.tableStatus.textContent = summary.notice
@@ -656,14 +528,6 @@
             year_key: button.dataset.yearKey,
         });
 
-        if (state.role === 'universitas' && state.fakultasId !== 'all') {
-            params.set('fakultas_id', state.fakultasId);
-        }
-
-        if (state.role !== 'prodi' && state.programStudiId !== 'all') {
-            params.set('program_studi_id', state.programStudiId);
-        }
-
         els.detailTitle.textContent = button.dataset.dosenName || 'Detail Data';
         els.detailSubtitle.textContent = `${scopeLabel(button.dataset.scope)} - ${yearLabel(button.dataset.yearKey)}`;
         els.detailBody.innerHTML = '<div class="text-sm text-muted">Memuat detail...</div>';
@@ -711,9 +575,7 @@
             }
 
             maSummary = payload;
-            buildMaFilterData();
-            applyMaRoleDefaults();
-            renderMaFilters();
+            renderMaActiveUnit();
             renderMaSummary();
         } catch (error) {
             renderMaError(error.message);
@@ -732,117 +594,16 @@
         els.maTableFoot.innerHTML = '';
     }
 
-    // Fakultas unik dari baris yang punya mahasiswa asing, terurut nama.
-    function buildMaFilterData() {
-        const seen = new Map();
-
-        (maSummary.data || []).forEach((row) => {
-            if (row.fakultas_id && !seen.has(row.fakultas_id)) {
-                seen.set(row.fakultas_id, { id: row.fakultas_id, nama: row.fakultas });
-            }
-        });
-
-        maFilter.fakultas = [...seen.values()].sort((a, b) => a.nama.localeCompare(b.nama, 'id'));
-    }
-
-    // Prodi (id_prodi) yang tersedia untuk fakultas terpilih, atau semua.
-    function maProdiOptions() {
-        return (maSummary.data || [])
-            .filter((row) => maFilter.fakultasId === 'all' || row.fakultas_id === maFilter.fakultasId)
-            .map((row) => ({ id: row.id_prodi, nama: row.program_studi }));
-    }
-
-    // Selaraskan pilihan default dengan role aktif:
-    // - universitas: bebas, default Semua/Semua.
-    // - fakultas: wajib satu fakultas (default pertama), prodi Semua.
-    // - prodi: wajib satu fakultas + satu prodi (default pertama).
-    function applyMaRoleDefaults() {
-        const role = state.role;
-
-        if (role === 'universitas') {
-            maFilter.fakultasId = 'all';
-            maFilter.prodiId = 'all';
-            return;
-        }
-
-        const fakultasValid = maFilter.fakultas.some((f) => f.id === maFilter.fakultasId);
-
-        if (!fakultasValid) {
-            maFilter.fakultasId = maFilter.fakultas[0]?.id ?? 'all';
-        }
-
-        if (role === 'fakultas') {
-            maFilter.prodiId = 'all';
-            return;
-        }
-
-        // role === 'prodi'
-        const prodiList = maProdiOptions();
-        const prodiValid = prodiList.some((p) => p.id === maFilter.prodiId);
-
-        if (!prodiValid) {
-            maFilter.prodiId = prodiList[0]?.id ?? 'all';
-        }
-    }
-
-    function renderMaFilters() {
-        const role = state.role;
-
-        // Fakultas: role universitas boleh "Semua"; role lain wajib pilih satu.
-        const fakultasOptions = [
-            ...(role === 'universitas' ? ['<option value="all">Semua Fakultas</option>'] : []),
-            ...maFilter.fakultas.map((f) => `<option value="${escapeAttr(f.id)}">${escapeHtml(f.nama)}</option>`),
-        ];
-        els.maFakultas.innerHTML = fakultasOptions.join('') || '<option value="all">Tidak ada fakultas</option>';
-        els.maFakultas.value = maFilter.fakultasId;
-
-        // Program studi: role prodi wajib pilih satu; selain itu boleh "Semua".
-        const prodiList = maProdiOptions();
-        const prodiOptions = [
-            ...(role === 'prodi' ? [] : ['<option value="all">Semua Program Studi</option>']),
-            ...prodiList.map((p) => `<option value="${escapeAttr(p.id)}">${escapeHtml(p.nama)}</option>`),
-        ];
-        els.maProgramStudi.innerHTML = prodiOptions.join('') || '<option value="all">Tidak ada program studi</option>';
-        els.maProgramStudi.value = maFilter.prodiId;
-
-        // Prodi hanya relevan saat menyaring per fakultas/prodi.
-        els.maProdiWrap.classList.toggle('hidden', role === 'universitas' && maFilter.fakultasId === 'all');
-
-        renderMaActiveUnit();
-    }
-
+    // Data dari /sapto/mahasiswa-asing sudah discope server-side ke satu
+    // program studi akun (lihat MahasiswaController::data_mahasiswa_asing),
+    // jadi tidak ada lagi filter fakultas/prodi di klien.
     function renderMaActiveUnit() {
-        if (maFilter.prodiId !== 'all') {
-            const prodi = (maSummary.data || []).find((row) => row.id_prodi === maFilter.prodiId);
-            els.maActiveUnit.textContent = prodi ? prodi.program_studi : 'Universitas Sriwijaya';
-            return;
-        }
-
-        if (maFilter.fakultasId !== 'all') {
-            const fakultas = maFilter.fakultas.find((f) => f.id === maFilter.fakultasId);
-            els.maActiveUnit.textContent = fakultas ? fakultas.nama : 'Universitas Sriwijaya';
-            return;
-        }
-
-        els.maActiveUnit.textContent = 'Universitas Sriwijaya';
-    }
-
-    function maVisibleRows() {
-        return (maSummary.data || []).filter((row) => {
-            if (maFilter.fakultasId !== 'all' && row.fakultas_id !== maFilter.fakultasId) {
-                return false;
-            }
-
-            if (maFilter.prodiId !== 'all' && row.id_prodi !== maFilter.prodiId) {
-                return false;
-            }
-
-            return true;
-        });
+        const row = (maSummary.data || [])[0];
+        els.maActiveUnit.textContent = row ? row.program_studi : 'Program studi akun tidak ditemukan';
     }
 
     function renderMaSummary() {
-        const rows = maVisibleRows();
+        const rows = maSummary.data || [];
         const totals = maRowTotals(rows);
 
         maMetricEls.forEach((el) => el.classList.remove('is-loading'));
@@ -1046,12 +807,37 @@
         'dosen-tetap-pt': {
             endpoint: 'dosen-tetap-pt',
             unit: 'dosen',
-            description: 'Daftar dosen tetap perguruan tinggi berdasarkan program studi homebase pada tahun ajaran terpilih (Tabel 3.a.1). Kolom pendidikan/jabatan/sertifikat menyusul saat data tersedia.',
+            description: 'Daftar dosen tetap perguruan tinggi berdasarkan program studi homebase pada tahun ajaran terpilih (Tabel 3.a.1). Kolom mata kuliah dan kesesuaian kompetensi inti PS belum tersedia di sumber data.',
+        },
+        'dosen-tidak-tetap': {
+            endpoint: 'dosen-tidak-tetap',
+            unit: 'dosen',
+            description: 'Daftar dosen tidak tetap: dosen yang ditugaskan mengajar di program studi terpilih tanpa prodi itu menjadi homebase-nya, pada tahun ajaran terpilih (Tabel 3.a.4). Kolom pendidikan/jabatan/sertifikat/mata kuliah menyusul saat data tersedia.',
         },
         'masa-studi': {
             endpoint: 'masa-studi',
             unit: 'angkatan',
             description: 'Matriks masa studi lulusan per angkatan (tahun masuk) untuk satu program studi: jumlah diterima, lulus di akhir tiap TS, dan rata-rata masa studi, mengikuti format Tabel 8.c BAN-PT.',
+        },
+        'kerjasama-pendidikan': {
+            endpoint: 'kerjasama-pendidikan',
+            unit: 'kerjasama',
+            description: 'Kerjasama tridharma bidang pendidikan (MoU institusi + PKS pelaksana) yang masih berlaku pada tahun terpilih, mengikuti format Tabel 1 BAN-PT. Kolom Tingkat dan filter "judul pendidikan" hasil inferensi teks (perlu diverifikasi manual); kolom Manfaat bagi PS wajib diisi manual karena narasinya tidak tersimpan di sistem.',
+        },
+        'kerjasama-penelitian': {
+            endpoint: 'kerjasama-penelitian',
+            unit: 'kerjasama',
+            description: 'Kerjasama tridharma bidang penelitian (MoU institusi + PKS pelaksana) yang masih berlaku pada tahun terpilih, mengikuti format Tabel 1 BAN-PT. Kolom Tingkat dan filter "judul penelitian" hasil inferensi teks (perlu diverifikasi manual); kolom Manfaat bagi PS wajib diisi manual karena narasinya tidak tersimpan di sistem.',
+        },
+        'kerjasama-pkm': {
+            endpoint: 'kerjasama-pkm',
+            unit: 'kerjasama',
+            description: 'Kerjasama tridharma bidang pengabdian kepada masyarakat (MoU institusi + PKS pelaksana) yang masih berlaku pada tahun terpilih, mengikuti format Tabel 1 BAN-PT. Kolom Tingkat dan filter "judul PkM" hasil inferensi teks (perlu diverifikasi manual); kolom Manfaat bagi PS wajib diisi manual karena narasinya tidak tersimpan di sistem.',
+        },
+        'penelitian-dtps': {
+            endpoint: 'penelitian-dtps',
+            unit: 'kategori sumber pembiayaan',
+            description: 'Jumlah judul penelitian dosen tetap program studi (DTPS) per sumber pembiayaan pada TS-2/TS-1/TS, mengikuti format Tabel 3.b.2 BAN-PT. Klasifikasi "Lembaga Luar Negeri" berbasis skema penelitian (heuristik teks, perlu diverifikasi manual); judul yang didanai lebih dari satu sumber dihitung di tiap kategori yang berlaku.',
         },
     };
 
@@ -1060,6 +846,13 @@
     }
 
     const TABLE_HANDLERS = {
+        'dashboard': {
+            description: 'Ringkasan angka kunci dari 5 tabel BAN-PT yang sudah tersedia datanya.',
+            show() {
+                els.dashboardPage.classList.remove('hidden');
+                loadDashboard();
+            },
+        },
         'dosen-pembimbing-ta': {
             description: 'Data jumlah mahasiswa yang dibimbing oleh dosen sebagai pembimbing utama tugas akhir berdasarkan program studi dan tahun TS.',
             show() {
@@ -1094,12 +887,21 @@
             button.classList.toggle('is-active', button.dataset.tableId === tableId);
         });
 
+        // 'dashboard' bukan salah satu dari 46 tabel BAN-PT di array `tables`,
+        // jadi judulnya di-hardcode, tidak dicari lewat tables.find().
         const table = tables.find((item) => item.id === tableId);
-        els.pageTitle.textContent = table?.name || 'SAPTO';
+        els.pageTitle.textContent = tableId === 'dashboard' ? 'Dashboard' : (table?.name || 'SAPTO');
 
         els.tablePage.classList.add('hidden');
         els.maPage.classList.add('hidden');
         els.placeholderPage.classList.add('hidden');
+        els.dashboardPage.classList.add('hidden');
+
+        // Filter bar dipakai bersama dashboard + keluarga tabel "table-page"
+        // (dosen-pembimbing-ta + tabel generik); mahasiswa-asing punya filter
+        // sendiri, placeholder tidak butuh filter sama sekali.
+        const usesSharedFilterBar = tableId === 'dashboard' || tableId === 'dosen-pembimbing-ta' || isGeneric(tableId);
+        els.sharedFilterBar.classList.toggle('hidden', !usesSharedFilterBar);
 
         const handler = TABLE_HANDLERS[tableId];
 
@@ -1149,72 +951,128 @@
         return escapeHtml(value).replaceAll('`', '&#096;');
     }
 
-    els.role.addEventListener('change', async () => {
-        state.role = els.role.value;
+    function dashboardUrl() {
+        const params = new URLSearchParams();
 
-        // Tabel Mahasiswa Asing punya filter role sendiri (data lokal, difilter
-        // di klien) — tidak lewat API fakultas/prodi milik tabel dosen.
-        if (currentTableId === 'mahasiswa-asing') {
-            if (maSummary) {
-                applyMaRoleDefaults();
-                renderMaFilters();
-                renderMaSummary();
+        if (state.ts !== null) {
+            params.set('ts', state.ts);
+        }
+
+        return `/api/sapto/dashboard/summary?${params}`;
+    }
+
+    async function loadDashboard() {
+        setDashboardLoading();
+
+        try {
+            const payload = await fetchJson(dashboardUrl());
+            renderDashboard(payload);
+        } catch (error) {
+            renderDashboardError(error.message);
+        }
+    }
+
+    // Filter bar is shared antara dashboard & table-page; dispatch ke loader
+    // yang sesuai halaman aktif alih-alih selalu memanggil loadSummary().
+    function loadActivePage() {
+        return currentTableId === 'dashboard' ? loadDashboard() : loadSummary();
+    }
+
+    function setDashboardLoading() {
+        els.dashboardStatus.textContent = 'Memuat ringkasan...';
+
+        els.dashboardCards.forEach((card) => {
+            card.querySelector('.dashboard-card-metrics').innerHTML = Array.from({ length: 3 }).map(() => `
+                <div class="dashboard-metric">
+                    <div class="dashboard-metric-value is-loading">0</div>
+                    <div class="dashboard-metric-label">&nbsp;</div>
+                </div>
+            `).join('');
+            card.querySelector('.dashboard-card-trend').innerHTML = '';
+        });
+    }
+
+    function renderDashboard(payload) {
+        if (payload.ts !== null && payload.ts !== undefined) {
+            state.ts = payload.ts;
+        }
+
+        populateTsOptions(payload.available_years, payload.ts);
+
+        els.dashboardStatus.textContent = '';
+
+        const cardsById = new Map((payload.cards || []).map((card) => [card.id, card]));
+
+        els.dashboardCards.forEach((el) => {
+            const card = cardsById.get(el.dataset.cardId);
+
+            if (card) {
+                renderDashboardCard(el, card);
             }
+        });
+    }
+
+    function renderDashboardCard(el, card) {
+        el.querySelector('.dashboard-card-title').textContent = card.title;
+        const metricsEl = el.querySelector('.dashboard-card-metrics');
+        const trendEl = el.querySelector('.dashboard-card-trend');
+
+        if (card.error) {
+            metricsEl.innerHTML = '<p class="dashboard-card-notice dashboard-card-notice-error">Data belum bisa ditampilkan.</p>';
+            trendEl.innerHTML = '';
             return;
         }
 
-        if (state.role === 'fakultas' && state.fakultasId === 'all' && state.fakultas[0]) {
-            state.fakultasId = String(state.fakultas[0].id);
-            state.programStudiId = 'all';
+        if (card.notice) {
+            metricsEl.innerHTML = `<p class="dashboard-card-notice">${escapeHtml(card.notice)}</p>`;
+            trendEl.innerHTML = '';
+            return;
         }
 
-        if (state.role === 'prodi' && state.programStudiId === 'all' && state.programStudi[0]) {
-            state.programStudiId = String(state.programStudi[0].id);
-        }
+        metricsEl.innerHTML = card.metrics.map((metric) => `
+            <div class="dashboard-metric">
+                <div class="dashboard-metric-value">${formatNumber(metric.value)}</div>
+                <div class="dashboard-metric-label">${escapeHtml(metric.label)}</div>
+            </div>
+        `).join('');
 
-        await loadFakultas();
-        await loadProgramStudi();
-        await loadSummary();
-    });
+        trendEl.innerHTML = card.trend ? dashboardSparkline(card.trend) : '';
+    }
 
-    els.maFakultas.addEventListener('change', () => {
-        maFilter.fakultasId = els.maFakultas.value;
+    function dashboardSparkline(trend) {
+        const values = trend.values.map(Number);
+        const min = Math.min(...values);
+        const max = Math.max(...values);
+        const range = max - min || 1;
+        const width = 120;
+        const height = 32;
+        const step = width / (values.length - 1 || 1);
 
-        // Ganti fakultas: reset prodi. Role prodi wajib punya prodi terpilih,
-        // jadi jatuhkan ke prodi pertama di fakultas baru.
-        if (state.role === 'prodi') {
-            maFilter.prodiId = maProdiOptions()[0]?.id ?? 'all';
-        } else {
-            maFilter.prodiId = 'all';
-        }
+        const points = values
+            .map((value, index) => `${(index * step).toFixed(1)},${(height - ((value - min) / range) * height).toFixed(1)}`)
+            .join(' ');
 
-        renderMaFilters();
-        renderMaSummary();
-    });
+        return `
+            <svg class="dashboard-sparkline" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-hidden="true">
+                <polyline points="${points}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <div class="dashboard-sparkline-labels">
+                ${trend.labels.map((label) => `<span>${escapeHtml(label)}</span>`).join('')}
+            </div>
+        `;
+    }
 
-    els.maProgramStudi.addEventListener('change', () => {
-        maFilter.prodiId = els.maProgramStudi.value;
-        renderMaActiveUnit();
-        renderMaSummary();
+    function renderDashboardError(message) {
+        els.dashboardStatus.innerHTML = `<span class="font-medium text-warn">${escapeHtml(message)}</span>`;
+    }
+
+    els.dashboardCards.forEach((card) => {
+        card.addEventListener('click', () => activateTable(card.dataset.tableId));
     });
 
     els.ts.addEventListener('change', () => {
         state.ts = Number(els.ts.value);
-        loadSummary();
-    });
-
-    els.fakultas.addEventListener('change', async () => {
-        state.fakultasId = els.fakultas.value;
-        state.programStudiId = 'all';
-        renderFakultasSelect();
-        await loadProgramStudi();
-        await loadSummary();
-    });
-
-    els.programStudi.addEventListener('change', () => {
-        state.programStudiId = els.programStudi.value;
-        renderProgramStudiSelect();
-        loadSummary();
+        loadActivePage();
     });
 
     els.tableBody.addEventListener('click', (event) => {
@@ -1319,9 +1177,8 @@
     }
 
     initTsOptions();
-    loadFakultas()
-        .then(loadProgramStudi)
-        .then(loadSummary)
+    loadProgramStudi()
+        .then(() => activateTable(currentTableId))
         .catch((error) => renderError(error.message));
 </script>
 @endsection

@@ -21,16 +21,27 @@ class SaptoNewTablesTest extends TestCase
         parent::setUp();
 
         Cache::flush();
+        $this->withSession(['sso_user' => [
+            'sub' => 'test', 'name' => 'Test', 'email' => 'test@example.test',
+            'nomor_identitas' => '199999999999999001',
+        ]]);
         $this->seedReference();
         $this->seedLulusan();
         $this->seedIntake();
         $this->seedPenugasan();
+
+        // Auto-scopes this session to P1 (kode 55201) via the korprodi
+        // mapping — X-SAPTO-* headers are no longer trusted for scope.
+        \App\Models\Korprodi::create([
+            'nip' => '199999999999999001',
+            'nama' => 'Test Korprodi',
+            'kode_program_studi' => '55201',
+        ]);
     }
 
     public function test_ipk_lulusan_rows_per_graduation_year(): void
     {
-        $response = $this->withHeader('X-SAPTO-Role', 'universitas')
-            ->getJson('/api/sapto/tables/ipk-lulusan/summary?ts=2024')
+        $response = $this->getJson('/api/sapto/tables/ipk-lulusan/summary?ts=2024')
             ->assertOk()
             ->assertJsonPath('table_code', '8.a')
             // Kolom mengikuti format BAN-PT: tahun lulus + IPK min/rata/maks.
@@ -49,10 +60,11 @@ class SaptoNewTablesTest extends TestCase
         $ts1 = $rows->firstWhere('tahun_lulus', '2023 (TS-1)');
         $this->assertSame(1, $ts1['jumlah_lulusan']);
 
-        // TS (2024): 4 lulusan (P1 4.0, P1 3.5, P2 3.8, P1 IPK 0). IPK 0 & baris
-        // "Putus Studi" tak masuk statistik -> min 3.5, maks 4.0.
+        // TS (2024), scope P1: 3 lulusan (P1 4.0, P1 3.5, P1 IPK 0; P2 3.8 di
+        // luar scope). IPK 0 & baris "Putus Studi" tak masuk statistik -> min
+        // 3.5, maks 4.0.
         $tsRow = $rows->firstWhere('tahun_lulus', '2024 (TS)');
-        $this->assertSame(4, $tsRow['jumlah_lulusan']);
+        $this->assertSame(3, $tsRow['jumlah_lulusan']);
         $this->assertEquals(3.5, $tsRow['ipk_min']);
         $this->assertEquals(4.0, $tsRow['ipk_maks']);
     }
@@ -72,46 +84,27 @@ class SaptoNewTablesTest extends TestCase
             'tanggal_keluar' => '15-06-2024',
         ]);
 
-        $tsRow = collect($this->withHeader('X-SAPTO-Role', 'universitas')
-            ->getJson('/api/sapto/tables/ipk-lulusan/summary?ts=2024')
+        $tsRow = collect($this->getJson('/api/sapto/tables/ipk-lulusan/summary?ts=2024')
             ->assertOk()
             ->json('rows'))->firstWhere('tahun_lulus', '2024 (TS)');
 
-        // 4 dari seeder + 1 hasil pemulihan dari tanggal_keluar = 5.
-        $this->assertSame(5, $tsRow['jumlah_lulusan']);
+        // 3 dari seeder (scope P1) + 1 hasil pemulihan dari tanggal_keluar = 4.
+        $this->assertSame(4, $tsRow['jumlah_lulusan']);
     }
 
     public function test_ipk_lulusan_respects_fakultas_scope(): void
     {
-        // Fakultas Ilmu Komputer -> hanya P1. TS 2024 P1: 4.0, 3.5, & IPK 0 ->
-        // jumlah 3 (P2 3.8 tidak masuk karena beda fakultas).
-        $tsRow = collect($this->withHeaders([
-            'X-SAPTO-Role' => 'fakultas',
-            'X-SAPTO-Fakultas-Id' => 'fakultas-ilmu-komputer',
-        ])->getJson('/api/sapto/tables/ipk-lulusan/summary?ts=2024')
-            ->assertOk()
-            ->assertJsonPath('fakultas.id', 'fakultas-ilmu-komputer')
-            ->json('rows'));
-
-        $this->assertSame(3, collect($tsRow)->firstWhere('tahun_lulus', '2024 (TS)')['jumlah_lulusan']);
+        $this->markTestSkipped('Fakultas-wide scope is pending entitlement data — see SaptoUserContext::fromRequest().');
     }
 
     public function test_masa_studi_requires_program_studi(): void
     {
-        // Tanpa prodi terpilih -> pesan pengarah, tabel kosong.
-        $this->withHeader('X-SAPTO-Role', 'universitas')
-            ->getJson('/api/sapto/tables/masa-studi/summary?ts=2024')
-            ->assertOk()
-            ->assertJsonPath('rows', [])
-            ->assertJsonPath('notice', fn ($notice): bool => is_string($notice) && str_contains($notice, 'program studi'));
+        $this->markTestSkipped('Every session now always resolves to a specific program studi — see SaptoUserContext::fromRequest().');
     }
 
     public function test_masa_studi_cohort_matrix_for_selected_prodi(): void
     {
-        $response = $this->withHeaders([
-            'X-SAPTO-Role' => 'prodi',
-            'X-SAPTO-Program-Studi-Id' => 'P1',
-        ])->getJson('/api/sapto/tables/masa-studi/summary?ts=2024')
+        $response = $this->getJson('/api/sapto/tables/masa-studi/summary?ts=2024')
             ->assertOk()
             ->assertJsonPath('table_code', '8.c')
             ->assertJsonPath('program_studi.id', 'P1');
@@ -134,8 +127,13 @@ class SaptoNewTablesTest extends TestCase
 
     public function test_dosen_tetap_lists_homebase_roster(): void
     {
-        $response = $this->withHeader('X-SAPTO-Role', 'universitas')
-            ->getJson('/api/sapto/tables/dosen-tetap-pt/summary?ts=2024')
+        DB::table('riwayat_pendidikan_dosen')->insert([
+            // D1 punya S2 dan S3 -> di kartu dihitung S3 saja, bukan dua-duanya.
+            ['id_dosen' => 'D1', 'nama_jenjang_pendidikan' => 'S2', 'nama_bidang_studi' => 'Ilmu Komputer', 'nama_perguruan_tinggi' => 'Universitas Indonesia', 'tahun_lulus' => '2009'],
+            ['id_dosen' => 'D1', 'nama_jenjang_pendidikan' => 'S3', 'nama_bidang_studi' => 'Ilmu Komputer', 'nama_perguruan_tinggi' => 'Universitas Gadjah Mada', 'tahun_lulus' => '2015'],
+        ]);
+
+        $response = $this->getJson('/api/sapto/tables/dosen-tetap-pt/summary?ts=2024')
             ->assertOk()
             ->assertJsonPath('table_code', '3.a.1')
             // Kolom mengikuti format BAN-PT Tabel 3.a.1.
@@ -143,22 +141,78 @@ class SaptoNewTablesTest extends TestCase
 
         $rows = collect($response->json('rows'));
 
-        // D1 (P) & D2 (L) homebase; D3 bukan homebase; duplikat D1 dihitung sekali.
-        $this->assertSame(2, $rows->count());
-        $this->assertEqualsCanonicalizing(['D1', 'D2'], $rows->pluck('dosen_id')->all());
+        // Scope P1: hanya D1 homebase (D2 homebase-nya P2, di luar scope; D3
+        // bukan homebase). Duplikat D1 dihitung sekali.
+        $this->assertSame(1, $rows->count());
+        $this->assertEqualsCanonicalizing(['D1'], $rows->pluck('dosen_id')->all());
 
         $metrics = collect($response->json('metrics'))->pluck('value', 'label');
-        $this->assertSame(2, $metrics['Total dosen tetap']);
-        $this->assertSame(1, $metrics['Laki-laki']);
-        $this->assertSame(1, $metrics['Perempuan']);
+        $this->assertSame(1, $metrics['Total dosen tetap']);
+        $this->assertSame(0, $metrics['Pendidikan S2 (Magister)']);
+        $this->assertSame(1, $metrics['Pendidikan S3 (Doktor)']);
+    }
+
+    public function test_dosen_tetap_includes_education_jabatan_and_sertifikat(): void
+    {
+        DB::table('riwayat_pendidikan_dosen')->insert([
+            ['id_dosen' => 'D1', 'nama_jenjang_pendidikan' => 'S1', 'nama_bidang_studi' => 'Teknik Informatika', 'nama_perguruan_tinggi' => 'Universitas Sriwijaya', 'tahun_lulus' => '2005'],
+            ['id_dosen' => 'D1', 'nama_jenjang_pendidikan' => 'S2', 'nama_bidang_studi' => 'Ilmu Komputer', 'nama_perguruan_tinggi' => 'Universitas Indonesia', 'tahun_lulus' => '2009'],
+            ['id_dosen' => 'D1', 'nama_jenjang_pendidikan' => 'S3', 'nama_bidang_studi' => 'Ilmu Komputer', 'nama_perguruan_tinggi' => 'Universitas Gadjah Mada', 'tahun_lulus' => '2015'],
+        ]);
+
+        DB::table('riwayat_fungsional_dosen')->insert([
+            ['id_dosen' => 'D1', 'nama_jabatan_fungsional' => 'Lektor', 'mulai_sk_jabatan' => '2016-01-01'],
+            // Baris terbaru -> harus menang atas 'Lektor', dan "Profesor" dipetakan ke "Guru Besar".
+            ['id_dosen' => 'D1', 'nama_jabatan_fungsional' => 'Profesor', 'mulai_sk_jabatan' => '2020-01-01'],
+        ]);
+
+        DB::table('riwayat_sertifikasi_dosen')->insert([
+            ['id_dosen' => 'D1', 'nama_jenis_sertifikasi' => 'Sertifikasi Dosen', 'tahun_sertifikasi' => '2017'],
+            ['id_dosen' => 'D1', 'nama_jenis_sertifikasi' => 'Sertifikasi Kompetensi', 'tahun_sertifikasi' => '2021'],
+            // Asesor BKD sengaja tak dipetakan ke kolom pendidik atau kompetensi.
+            ['id_dosen' => 'D1', 'nama_jenis_sertifikasi' => 'Sertifikasi Asesor BKD', 'tahun_sertifikasi' => '2022'],
+        ]);
+
+        // D4 homebase P1, tanpa riwayat sama sekali -> menguji kolom tambahan
+        // default null ("-" di UI). D2 (homebase P2) di luar scope P1.
+        DB::table('list_penugasan_dosen')->insert([
+            'id_dosen' => 'D4', 'nama_dosen' => 'Dr. Dewi', 'nidn' => '444', 'jk' => 'P', 'id_prodi' => 'P1', 'nama_program_studi' => 'Teknik Informatika', 'a_sp_homebase' => '1', 'nama_tahun_ajaran' => '2024/2025',
+        ]);
+
+        $rows = collect($this->getJson('/api/sapto/tables/dosen-tetap-pt/summary?ts=2024')
+            ->assertOk()
+            ->json('rows'));
+
+        $d1 = $rows->firstWhere('dosen_id', 'D1');
+        $this->assertSame('Ilmu Komputer - Universitas Indonesia', $d1['pendidikan_magister']);
+        $this->assertSame('Ilmu Komputer - Universitas Gadjah Mada', $d1['pendidikan_doktor']);
+        $this->assertSame('Ilmu Komputer', $d1['bidang_keahlian']);
+        $this->assertSame('Guru Besar', $d1['jabatan_akademik']);
+        $this->assertSame('Sertifikasi Dosen (2017)', $d1['sertifikat_pendidik']);
+        $this->assertSame('Sertifikasi Kompetensi (2021)', $d1['sertifikat_kompetensi']);
+
+        // D4 tak punya riwayat sama sekali -> semua kolom tambahan null ("-" di UI).
+        $d4 = $rows->firstWhere('dosen_id', 'D4');
+        $this->assertNull($d4['pendidikan_magister']);
+        $this->assertNull($d4['jabatan_akademik']);
+        $this->assertNull($d4['sertifikat_pendidik']);
     }
 
     public function test_dosen_tetap_respects_prodi_scope(): void
     {
-        $rows = collect($this->withHeaders([
-            'X-SAPTO-Role' => 'prodi',
-            'X-SAPTO-Program-Studi-Id' => 'P2',
-        ])->getJson('/api/sapto/tables/dosen-tetap-pt/summary?ts=2024')
+        // Scope kini ditentukan server-side per akun (korprodi), bukan header
+        // klien — pakai sesi korprodi P2 terpisah untuk menguji sisi lain.
+        $this->withSession(['sso_user' => [
+            'sub' => 'test-p2', 'name' => 'Test P2', 'email' => 'test-p2@example.test',
+            'nomor_identitas' => '199999999999999002',
+        ]]);
+        \App\Models\Korprodi::create([
+            'nip' => '199999999999999002',
+            'nama' => 'Test Korprodi P2',
+            'kode_program_studi' => '61101',
+        ]);
+
+        $rows = collect($this->getJson('/api/sapto/tables/dosen-tetap-pt/summary?ts=2024')
             ->assertOk()
             ->assertJsonPath('program_studi.id', 'P2')
             ->json('rows'));
@@ -170,8 +224,7 @@ class SaptoNewTablesTest extends TestCase
     public function test_ipk_lulusan_defaults_ts_to_latest_year(): void
     {
         // Seeder punya lulusan 2024 & 2023 -> tahun terbaru (2024) jadi default.
-        $this->withHeader('X-SAPTO-Role', 'universitas')
-            ->getJson('/api/sapto/tables/ipk-lulusan/summary')
+        $this->getJson('/api/sapto/tables/ipk-lulusan/summary')
             ->assertOk()
             ->assertJsonPath('ts', 2024)
             ->assertJsonPath('available_years', [2024, 2023]);

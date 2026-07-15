@@ -68,6 +68,19 @@
     </div>
 
     <nav id="menu" class="menu flex-1 space-y-4 overflow-y-auto px-3 py-3" aria-label="Menu tabel SAPTO">
+        <div class="space-y-0.5">
+            <button
+                type="button"
+                data-table-id="dashboard"
+                class="menu-item {{ ($activeTableId ?? 'dashboard') === 'dashboard' ? 'is-active' : '' }}"
+            >
+                <svg class="mr-2 h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 9.5 12 3l9 6.5V21a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z" />
+                </svg>
+                Dashboard
+            </button>
+        </div>
+
         @foreach ($groups as $groupKey => $items)
             <div class="menu-group" data-menu-group>
                 <div class="mb-1 flex items-center gap-2 px-3">
