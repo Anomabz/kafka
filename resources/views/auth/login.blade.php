@@ -602,6 +602,35 @@
         </div>
     </div>
 
+    @if ($notKorprodiHint)
+        <div class="auth-modal-backdrop" id="not-korprodi-backdrop">
+            <div
+                class="auth-modal glass-strong rounded-2xl"
+                role="alertdialog"
+                aria-modal="true"
+                aria-labelledby="not-korprodi-title"
+                aria-describedby="not-korprodi-desc"
+                tabindex="-1"
+            >
+                <button type="button" id="not-korprodi-close" class="theme-toggle auth-modal-close" aria-label="Tutup">
+                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                    </svg>
+                </button>
+
+                <div class="auth-modal-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/>
+                    </svg>
+                </div>
+                <h2 id="not-korprodi-title" class="auth-modal-title">Akses SAPTO ditolak</h2>
+                <p id="not-korprodi-desc" class="auth-modal-desc">
+                    Akun {{ $notKorprodiHint }} valid di SSO, tapi belum terdaftar sebagai koordinator program studi (korprodi) di SAPTO. Hubungi admin SAPTO jika ini keliru.
+                </p>
+            </div>
+        </div>
+    @endif
+
     @if ($unregisteredHint)
         @php($ssoRedirectUrl = route('sso.login', ['login_hint' => $unregisteredHint]))
         <div class="auth-modal-backdrop" id="unregistered-backdrop">
@@ -665,6 +694,17 @@
                 form.addEventListener('submit', function () {
                     submitBtn.disabled = true;
                     submitBtn.textContent = 'Memproses…';
+                });
+            }
+
+            var notKorprodiBackdrop = document.getElementById('not-korprodi-backdrop');
+            var notKorprodiClose = document.getElementById('not-korprodi-close');
+            if (notKorprodiBackdrop) {
+                var notKorprodiModal = notKorprodiBackdrop.querySelector('.auth-modal');
+                if (notKorprodiModal) notKorprodiModal.focus();
+                if (notKorprodiClose) notKorprodiClose.addEventListener('click', function () { notKorprodiBackdrop.remove(); });
+                document.addEventListener('keydown', function (e) {
+                    if (e.key === 'Escape') notKorprodiBackdrop.remove();
                 });
             }
 

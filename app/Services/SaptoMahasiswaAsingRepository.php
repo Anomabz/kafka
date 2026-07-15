@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -29,6 +30,37 @@ class SaptoMahasiswaAsingRepository
      * @return array{tahun_akademik: array{ts_2: string, ts_1: string, ts: string}, total_prodi: int, data: array<int, object>}
      */
     public function summary(?string $fakultasId = null, ?string $programStudiId = null): array
+    {
+        // Query mentahnya (join 3 tabel ratusan ribu baris) tidak berubah per
+        // fakultas/prodi — hasilnya sama untuk semua akun, filter scope-nya
+        // baru diterapkan di PHP setelah ini. Jadi di-cache satu kali secara
+        // global (bukan per-scope) supaya akun manapun yang pertama membuka
+        // dashboard/tabel ini menanggung biaya query-nya, bukan tiap akun.
+        $unscoped = Cache::remember('sapto:mahasiswa-asing:v1', $this->cacheTtl(), fn (): array => $this->queryUnscoped());
+
+        $rows = array_values(array_filter($unscoped['rows'], function (array $row) use ($fakultasId, $programStudiId): bool {
+            if ($fakultasId !== null && $row['fakultas_id'] !== $fakultasId) {
+                return false;
+            }
+
+            if ($programStudiId !== null && $row['id_prodi'] !== $programStudiId) {
+                return false;
+            }
+
+            return true;
+        }));
+
+        return [
+            'tahun_akademik' => $unscoped['tahun_akademik'],
+            'total_prodi' => count($rows),
+            'data' => array_map(fn (array $row): object => (object) $row, $rows),
+        ];
+    }
+
+    /**
+     * @return array{tahun_akademik: array{ts_2: string, ts_1: string, ts: string}, rows: array<int, array<string, mixed>>}
+     */
+    private function queryUnscoped(): array
     {
         $ts = '2025';
         $ts1 = '2024';
@@ -78,37 +110,22 @@ class SaptoMahasiswaAsingRepository
 
         $programIndex = $this->client->programStudis()->keyBy('id');
 
-        $rows = array_map(function (object $row) use ($programIndex): object {
-            $program = $programIndex->get((string) $row->id_prodi);
-            $row->fakultas = $program['fakultas'] ?? 'Belum Dipetakan';
-            $row->fakultas_id = $program['fakultas_id'] ?? 'belum-dipetakan';
+        $rows = array_map(function (array $row) use ($programIndex): array {
+            $program = $programIndex->get((string) $row['id_prodi']);
+            $row['fakultas'] = $program['fakultas'] ?? 'Belum Dipetakan';
+            $row['fakultas_id'] = $program['fakultas_id'] ?? 'belum-dipetakan';
 
             return $row;
-        }, $data);
-
-        // Scope fakultas/prodi: sama seperti maVisibleRows() di klien
-        // (resources/views/sapto.blade.php), dipindah ke sini supaya
-        // SaptoDashboardRepository bisa discope tanpa fetch-semua-lalu-
-        // filter-di-JS. Endpoint /sapto/mahasiswa-asing yang sudah ada tetap
-        // memanggil summary() tanpa argumen (null, null = tidak difilter),
-        // jadi perilakunya tidak berubah.
-        $rows = array_values(array_filter($rows, function (object $row) use ($fakultasId, $programStudiId): bool {
-            if ($fakultasId !== null && $row->fakultas_id !== $fakultasId) {
-                return false;
-            }
-
-            if ($programStudiId !== null && (string) $row->id_prodi !== $programStudiId) {
-                return false;
-            }
-
-            return true;
-        }));
+        }, array_map(fn (object $row): array => (array) $row, $data));
 
         return [
             'tahun_akademik' => ['ts_2' => $ts2, 'ts_1' => $ts1, 'ts' => $ts],
-            'total_prodi' => count($rows),
-            'data' => $rows,
+            'rows' => $rows,
         ];
     }
 
+    private function cacheTtl(): int
+    {
+        return max(1, (int) config('services.pangkalan_data.cache_ttl', 3600));
+    }
 }
