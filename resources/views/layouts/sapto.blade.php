@@ -4,8 +4,9 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" id="theme-color-meta" content="#e7ecf5">
-    <title>@yield('title', 'SAPTO')</title>
+    <title>@yield('title', 'SAPTO — Sistem Aplikasi Pelaporan Tridharma Universitas Sriwijaya')</title>
     <link rel="icon" href="{{ asset('images/logo-unsri.png') }}" type="image/png">
+    @include('components.seo-meta')
     {{-- Set the theme before first paint to avoid a light/dark flash. Only an
          explicit user choice is stored; otherwise the OS preference drives it
          through the prefers-color-scheme rules in app.css. Also colours the

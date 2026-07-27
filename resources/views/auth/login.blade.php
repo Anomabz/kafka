@@ -4,8 +4,9 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" id="theme-color-meta" content="#e7ecf5">
-    <title>Masuk — SAPTO</title>
+    <title>Masuk — SAPTO Universitas Sriwijaya</title>
     <link rel="icon" href="{{ asset('images/logo-unsri.png') }}" type="image/png">
+    @include('components.seo-meta')
     <script>
         (function () {
             try {

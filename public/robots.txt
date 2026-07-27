@@ -1,2 +1,9 @@
 User-agent: *
-Disallow:
+Allow: /$
+Allow: /login
+Disallow: /api/
+Disallow: /sapto/
+Disallow: /admin/
+Disallow: /auth/
+
+Sitemap: https://sapto.unsri.ac.id/sitemap.xml
