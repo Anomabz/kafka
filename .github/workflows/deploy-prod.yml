@@ -32,9 +32,17 @@ jobs:
           
           # Sekarang sshpass -e akan langsung mengenali password dari variabel di atas
           sshpass -e ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} << 'EOF'
+            # `set -e` wajib: tanpa ini, `docker compose up --build` boleh gagal
+            # dan exit code SSH tetap diambil dari perintah TERAKHIR, jadi deploy
+            # yang rusak dilaporkan hijau. Persis begini Dockerfile rusak
+            # (COPY cert yang filenya tidak ada) bisa lolos tanpa ketahuan.
+            set -e
             cd /home/sapto/sapto-prod
             git pull origin dev-prod --no-rebase
             docker compose up -d --build
-            docker compose exec -T app npm install
-            docker compose exec -T app npm run build
+            # Container `app` dibangun FROM composer:2 — tidak punya node/npm,
+            # jadi `docker compose exec app npm ...` selalu exit 127 dan asset
+            # tidak pernah ter-build (sempat beku 12 hari tanpa ketahuan).
+            # Pakai container node sekali pakai; vite 8 butuh node >= 22.12.
+            docker run --rm -v "$PWD":/app -w /app node:22-alpine sh -c 'npm ci && npm run build'
           EOF

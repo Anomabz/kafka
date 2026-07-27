@@ -2,6 +2,7 @@ services:
   app:
     build:
       context: .
+    restart: unless-stopped
     ports:
       - "8020:8000"
     volumes:
@@ -10,10 +11,8 @@ services:
       APP_ENV: local
       APP_DEBUG: "true"
       RUN_MIGRATIONS: "${RUN_MIGRATIONS:-true}"
-      # Diarahkan ke db milik project "sapto" (sapto-db-1) yang sudah berisi
-      # data hasil sync Feeder, bukan db lokal project ini yang masih kosong.
       DB_CONNECTION: mysql
-      DB_HOST: sapto-db-1
+      DB_HOST: db
       DB_PORT: 3306
       DB_DATABASE: sapto_db
       DB_USERNAME: root
@@ -34,9 +33,9 @@ services:
       SAPTO_API_DATA_MAX_PAGES: "${SAPTO_API_DATA_MAX_PAGES:-10}"
       SAPTO_API_ACTIVITY_LOOKUP_LIMIT: "${SAPTO_API_ACTIVITY_LOOKUP_LIMIT:-600}"
       SAPTO_API_ACTIVITY_POOL_SIZE: "${SAPTO_API_ACTIVITY_POOL_SIZE:-20}"
-    networks:
-      - default
-      - sapto_default
+    depends_on:
+      db:
+        condition: service_healthy
 
   db:
     image: mysql:8.0
@@ -44,8 +43,18 @@ services:
     environment:
       MYSQL_DATABASE: sapto_db
       MYSQL_ROOT_PASSWORD: rootpassword
-    ports:
-      - "3307:3306"
+    # start_period longgar: db ini ~2GB, InnoDB/XA recovery setelah reboot
+    # kotor pernah butuh ~90 detik sebelum menerima koneksi.
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-prootpassword"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    # Sengaja tidak publish port ke host: 3306/3307/3308/3309 sudah dipakai
+    # container project lain yang restart:always, jadi setiap reboot db ini
+    # kalah rebutan port dan mati (exit 255). app & phpmyadmin cukup lewat
+    # network compose. Akses dari host: pakai phpmyadmin di :8086.
     volumes:
       - mysql_data:/var/lib/mysql
 
@@ -53,17 +62,13 @@ services:
     image: phpmyadmin/phpmyadmin
     restart: always
     ports:
-      - "8085:80"
+      - "8086:80"
     environment:
       PMA_HOST: db
       MYSQL_ROOT_PASSWORD: rootpassword
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
 volumes:
   mysql_data:
-
-networks:
-  default:
-  sapto_default:
-    external: true
