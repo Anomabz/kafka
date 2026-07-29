@@ -10,8 +10,13 @@ use App\Http\Controllers\Api\Sapto\KerjasamaPendidikanController;
 use App\Http\Controllers\Api\Sapto\KerjasamaPenelitianController;
 use App\Http\Controllers\Api\Sapto\KerjasamaPkmController;
 use App\Http\Controllers\Api\Sapto\MasaStudiController;
+use App\Http\Controllers\Api\Sapto\PagelaranDtpsController;
 use App\Http\Controllers\Api\Sapto\PenelitianDtpsController;
+use App\Http\Controllers\Api\Sapto\PrestasiAkademikController;
+use App\Http\Controllers\Api\Sapto\PrestasiNonAkademikController;
 use App\Http\Controllers\Api\Sapto\ProgramStudiController;
+use App\Http\Controllers\Api\Sapto\PublikasiIlmiahDtpsController;
+use App\Http\Controllers\Api\Sapto\WaktuTungguController;
 use Illuminate\Support\Facades\Route;
 
 // 'web' adds the session/cookie stack so the SSO login (session-based) is
@@ -35,4 +40,9 @@ Route::middleware(['web', 'sso.auth'])->prefix('sapto')->group(function (): void
     Route::get('/tables/kerjasama-penelitian/summary', [KerjasamaPenelitianController::class, 'summary']);
     Route::get('/tables/kerjasama-pkm/summary', [KerjasamaPkmController::class, 'summary']);
     Route::get('/tables/penelitian-dtps/summary', [PenelitianDtpsController::class, 'summary']);
+    Route::get('/tables/publikasi-ilmiah-dtps/summary', [PublikasiIlmiahDtpsController::class, 'summary']);
+    Route::get('/tables/pagelaran-dtps/summary', [PagelaranDtpsController::class, 'summary']);
+    Route::get('/tables/waktu-tunggu/summary', [WaktuTungguController::class, 'summary']);
+    Route::get('/tables/prestasi-akademik/summary', [PrestasiAkademikController::class, 'summary']);
+    Route::get('/tables/prestasi-non-akademik/summary', [PrestasiNonAkademikController::class, 'summary']);
 });

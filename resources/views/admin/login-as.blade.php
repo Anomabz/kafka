@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" id="theme-color-meta" content="#e7ecf5">
     <title>Login sebagai — SAPTO Admin</title>
-    <link rel="icon" href="{{ asset('images/logo-unsri.png') }}" type="image/png">
+    <link rel="icon" href="{{ asset('images/logo-unsri.webp') }}" type="image/webp">
     <script>
         (function () {
             try {
@@ -15,7 +15,7 @@
                 }
                 document.documentElement.setAttribute('data-theme', t);
                 var m = document.getElementById('theme-color-meta');
-                if (m) m.setAttribute('content', t === 'dark' ? '#060a13' : '#e7ecf5');
+                if (m) m.setAttribute('content', t === 'dark' ? '#0a0a0c' : '#e7ecf5');
             } catch (e) {}
         })();
     </script>

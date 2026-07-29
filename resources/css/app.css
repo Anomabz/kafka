@@ -18,7 +18,7 @@
  * via color-mix; translucent glass fills live in the non-utility vars.
  */
 @theme {
-    --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
 
     /* Light theme defaults — overridden under [data-theme="dark"] below. */
     --color-ink: #0f1b2d;
@@ -27,10 +27,10 @@
     --color-surface: #ffffff;
     --color-line: rgba(15, 27, 45, 0.10);
 
-    --color-accent: #0f9d8b;
-    --color-accent-dark: #0a6b5e;
-    --color-accent-soft: rgba(15, 157, 139, 0.12);
-    --color-accent-line: rgba(15, 157, 139, 0.30);
+    --color-accent: #4338ca;
+    --color-accent-dark: #3730a3;
+    --color-accent-soft: rgba(67, 56, 202, 0.12);
+    --color-accent-line: rgba(67, 56, 202, 0.30);
 
     --color-focus: #2f6fed;
 
@@ -73,11 +73,11 @@
     --side-dim: #5b6b82;
     --side-faint: #94a3b8;
     --side-hover: rgba(15, 27, 45, 0.05);
-    --side-active: rgba(15, 157, 139, 0.14);
+    --side-active: rgba(67, 56, 202, 0.14);
     --side-border: rgba(15, 27, 45, 0.08);
 
     /* Backdrop wash — very subtle, near-neutral so panels read clean. */
-    --aura-1: rgba(15, 157, 139, 0.08);
+    --aura-1: rgba(67, 56, 202, 0.08);
     --aura-2: rgba(100, 116, 139, 0.07);
 }
 
@@ -85,16 +85,16 @@
 :root[data-theme='dark'] {
     color-scheme: dark;
 
-    --color-ink: #e8eef8;
-    --color-muted: #94a3ba;
-    --color-canvas: #060a13;
-    --color-surface: #131c2e;
-    --color-line: rgba(255, 255, 255, 0.10);
+    --color-ink: #ececee;
+    --color-muted: #9b9ba3;
+    --color-canvas: #0a0a0c;
+    --color-surface: #151517;
+    --color-line: rgba(255, 255, 255, 0.09);
 
-    --color-accent: #3fab9c;
-    --color-accent-dark: #97cec5;
-    --color-accent-soft: rgba(63, 171, 156, 0.16);
-    --color-accent-line: rgba(63, 171, 156, 0.30);
+    --color-accent: #818cf8;
+    --color-accent-dark: #c7d2fe;
+    --color-accent-soft: rgba(129, 140, 248, 0.16);
+    --color-accent-line: rgba(129, 140, 248, 0.30);
 
     --color-focus: #7c93d6;
 
@@ -107,8 +107,8 @@
 
     --color-slate-soft: rgba(255, 255, 255, 0.07);
 
-    --glass-bg: rgba(22, 32, 52, 0.55);
-    --glass-bg-strong: rgba(20, 29, 48, 0.74);
+    --glass-bg: rgba(20, 20, 22, 0.55);
+    --glass-bg-strong: rgba(18, 18, 20, 0.74);
     --glass-2: rgba(255, 255, 255, 0.04);
     --glass-border: rgba(255, 255, 255, 0.10);
     --glass-hi: rgba(255, 255, 255, 0.12);
@@ -120,18 +120,18 @@
     --input-bg: rgba(255, 255, 255, 0.05);
     --input-border: rgba(255, 255, 255, 0.14);
 
-    --scrim: rgba(2, 6, 14, 0.55);
+    --scrim: rgba(4, 4, 5, 0.6);
 
-    --side-bg: rgba(13, 20, 34, 0.62);
-    --side-text: #e8eef8;
-    --side-dim: #8595ad;
-    --side-faint: #5c6b83;
+    --side-bg: rgba(14, 14, 16, 0.65);
+    --side-text: #ececee;
+    --side-dim: #9b9ba3;
+    --side-faint: #6c6c72;
     --side-hover: rgba(255, 255, 255, 0.06);
-    --side-active: rgba(63, 171, 156, 0.14);
+    --side-active: rgba(129, 140, 248, 0.14);
     --side-border: rgba(255, 255, 255, 0.08);
 
-    --aura-1: rgba(63, 171, 156, 0.06);
-    --aura-2: rgba(100, 116, 139, 0.09);
+    --aura-1: rgba(129, 140, 248, 0.045);
+    --aura-2: rgba(100, 116, 139, 0.06);
 }
 
 /* Follow the OS when the user hasn't picked a theme yet (no data-theme set). */
@@ -139,15 +139,15 @@
     :root:not([data-theme]) {
         color-scheme: dark;
 
-        --color-ink: #e8eef8;
-        --color-muted: #94a3ba;
-        --color-canvas: #060a13;
-        --color-surface: #131c2e;
-        --color-line: rgba(255, 255, 255, 0.10);
-        --color-accent: #3fab9c;
-        --color-accent-dark: #97cec5;
-        --color-accent-soft: rgba(63, 171, 156, 0.16);
-        --color-accent-line: rgba(63, 171, 156, 0.30);
+        --color-ink: #ececee;
+        --color-muted: #9b9ba3;
+        --color-canvas: #0a0a0c;
+        --color-surface: #151517;
+        --color-line: rgba(255, 255, 255, 0.09);
+        --color-accent: #818cf8;
+        --color-accent-dark: #c7d2fe;
+        --color-accent-soft: rgba(129, 140, 248, 0.16);
+        --color-accent-line: rgba(129, 140, 248, 0.30);
         --color-focus: #7c93d6;
         --color-info: #7c93d6;
         --color-info-soft: rgba(124, 147, 214, 0.16);
@@ -156,8 +156,8 @@
         --color-warn-line: rgba(207, 159, 74, 0.30);
         --color-slate-soft: rgba(255, 255, 255, 0.07);
 
-        --glass-bg: rgba(22, 32, 52, 0.55);
-        --glass-bg-strong: rgba(20, 29, 48, 0.74);
+        --glass-bg: rgba(20, 20, 22, 0.55);
+        --glass-bg-strong: rgba(18, 18, 20, 0.74);
         --glass-2: rgba(255, 255, 255, 0.04);
         --glass-border: rgba(255, 255, 255, 0.10);
         --glass-hi: rgba(255, 255, 255, 0.12);
@@ -167,16 +167,16 @@
         --skeleton: rgba(255, 255, 255, 0.10);
         --input-bg: rgba(255, 255, 255, 0.05);
         --input-border: rgba(255, 255, 255, 0.14);
-        --scrim: rgba(2, 6, 14, 0.55);
-        --side-bg: rgba(13, 20, 34, 0.62);
-        --side-text: #e8eef8;
-        --side-dim: #8595ad;
-        --side-faint: #5c6b83;
+        --scrim: rgba(4, 4, 5, 0.6);
+        --side-bg: rgba(14, 14, 16, 0.65);
+        --side-text: #ececee;
+        --side-dim: #9b9ba3;
+        --side-faint: #6c6c72;
         --side-hover: rgba(255, 255, 255, 0.06);
-        --side-active: rgba(63, 171, 156, 0.14);
+        --side-active: rgba(129, 140, 248, 0.14);
         --side-border: rgba(255, 255, 255, 0.08);
-        --aura-1: rgba(63, 171, 156, 0.06);
-        --aura-2: rgba(100, 116, 139, 0.09);
+        --aura-1: rgba(129, 140, 248, 0.045);
+        --aura-2: rgba(100, 116, 139, 0.06);
     }
 }
 
@@ -246,28 +246,60 @@ body::before {
         border-color: var(--color-accent-line);
     }
 
-    /* ---- Table primitives (rendered from JS template strings) ---- */
+    /*
+     * ---- Table primitives (rendered from JS template strings) ----
+     * Grid ala Excel: garis vertikal+horizontal di setiap sel. Ketebalan
+     * dibedakan per peran, bukan seragam semua 1px, supaya mata langsung
+     * menangkap struktur tabel tanpa baca label:
+     *   - garis antar kolom (judul & isi)     -> tipis, --color-line
+     *   - garis antar baris data               -> tipis, --color-line
+     *   - garis antar grup kolom di judul       -> sedang, --color-line 2px
+     *   - garis pemisah judul/isi               -> tebal + warna aksen
+     *   - garis pemisah isi/baris total          -> tebal + warna aksen
+     * border-collapse (di table-panel.blade.php) menyatukan garis
+     * bersebelahan jadi satu garis, jadi tiap sel cukup diberi
+     * border-right+border-bottom -- tidak perlu border-left/top terpisah.
+     */
     .sp-th {
         background: var(--glass-2);
         color: var(--color-muted);
-        border-bottom: 1px solid var(--color-line);
-        @apply text-[11px] font-bold uppercase tracking-wide px-3 py-2.5 text-left whitespace-nowrap;
+        border-right: 1px solid var(--color-line);
+        border-bottom: 2px solid var(--color-accent-line);
+        @apply text-[11px] font-bold uppercase tracking-wide px-3 py-2.5 text-center whitespace-nowrap;
+    }
+
+    .sp-th:last-child {
+        border-right: 0;
     }
 
     .sp-th-group {
         text-align: center;
-        border-left: 1px solid var(--color-line);
+        border-left: 2px solid var(--color-line);
     }
 
     .sp-th-num,
     .sp-td-num {
-        @apply text-right tabular-nums;
+        @apply text-center tabular-nums;
+    }
+
+    /* Nilai pendek non-angka: nomor baris, "✓"/"-", "Ya"/"Tidak", dst —
+       ditandai .sp-td-center saat render (lihat genericCell() di
+       sapto.blade.php) supaya ikut center seperti kolom angka, tanpa
+       mengganggu teks bebas yang panjang (nama, deskripsi) yang tetap rata
+       kiri seperti semula. */
+    .sp-td-center {
+        text-align: center;
     }
 
     .sp-td {
         color: var(--color-ink);
+        border-right: 1px solid var(--color-line);
         border-bottom: 1px solid var(--color-line);
         @apply px-3 py-2.5 text-[13px] align-middle;
+    }
+
+    .sp-td:last-child {
+        border-right: 0;
     }
 
     .sp-row {
@@ -278,11 +310,20 @@ body::before {
         background: var(--row-hover);
     }
 
+    .sp-row:last-child .sp-td {
+        border-bottom: 0;
+    }
+
     .sp-foot-td {
         background: var(--glass-2);
         color: var(--color-ink);
-        border-top: 1px solid var(--color-line);
-        @apply px-3 py-2.5 text-[13px] font-bold;
+        border-right: 1px solid var(--color-line);
+        border-top: 2px solid var(--color-accent-line);
+        @apply px-3 py-2.5 text-[13px] font-bold text-center;
+    }
+
+    .sp-foot-td:last-child {
+        border-right: 0;
     }
 
     .sp-empty-row {
@@ -522,8 +563,11 @@ body::before {
             transition: grid-template-columns 200ms ease-in-out;
         }
 
+        /* "Closed" on desktop is a slim icon rail, not fully hidden — nav
+           stays reachable (icons + hover tooltips) without reopening the
+           sidebar first. Labels/search/profile text hide; icons stay. */
         #app-shell.sidebar-closed {
-            grid-template-columns: 0px minmax(0, 1fr);
+            grid-template-columns: 4.5rem minmax(0, 1fr);
         }
 
         #sidebar {
@@ -533,13 +577,20 @@ body::before {
             height: 100vh;
             width: auto;
             translate: none;
-            transition: opacity 200ms ease-in-out;
+            transition: width 200ms ease-in-out;
         }
 
         #app-shell.sidebar-closed #sidebar {
-            opacity: 0;
-            pointer-events: none;
+            width: 4.5rem;
         }
+
+        /* What happens *inside* the rail (hiding labels, centering icons)
+           is styled in components/sidebar.blade.php's own <style> block, not
+           here — that block is unlayered CSS (plain <style>, not @layer
+           components), and unlayered CSS always wins the cascade over
+           @layer content regardless of selector specificity. A rule here
+           would silently lose to sidebar.blade.php's own base styles for
+           the same classes. */
     }
 
     /* ---- Loading skeletons ---- */
@@ -626,6 +677,54 @@ body::before {
         color: var(--color-muted);
         border-top: 1px solid var(--color-line);
         @apply flex items-center justify-center gap-1.5 px-4 py-2 text-[11px] font-medium sm:hidden;
+    }
+
+    /*
+     * Kolom pertama (No/nama) dipin ke kiri selagi sisa tabel discroll
+     * horizontal, supaya identitas baris tidak hilang di layar sempit --
+     * lihat genericCell()/renderTable()/renderMaTable() di sapto.blade.php
+     * untuk kelas mana yang dapat ini (cuma kolom pertama).
+     *
+     * .sp-th/.sp-td sengaja transparan (supaya glass card & .sp-row:hover
+     * tembus), tapi sel sticky WAJIB background solid -- kalau tidak,
+     * kolom-kolom lain yang lewat di baliknya pas discroll akan kelihatan
+     * transparan menembus kolom yang dipin.
+     */
+    .sp-th-sticky,
+    .sp-td-sticky,
+    .sp-foot-td-sticky {
+        position: sticky;
+        left: 0;
+        z-index: 2;
+        background: var(--color-surface);
+    }
+
+    .sp-th-sticky {
+        z-index: 3;
+    }
+
+    /* .sp-row:hover mewarnai <tr>, tapi background solid di atas menutupinya
+       -- box-shadow inset (bukan background) supaya warna hover tetap bisa
+       translucent (var(--row-hover) adalah rgba) sambil tetap ke-clip pas
+       di kotak sel sendiri, bukan background biasa yang akan menimpa total
+       warna solid-nya. */
+    .sp-row:hover .sp-td-sticky {
+        box-shadow: inset 0 0 0 9999px var(--row-hover);
+    }
+
+    /* Bayangan tepi kanan supaya kolom yang dipin kelihatan "mengambang" di
+       atas konten yang discroll di baliknya, bukan cuma nempel rata. */
+    .sp-th-sticky::after,
+    .sp-td-sticky::after,
+    .sp-foot-td-sticky::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        right: -8px;
+        bottom: 0;
+        width: 8px;
+        pointer-events: none;
+        background: linear-gradient(to right, rgba(0, 0, 0, 0.08), transparent);
     }
 
     /* ---- Dashboard cards ---- */

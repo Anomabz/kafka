@@ -10,10 +10,14 @@ use App\Http\Controllers\Auth\SsoController;
 // grants disabled, MFA/required actions pending, ...) do we fall back to
 // /auth/login's redirect to the hosted Keycloak page. Opening the app must
 // never bounce straight to the SSO domain without this page in between.
+Route::get('/__worker_test', function () { sleep(3); return 'slow'; }); // TEMP verification, removed right after
 Route::get('/login', [SsoController::class, 'showLoginForm'])->name('login');
 Route::post('/login', [SsoController::class, 'authenticate'])
     ->middleware('throttle:6,1')
     ->name('login.attempt');
+
+// Easter egg — sengaja tidak ditautkan dari nav manapun.
+Route::get('/credits', fn () => view('credits'));
 
 Route::get('/auth/login', [SsoController::class, 'login'])->name('sso.login');
 Route::get('/auth/callback', [SsoController::class, 'callback'])->name('sso.callback');

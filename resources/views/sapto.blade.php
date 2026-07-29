@@ -59,7 +59,7 @@
 <script>
     const tables = @json($tables);
     const currentYear = new Date().getFullYear();
-    const PAGE_SIZE = 15; // baris dosen per halaman pada tabel 3.a.2
+    const PAGE_SIZE = 12; // baris per halaman, semua tabel
     // Akses korprodi biasa selalu dikunci ke satu program studi (lihat
     // SaptoUserContext::fromRequest) — canSelectFakultas/canSelectProgramStudi
     // datang dari API (/api/sapto/fakultas, /api/sapto/program-studi), bukan
@@ -75,6 +75,7 @@
         canSelectProgramStudi: false,
         summary: null,
         page: 1, // halaman aktif tabel dosen pembimbing
+        searchQuery: '', // filter teks lokal di tabel aktif (table-page), lowercase
     };
 
     const els = {
@@ -95,6 +96,8 @@
         pageTitle: document.getElementById('page-title'),
         pageDescription: document.getElementById('page-description'),
         tableStatus: document.getElementById('table-status'),
+        tableSearch: document.getElementById('table-search'),
+        tableExport: document.getElementById('table-export'),
         tableHead: document.getElementById('table-head'),
         tableBody: document.getElementById('table-body'),
         tableFoot: document.getElementById('table-foot'),
@@ -123,6 +126,8 @@
         sidebarClose: document.getElementById('sidebar-close'),
         maPage: document.getElementById('mahasiswa-asing-page'),
         maTableStatus: document.getElementById('ma-table-status'),
+        maTableSearch: document.getElementById('ma-table-search'),
+        maTableExport: document.getElementById('ma-table-export'),
         maTableHead: document.getElementById('ma-table-head'),
         maTableBody: document.getElementById('ma-table-body'),
         maTableFoot: document.getElementById('ma-table-foot'),
@@ -146,7 +151,7 @@
     // fakultas yang benar-benar punya mahasiswa asing (dibangun dari data
     // maSummary, bukan katalog penuh). Korprodi biasa tak melihat dropdown ini
     // (server sudah scope ke satu prodi mereka).
-    const maFilter = { fakultasId: 'all', prodiId: 'all' };
+    const maFilter = { fakultasId: 'all', prodiId: 'all', searchQuery: '' };
 
     let currentTableId = @json($activeTableId ?? 'kerjasama-pendidikan');
 
@@ -181,8 +186,27 @@
         return headers;
     }
 
-    async function fetchJson(url) {
-        const response = await fetch(url, { headers: contextHeaders() });
+    // Sekali coba ulang untuk kegagalan sementara (putus jaringan atau 5xx,
+    // termasuk timeout proxy saat cache masih dingin). Percobaan pertama yang
+    // lambat itulah yang mengisi cache, jadi percobaan kedua biasanya langsung
+    // cepat. 4xx (401/403/400) tidak diulang: itu jawaban final dari server.
+    async function fetchJson(url, retry = true) {
+        let response;
+
+        try {
+            response = await fetch(url, { headers: contextHeaders() });
+        } catch (error) {
+            if (retry) {
+                return fetchJson(url, false);
+            }
+
+            throw new Error('Tidak bisa menghubungi server. Periksa koneksi lalu muat ulang halaman.');
+        }
+
+        if (response.status >= 500 && retry) {
+            return fetchJson(url, false);
+        }
+
         const payload = await response.json().catch(() => ({}));
 
         if (!response.ok) {
@@ -348,9 +372,34 @@
     ];
     const metricValueEls = [els.metricDosen, els.metricPs, els.metricPsLain, els.metricTs];
     const metricLabelEls = [els.metricDosenLabel, els.metricPsLabel, els.metricPsLainLabel, els.metricTsLabel];
+    const metricIconEls = metricValueEls.map((el) => document.getElementById(`${el.id}-icon`));
+
+    // Ikon chip metrik: dipakai lintas tabel generik lewat kunci di sini, bukan
+    // svg mentah, supaya tiap tabel bisa pilih ikon yang cocok dengan makna
+    // metriknya (lihat GENERIC_TABLES[id].icons) tanpa duplikasi markup svg.
+    const METRIC_ICONS = {
+        users: '<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/><circle cx="10" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+        cap: '<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m22 10-10-5L2 10l10 5 10-5Z"/><path d="M6 12v5c0 1.66 2.69 3 6 3s6-1.34 6-3v-5"/></svg>',
+        swap: '<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/></svg>',
+        calendar: '<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>',
+        globe: '<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z"/></svg>',
+        book: '<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>',
+        chart: '<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-3"/></svg>',
+        pin: '<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg>',
+    };
+    const DEFAULT_METRIC_ICONS = ['users', 'cap', 'swap', 'calendar'];
 
     function setMetricLabels(labels) {
         metricLabelEls.forEach((el, i) => { if (el) el.textContent = labels[i] ?? ''; });
+    }
+
+    // Ganti svg tiap chip ikon metrik sesuai tabel aktif (fallback ke ikon
+    // default 3.a.2 kalau tabel belum didefinisikan icons-nya).
+    function setMetricIcons(iconKeys) {
+        const keys = iconKeys || DEFAULT_METRIC_ICONS;
+        metricIconEls.forEach((el, i) => {
+            if (el) el.innerHTML = METRIC_ICONS[keys[i]] || METRIC_ICONS[DEFAULT_METRIC_ICONS[i]];
+        });
     }
 
     // Isi kartu metrik dari daftar {label, value} (tabel generik). Kartu sisa
@@ -374,6 +423,7 @@
         populateTsOptions(els.ts, summary.available_years, summary.ts);
 
         metricEls.forEach((el) => el.classList.remove('is-loading'));
+        setMetricIcons(isGeneric(currentTableId) ? GENERIC_TABLES[currentTableId].icons : null);
 
         if (isGeneric(currentTableId)) {
             renderGenericSummary(summary);
@@ -423,8 +473,13 @@
             return;
         }
 
-        els.tableHead.innerHTML = `<tr>${cols.map((c) =>
-            `<th class="sp-th ${c.align === 'num' ? 'sp-th-num' : ''}">${escapeHtml(c.label)}</th>`).join('')}</tr>`;
+        // Kolom pertama (biasanya No/nama) di-pin lewat .sp-th-sticky /
+        // .sp-td-sticky supaya identitas baris tetap kelihatan selagi geser
+        // horizontal di layar sempit -- lihat komentar .table-scroll di
+        // app.css untuk kenapa ini butuh background solid, bukan cuma
+        // position:sticky saja.
+        els.tableHead.innerHTML = `<tr>${cols.map((c, i) =>
+            `<th class="sp-th ${c.align === 'num' ? 'sp-th-num' : ''} ${i === 0 ? 'sp-th-sticky' : ''}">${escapeHtml(c.label)}</th>`).join('')}</tr>`;
 
         if (!summary.rows.length) {
             els.tableBody.innerHTML = `<tr><td class="sp-empty-row" colspan="${cols.length || 1}">Belum ada data untuk kombinasi filter ini.</td></tr>`;
@@ -433,32 +488,87 @@
             return;
         }
 
-        const pageCount = Math.max(1, Math.ceil(summary.rows.length / PAGE_SIZE));
-        state.page = Math.min(Math.max(state.page, 1), pageCount);
-        const startIndex = (state.page - 1) * PAGE_SIZE;
-        const pageRows = summary.rows.slice(startIndex, startIndex + PAGE_SIZE);
+        const filteredRows = filterGenericRows(summary.rows, cols, state.searchQuery);
 
-        els.tableBody.innerHTML = pageRows.map((row) =>
-            `<tr class="sp-row">${cols.map((c) => genericCell(row, c)).join('')}</tr>`).join('');
-        els.tableFoot.innerHTML = '';
-        renderPagination(summary.rows.length, GENERIC_TABLES[currentTableId]?.unit || 'baris');
-    }
-
-    function genericCell(row, col) {
-        const value = row[col.key];
-
-        if (col.align === 'num') {
-            return `<td class="sp-td sp-td-num">${value === null || value === undefined ? '-' : formatNumber(value)}</td>`;
+        if (!filteredRows.length) {
+            els.tableBody.innerHTML = `<tr><td class="sp-empty-row" colspan="${cols.length || 1}">Tidak ada baris yang cocok dengan pencarian "${escapeHtml(state.searchQuery)}".</td></tr>`;
+            els.tableFoot.innerHTML = '';
+            els.tablePagination.innerHTML = '';
+            return;
         }
 
-        return `<td class="sp-td">${value === null || value === undefined || value === '' ? '-' : escapeHtml(String(value))}</td>`;
+        const pageCount = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+        state.page = Math.min(Math.max(state.page, 1), pageCount);
+        const startIndex = (state.page - 1) * PAGE_SIZE;
+        const pageRows = filteredRows.slice(startIndex, startIndex + PAGE_SIZE);
+
+        els.tableBody.innerHTML = pageRows.map((row) =>
+            `<tr class="sp-row">${cols.map((c, i) => genericCell(row, c, i === 0)).join('')}</tr>`).join('');
+        els.tableFoot.innerHTML = '';
+        renderPagination(filteredRows.length, GENERIC_TABLES[currentTableId]?.unit || 'baris');
+    }
+
+    function genericCell(row, col, isFirst) {
+        const value = row[col.key];
+        const sticky = isFirst ? ' sp-td-sticky' : '';
+
+        if (col.align === 'num') {
+            return `<td class="sp-td sp-td-num${sticky}">${value === null || value === undefined ? '-' : formatNumber(value)}</td>`;
+        }
+
+        const display = value === null || value === undefined || value === '' ? '-' : String(value);
+
+        // Kolom non-angka isinya macam-macam: nomor urut, tanda "✓"/"-",
+        // "Ya"/"Tidak", TAPI juga nama/deskripsi panjang. Tidak ada penanda
+        // per kolom yang membedakan keduanya, jadi ditentukan dari nilai
+        // aktualnya saat render -- pendek & tanpa spasi (nomor, ikon,
+        // Ya/Tidak) dipusatkan biar rapi kayak kolom angka; teks yang
+        // mengandung spasi (nama, deskripsi) hampir pasti kalimat/frasa,
+        // dibiarkan rata kiri seperti semula.
+        const isShortToken = display.length <= 6 && !display.includes(' ');
+
+        return `<td class="sp-td${isShortToken ? ' sp-td-center' : ''}${sticky}">${escapeHtml(display)}</td>`;
+    }
+
+    // Pencarian tabel lokal (tidak ke server -- summary.rows sudah lengkap
+    // di memori buat kebutuhan pagination, jadi filter teks cukup jalan di
+    // situ juga). Query sudah lowercase dari pemanggil (lihat listener
+    // #table-search/#ma-table-search).
+    function filterGenericRows(rows, cols, query) {
+        if (!query) {
+            return rows;
+        }
+
+        return rows.filter((row) => cols.some((c) => {
+            const value = row[c.key];
+
+            if (value === null || value === undefined || value === '') {
+                return false;
+            }
+
+            return String(c.align === 'num' ? formatNumber(value) : value).toLowerCase().includes(query);
+        }));
+    }
+
+    // Tabel Dosen Pembimbing punya bentuk baris sendiri (bukan columns/rows
+    // generik) -- dicari lewat kolom yang benar-benar ditampilkan sebagai
+    // teks (nama, NIDN/NIDK/NIP, nomor urut), bukan seluruh angka bimbingan.
+    function filterDosenRows(rows, query) {
+        if (!query) {
+            return rows;
+        }
+
+        return rows.filter((row) =>
+            String(row.no ?? '').toLowerCase().includes(query) ||
+            String(row.nama_dosen ?? '').toLowerCase().includes(query) ||
+            String(row.identifier ?? '').toLowerCase().includes(query));
     }
 
     function renderTable(summary) {
         const y = summary.year_columns;
         els.tableHead.innerHTML = `
             <tr>
-                <th rowspan="2" class="sp-th">No</th>
+                <th rowspan="2" class="sp-th sp-th-sticky">No</th>
                 <th rowspan="2" class="sp-th">Nama Dosen</th>
                 <th rowspan="2" class="sp-th">NIDN/NIDK/NIP</th>
                 <th class="sp-th sp-th-group" colspan="4">Jumlah Mahasiswa yang Dibimbing pada PS yang Diakreditasi</th>
@@ -484,17 +594,26 @@
             return;
         }
 
+        const filteredRows = filterDosenRows(summary.rows, state.searchQuery);
+
+        if (!filteredRows.length) {
+            els.tableBody.innerHTML = `<tr><td class="sp-empty-row" colspan="12">Tidak ada dosen yang cocok dengan pencarian "${escapeHtml(state.searchQuery)}".</td></tr>`;
+            els.tableFoot.innerHTML = totalsRow(summary.totals, false);
+            els.tablePagination.innerHTML = '';
+            return;
+        }
+
         // Jaga halaman aktif tetap valid bila jumlah baris berubah.
-        const pageCount = Math.max(1, Math.ceil(summary.rows.length / PAGE_SIZE));
+        const pageCount = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
         state.page = Math.min(Math.max(state.page, 1), pageCount);
         const startIndex = (state.page - 1) * PAGE_SIZE;
-        const pageRows = summary.rows.slice(startIndex, startIndex + PAGE_SIZE);
+        const pageRows = filteredRows.slice(startIndex, startIndex + PAGE_SIZE);
 
         els.tableBody.innerHTML = pageRows.map((row) => `
             <tr class="sp-row">
-                <td class="sp-td">${row.no}</td>
+                <td class="sp-td sp-td-center sp-td-sticky">${row.no}</td>
                 <td class="sp-td">${escapeHtml(row.nama_dosen || '-')}</td>
-                <td class="sp-td">${escapeHtml(row.identifier || '-')}</td>
+                <td class="sp-td sp-td-center">${escapeHtml(row.identifier || '-')}</td>
                 ${yearButton(row, 'ps_diakreditasi', 'ts_2')}
                 ${yearButton(row, 'ps_diakreditasi', 'ts_1')}
                 ${yearButton(row, 'ps_diakreditasi', 'ts')}
@@ -507,7 +626,7 @@
             </tr>
         `).join('');
         els.tableFoot.innerHTML = totalsRow(summary.totals, false);
-        renderPagination(summary.rows.length, 'dosen');
+        renderPagination(filteredRows.length, 'dosen');
     }
 
     // Deretan nomor halaman dengan pemadatan (…) bila halaman banyak.
@@ -598,7 +717,7 @@
 
         return `
             <tr>
-                <td class="sp-foot-td" colspan="3">${empty ? 'Ringkasan' : 'Total'}</td>
+                <td class="sp-foot-td sp-foot-td-sticky" colspan="3">${empty ? 'Ringkasan' : 'Total'}</td>
                 <td class="sp-foot-td sp-td-num">${formatNumber(ps.ts_2)}</td>
                 <td class="sp-foot-td sp-td-num">${formatNumber(ps.ts_1)}</td>
                 <td class="sp-foot-td sp-td-num">${formatNumber(ps.ts)}</td>
@@ -768,6 +887,10 @@
                 return false;
             }
 
+            if (maFilter.searchQuery && !String(row.program_studi ?? '').toLowerCase().includes(maFilter.searchQuery)) {
+                return false;
+            }
+
             return true;
         });
     }
@@ -847,7 +970,7 @@
 
         els.maTableHead.innerHTML = `
             <tr>
-                <th rowspan="2" class="sp-th">No</th>
+                <th rowspan="2" class="sp-th sp-th-sticky">No</th>
                 <th rowspan="2" class="sp-th">Program Studi</th>
                 <th class="sp-th sp-th-group" colspan="3">Jumlah Mahasiswa Aktif</th>
                 <th class="sp-th sp-th-group" colspan="3">Jumlah Mahasiswa Asing Penuh Waktu (Full-time)</th>
@@ -867,14 +990,17 @@
         `;
 
         if (!rows.length) {
-            els.maTableBody.innerHTML = `<tr><td class="sp-empty-row" colspan="11">Belum ada data mahasiswa asing untuk periode ini.</td></tr>`;
+            const message = maFilter.searchQuery
+                ? `Tidak ada program studi yang cocok dengan pencarian "${escapeHtml(maFilter.searchQuery)}".`
+                : 'Belum ada data mahasiswa asing untuk periode ini.';
+            els.maTableBody.innerHTML = `<tr><td class="sp-empty-row" colspan="11">${message}</td></tr>`;
             els.maTableFoot.innerHTML = maTotalsRow(totals, true);
             return;
         }
 
         els.maTableBody.innerHTML = rows.map((row, index) => `
             <tr class="sp-row">
-                <td class="sp-td">${index + 1}</td>
+                <td class="sp-td sp-td-center sp-td-sticky">${index + 1}</td>
                 <td class="sp-td">${escapeHtml(row.program_studi || '-')}</td>
                 <td class="sp-td sp-td-num">${formatNumber(row.mhs_aktif_ts2)}</td>
                 <td class="sp-td sp-td-num">${formatNumber(row.mhs_aktif_ts1)}</td>
@@ -903,7 +1029,7 @@
     function maTotalsRow(totals, empty) {
         return `
             <tr>
-                <td class="sp-foot-td" colspan="2">${empty ? 'Ringkasan' : 'Total'}</td>
+                <td class="sp-foot-td sp-foot-td-sticky" colspan="2">${empty ? 'Ringkasan' : 'Total'}</td>
                 <td class="sp-foot-td sp-td-num">${formatNumber(totals.aktif.ts_2)}</td>
                 <td class="sp-foot-td sp-td-num">${formatNumber(totals.aktif.ts_1)}</td>
                 <td class="sp-foot-td sp-td-num">${formatNumber(totals.aktif.ts)}</td>
@@ -1022,41 +1148,82 @@
             endpoint: 'ipk-lulusan',
             unit: 'tahun lulus',
             description: 'Rata-rata IPK lulusan (minimum/rata-rata/maksimum) beserta jumlah lulusan per tahun lulus (TS-2/TS-1/TS) dalam cakupan terpilih, mengikuti format Tabel 8.a BAN-PT.',
+            icons: ['cap', 'users', 'chart', 'calendar'],
         },
         'dosen-tetap-pt': {
             endpoint: 'dosen-tetap-pt',
             unit: 'dosen',
             description: 'Daftar dosen tetap perguruan tinggi berdasarkan program studi homebase pada tahun ajaran terpilih (Tabel 3.a.1). Kolom mata kuliah dan kesesuaian kompetensi inti PS belum tersedia di sumber data.',
+            icons: ['users', 'cap', 'cap', 'calendar'],
         },
         'dosen-tidak-tetap': {
             endpoint: 'dosen-tidak-tetap',
             unit: 'dosen',
             description: 'Daftar dosen tidak tetap: dosen yang ditugaskan mengajar di program studi terpilih tanpa prodi itu menjadi homebase-nya, pada tahun ajaran terpilih (Tabel 3.a.4). Kolom pendidikan/jabatan/sertifikat/mata kuliah menyusul saat data tersedia.',
+            icons: ['users', 'users', 'users', 'calendar'],
         },
         'masa-studi': {
             endpoint: 'masa-studi',
             unit: 'angkatan',
             description: 'Matriks masa studi lulusan per angkatan (tahun masuk) untuk satu program studi: jumlah diterima, lulus di akhir tiap TS, dan rata-rata masa studi, mengikuti format Tabel 8.c BAN-PT.',
+            icons: ['users', 'cap', 'chart', 'calendar'],
+        },
+        'waktu-tunggu': {
+            endpoint: 'waktu-tunggu',
+            unit: 'tahun lulus',
+            description: 'Jumlah lulusan per tahun lulus (TS-4/TS-3/TS-2) untuk satu program studi, mengikuti format Tabel 8.d.1 BAN-PT -- kolomnya berbeda untuk prodi Diploma Tiga vs Sarjana; jenjang lain (S2/S3/Profesi) tidak punya varian tabel ini. Cuma "Jumlah Lulusan" yang terisi dari data lulusan; kolom "Terlacak", "Dipesan Sebelum Lulus", dan seluruh kategori waktu tunggu selalu 0 karena butuh data tracer study alumni yang belum ada sumbernya di sistem -- isi manual dari hasil tracer study terpisah.',
+            icons: ['cap', 'users', 'swap', 'calendar'],
+        },
+        'prestasi-akademik': {
+            endpoint: 'prestasi-akademik',
+            unit: 'prestasi',
+            description: 'Daftar prestasi akademik mahasiswa pada TS-2/TS-1/TS, mengikuti format Tabel 8.b.1 BAN-PT. Hanya jenis prestasi "Sains" (lomba esai/riset/debat ilmiah) -- Olahraga & Seni masuk Tabel 8.b.2. Kolom Tingkat (Lokal/Wilayah, Nasional, Internasional) dipetakan dari taksonomi sumber -- kategori "Lainnya" dan tingkat di luar Nasional/Internasional dianggap Lokal/Wilayah, perlu diverifikasi manual. Kolom "Prestasi yang Dicapai" dibentuk dari peringkat mentah sebagai "Juara {n}"; baris tanpa peringkat tercatat ditampilkan "-".',
+            // Metriknya sama persis (Total, Internasional, Nasional, Wilayah/
+            // Lokal) dengan tabel Kerjasama -> pakai set ikon yang sama biar
+            // artinya konsisten se-aplikasi (globe=internasional, pin=lokal).
+            icons: ['swap', 'globe', 'cap', 'pin'],
+        },
+        'prestasi-non-akademik': {
+            endpoint: 'prestasi-non-akademik',
+            unit: 'prestasi',
+            description: 'Daftar prestasi non-akademik mahasiswa pada TS-2/TS-1/TS, mengikuti format Tabel 8.b.2 BAN-PT. Jenis prestasi "Olahraga" & "Seni", plus "Lain-lain" sebagai kategori residual (klaim akademik harus eksplisit "Sains" di Tabel 8.b.1) -- sample manual "Lain-lain" isinya campur, mis. ada Karya Tulis Ilmiah berdampingan dengan Finalis Bujang Gadis, perlu diverifikasi manual per baris. Kolom Tingkat & Prestasi yang Dicapai mengikuti aturan yang sama seperti Tabel 8.b.1.',
+            icons: ['swap', 'globe', 'cap', 'pin'],
         },
         'kerjasama-pendidikan': {
             endpoint: 'kerjasama-pendidikan',
             unit: 'kerjasama',
             description: 'Kerjasama tridharma bidang pendidikan (MoU institusi + PKS pelaksana) yang masih berlaku pada tahun terpilih, mengikuti format Tabel 1 BAN-PT. Kolom Tingkat dan filter "judul pendidikan" hasil inferensi teks (perlu diverifikasi manual); kolom Manfaat bagi PS wajib diisi manual karena narasinya tidak tersimpan di sistem.',
+            icons: ['swap', 'globe', 'cap', 'pin'],
         },
         'kerjasama-penelitian': {
             endpoint: 'kerjasama-penelitian',
             unit: 'kerjasama',
             description: 'Kerjasama tridharma bidang penelitian (MoU institusi + PKS pelaksana) yang masih berlaku pada tahun terpilih, mengikuti format Tabel 1 BAN-PT. Kolom Tingkat dan filter "judul penelitian" hasil inferensi teks (perlu diverifikasi manual); kolom Manfaat bagi PS wajib diisi manual karena narasinya tidak tersimpan di sistem.',
+            icons: ['swap', 'globe', 'cap', 'pin'],
         },
         'kerjasama-pkm': {
             endpoint: 'kerjasama-pkm',
             unit: 'kerjasama',
             description: 'Kerjasama tridharma bidang pengabdian kepada masyarakat (MoU institusi + PKS pelaksana) yang masih berlaku pada tahun terpilih, mengikuti format Tabel 1 BAN-PT. Kolom Tingkat dan filter "judul PkM" hasil inferensi teks (perlu diverifikasi manual); kolom Manfaat bagi PS wajib diisi manual karena narasinya tidak tersimpan di sistem.',
+            icons: ['swap', 'globe', 'cap', 'pin'],
         },
         'penelitian-dtps': {
             endpoint: 'penelitian-dtps',
             unit: 'kategori sumber pembiayaan',
             description: 'Jumlah judul penelitian dosen tetap program studi (DTPS) per sumber pembiayaan pada TS-2/TS-1/TS, mengikuti format Tabel 3.b.2 BAN-PT. Klasifikasi "Lembaga Luar Negeri" berbasis skema penelitian (heuristik teks, perlu diverifikasi manual); judul yang didanai lebih dari satu sumber dihitung di tiap kategori yang berlaku.',
+            icons: ['book', 'book', 'book', 'calendar'],
+        },
+        'publikasi-ilmiah-dtps': {
+            endpoint: 'publikasi-ilmiah-dtps',
+            unit: 'jenis publikasi',
+            description: 'Untuk program AKADEMIK (Sarjana/Magister/Doktor). Jumlah judul publikasi ilmiah dosen tetap program studi (DTPS) per jenis publikasi pada TS-2/TS-1/TS, mengikuti format Tabel 3.b.4 BAN-PT. DTPS didasarkan pada penugasan homebase terakhir dosen dari SISTER (sister_list_penugasan) yang masih aktif pada tahun pelaporan, disaring jenjang S1/S2/S3. Kategori "Seminar wilayah/lokal/PT" dan "Tulisan media massa wilayah/internasional" selalu 0 (tidak ada penanda cakupan di sumber data); "Tulisan media massa nasional" mengasumsikan semua tulisan koran/majalah populer berskala nasional -- perlu diverifikasi manual.',
+            icons: ['book', 'book', 'book', 'calendar'],
+        },
+        'pagelaran-dtps': {
+            endpoint: 'pagelaran-dtps',
+            unit: 'jenis publikasi',
+            description: 'Untuk program VOKASI (Diploma Tiga/Sarjana Terapan/Magister Terapan/Doktor Terapan). Baris 1-7 (jurnal & seminar) dihitung sama persis dengan Tabel 3.b.4 versi akademik; bedanya baris 8-10 adalah pagelaran/pameran/presentasi dalam forum, bukan tulisan di media massa -- karena itu koran/majalah populer tidak ikut dihitung di sini. DTPS didasarkan pada penugasan homebase terakhir dari SISTER (sister_list_penugasan) untuk jenjang D3/D4/Sarjana Terapan/Magister Terapan/Doktor Terapan. Ketiga baris pagelaran selalu 0 karena sumbernya belum ada di SISTER (tabel pembicara/orasi ilmiah/penghargaan masih kosong), begitu juga "Seminar wilayah/lokal/PT" -- isi manual.',
+            icons: ['book', 'book', 'book', 'calendar'],
         },
     };
 
@@ -1102,9 +1269,18 @@
     function activateTable(tableId) {
         currentTableId = tableId;
 
+        // Pencarian tabel lokal khusus tabel yang lagi dilihat -- pindah
+        // tabel harus mulai bersih, bukan bawa query tabel sebelumnya.
+        state.searchQuery = '';
+        state.page = 1;
+        if (els.tableSearch) {
+            els.tableSearch.value = '';
+        }
+
         document.querySelectorAll('.menu-item').forEach((button) => {
             button.classList.toggle('is-active', button.dataset.tableId === tableId);
         });
+        window.saptoExpandMenuGroupFor?.(tableId);
 
         const table = tables.find((item) => item.id === tableId);
         els.pageTitle.textContent = table?.name || 'SAPTO';
@@ -1181,6 +1357,118 @@
 
     function escapeAttr(value) {
         return escapeHtml(value).replaceAll('`', '&#096;');
+    }
+
+    // ---- Export tabel ("Export Excel") ----
+    //
+    // Bukan file .xlsx asli -- CSV dipilih dengan sengaja: satu-satunya
+    // library JS buat menulis .xlsx (paket `xlsx` di npm, SheetJS) punya 2
+    // kerentanan severity tinggi yang tidak ada perbaikannya (prototype
+    // pollution + ReDoS -- SheetJS sudah berhenti merilis versi terbaru ke
+    // npm). CSV tidak butuh dependency sama sekali dan Excel membukanya
+    // langsung dengan sekali klik. Baris "sep=," di awal file + BOM UTF-8
+    // memastikan Excel selalu mem-parsing delimiter dan karakter non-ASCII
+    // (mis. tanda "✓") dengan benar, terlepas dari locale sistem operasi
+    // user (beberapa region default ke titik koma sebagai delimiter).
+    //
+    // Selalu mengekspor SEMUA baris yang cocok dengan pencarian aktif, bukan
+    // cuma yang lagi tampil di halaman pagination saat ini -- itulah alasan
+    // export ini ada (butuh datanya buat berkas akreditasi, bukan cuma versi
+    // 12-baris yang kelihatan di layar).
+    function csvCell(value) {
+        const s = value === null || value === undefined ? '' : String(value);
+
+        return /[",\r\n]/.test(s) ? '"' + s.replaceAll('"', '""') + '"' : s;
+    }
+
+    function downloadCsv(filename, rows) {
+        const body = rows.map((row) => row.map(csvCell).join(',')).join('\r\n');
+        const bom = String.fromCharCode(0xFEFF); // BOM eksplisit lewat code point, bukan karakter tak terlihat di source
+        const blob = new Blob([bom, 'sep=,\r\n', body], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+    }
+
+    function exportFilenameFor(tableId) {
+        const table = tables.find((item) => item.id === tableId);
+        const label = (table?.name || tableId).replace(/[\\/:*?"<>|]/g, '-');
+
+        return `SAPTO - ${label} - ${new Date().toISOString().slice(0, 10)}.csv`;
+    }
+
+    function exportGenericRows(summary, cols) {
+        const filteredRows = filterGenericRows(summary.rows || [], cols, state.searchQuery);
+        const header = cols.map((c) => c.label);
+        const body = filteredRows.map((row) => cols.map((c) => {
+            const value = row[c.key];
+
+            if (value === null || value === undefined || value === '') {
+                return '-';
+            }
+
+            return c.align === 'num' ? Number(value) : value;
+        }));
+
+        return [header, ...body];
+    }
+
+    function exportDosenRows(summary) {
+        const y = summary.year_columns || {};
+        const header = [
+            'No', 'Nama Dosen', 'NIDN/NIDK/NIP',
+            `PS Diakreditasi - TS-2 (${y.ts_2 ?? ''})`, `PS Diakreditasi - TS-1 (${y.ts_1 ?? ''})`, `PS Diakreditasi - TS (${y.ts ?? ''})`, 'PS Diakreditasi - Rata-rata',
+            `PS Lain - TS-2 (${y.ts_2 ?? ''})`, `PS Lain - TS-1 (${y.ts_1 ?? ''})`, `PS Lain - TS (${y.ts ?? ''})`, 'PS Lain - Rata-rata',
+            'Rata-rata Semua PS',
+        ];
+        const filteredRows = filterDosenRows(summary.rows || [], state.searchQuery);
+        const body = filteredRows.map((row) => [
+            row.no, row.nama_dosen || '-', row.identifier || '-',
+            row.ps_diakreditasi.ts_2, row.ps_diakreditasi.ts_1, row.ps_diakreditasi.ts, row.ps_diakreditasi.rata_rata,
+            row.ps_lain_pt.ts_2, row.ps_lain_pt.ts_1, row.ps_lain_pt.ts, row.ps_lain_pt.rata_rata,
+            row.rata_rata_semua_ps,
+        ]);
+
+        const totals = summary.totals || {};
+        const ps = totals.ps_diakreditasi || { ts_2: 0, ts_1: 0, ts: 0, rata_rata: 0 };
+        const psLain = totals.ps_lain_pt || { ts_2: 0, ts_1: 0, ts: 0, rata_rata: 0 };
+        const totalAverage = ((ps.ts_2 + ps.ts_1 + ps.ts + psLain.ts_2 + psLain.ts_1 + psLain.ts) / 3).toFixed(2);
+        const totalsLine = ['Total', '', '', ps.ts_2, ps.ts_1, ps.ts, ps.rata_rata, psLain.ts_2, psLain.ts_1, psLain.ts, psLain.rata_rata, totalAverage];
+
+        return [header, ...body, totalsLine];
+    }
+
+    function exportMaRows() {
+        const y = maSummary?.tahun_akademik || { ts_2: '-', ts_1: '-', ts: '-' };
+        const header = [
+            'No', 'Program Studi',
+            `Aktif TS-2 (${y.ts_2})`, `Aktif TS-1 (${y.ts_1})`, `Aktif TS (${y.ts})`,
+            `Penuh Waktu TS-2 (${y.ts_2})`, `Penuh Waktu TS-1 (${y.ts_1})`, `Penuh Waktu TS (${y.ts})`,
+            `Paruh Waktu TS-2 (${y.ts_2})`, `Paruh Waktu TS-1 (${y.ts_1})`, `Paruh Waktu TS (${y.ts})`,
+        ];
+        const rows = maVisibleRows();
+        const body = rows.map((row, index) => [
+            index + 1, row.program_studi || '-',
+            row.mhs_aktif_ts2, row.mhs_aktif_ts1, row.mhs_aktif_ts,
+            row.asing_ft_ts2, row.asing_ft_ts1, row.asing_ft_ts,
+            row.asing_pt_ts2, row.asing_pt_ts1, row.asing_pt_ts,
+        ]);
+
+        const totals = maRowTotals(rows);
+        const totalsLine = [
+            'Total', '',
+            totals.aktif.ts_2, totals.aktif.ts_1, totals.aktif.ts,
+            totals.ft.ts_2, totals.ft.ts_1, totals.ft.ts,
+            totals.pt.ts_2, totals.pt.ts_1, totals.pt.ts,
+        ];
+
+        return [header, ...body, totalsLine];
     }
 
     function dashboardUrl() {
@@ -1417,10 +1705,92 @@
             });
 
             group.classList.toggle('hidden', !groupHasMatch);
+
+            // Dropdown groups (mis. Tabel 1) harus terbuka otomatis saat
+            // pencarian aktif, kalau tidak hasil yang cocok tersembunyi di
+            // balik panel yang collapsed.
+            if (query && groupHasMatch && group.classList.contains('menu-group-dropdown')) {
+                group.classList.remove('is-collapsed');
+                group.querySelector('[data-group-toggle]')?.setAttribute('aria-expanded', 'true');
+            }
         });
 
         els.menuEmpty.classList.toggle('hidden', visibleCount > 0);
     });
+
+    // Pencarian di dalam tabel aktif (bukan pencarian menu sidebar di atas).
+    // Data tabel sudah lengkap di memori (state.summary.rows) buat kebutuhan
+    // pagination, jadi filter cukup di klien -- tidak perlu round-trip ke
+    // server tiap ketikan.
+    els.tableSearch?.addEventListener('input', () => {
+        state.searchQuery = els.tableSearch.value.trim().toLowerCase();
+        state.page = 1;
+
+        if (!state.summary) {
+            return;
+        }
+
+        if (isGeneric(currentTableId)) {
+            renderGenericTable(state.summary);
+        } else {
+            renderTable(state.summary);
+        }
+    });
+
+    els.maTableSearch?.addEventListener('input', () => {
+        maFilter.searchQuery = els.maTableSearch.value.trim().toLowerCase();
+
+        if (maSummary) {
+            renderMaSummary();
+        }
+    });
+
+    els.tableExport?.addEventListener('click', () => {
+        if (!state.summary) {
+            return;
+        }
+
+        const rows = isGeneric(currentTableId)
+            ? exportGenericRows(state.summary, state.summary.columns || [])
+            : exportDosenRows(state.summary);
+
+        downloadCsv(exportFilenameFor(currentTableId), rows);
+    });
+
+    els.maTableExport?.addEventListener('click', () => {
+        if (!maSummary) {
+            return;
+        }
+
+        downloadCsv(exportFilenameFor('mahasiswa-asing'), exportMaRows());
+    });
+
+    // Toggle layar penuh untuk seluruh halaman (pakai Fullscreen API bawaan
+    // browser pada <html>) -- satu tombol di topbar, bukan diulang per kartu
+    // tabel, karena targetnya memang seluruh situs.
+    const fullscreenToggle = document.getElementById('fullscreen-toggle');
+    const fullscreenToggleIcon = document.getElementById('fullscreen-toggle-icon');
+    const FULLSCREEN_ICON_D = 'M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3';
+    const EXIT_FULLSCREEN_ICON_D = 'M9 3v4a1 1 0 0 1-1 1H4m16 0h-4a1 1 0 0 1-1-1V3m0 18v-4a1 1 0 0 1 1-1h4M4 15h4a1 1 0 0 1 1 1v4';
+
+    if (fullscreenToggle && fullscreenToggleIcon && document.fullscreenEnabled) {
+        fullscreenToggle.addEventListener('click', () => {
+            if (document.fullscreenElement) {
+                document.exitFullscreen();
+            } else {
+                document.documentElement.requestFullscreen().catch(() => {});
+            }
+        });
+
+        document.addEventListener('fullscreenchange', () => {
+            const isActive = Boolean(document.fullscreenElement);
+
+            fullscreenToggleIcon.setAttribute('d', isActive ? EXIT_FULLSCREEN_ICON_D : FULLSCREEN_ICON_D);
+            fullscreenToggle.title = isActive ? 'Keluar dari layar penuh' : 'Perbesar situs ke layar penuh';
+        });
+    } else {
+        fullscreenToggle?.remove();
+    }
 
     // Shortcut "/" fokus ke pencarian menu (kecuali sedang mengetik di field lain).
     document.addEventListener('keydown', (event) => {
@@ -1448,15 +1818,37 @@
             const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
             document.documentElement.setAttribute('data-theme', next);
             const meta = document.getElementById('theme-color-meta');
-            if (meta) meta.setAttribute('content', next === 'dark' ? '#060a13' : '#e7ecf5');
+            if (meta) meta.setAttribute('content', next === 'dark' ? '#0a0a0c' : '#e7ecf5');
             try { localStorage.setItem('sapto-theme', next); } catch (e) {}
         });
     }
 
     initTsOptions();
-    loadFakultas()
-        .then(loadProgramStudi)
-        .then(() => activateTable(currentTableId))
-        .catch((error) => renderError(error.message));
+
+    // Tiga tahap ini dimuat terpisah, bukan sebagai satu rantai .then().
+    // Sebelumnya satu request gagal/lambat (mis. saat cache dingin, tabel
+    // berat bisa belasan detik lalu kena timeout proxy) membatalkan sisa
+    // rantai sekaligus: dropdown fakultas tidak pernah di-unhide DAN tabel
+    // tidak pernah dimuat, sehingga halaman tampak "semua datanya hilang".
+    // Sekarang tiap tahap gagal sendiri-sendiri dan yang lain tetap jalan.
+    (async () => {
+        try {
+            await loadFakultas();
+        } catch (error) {
+            console.error('Gagal memuat daftar fakultas:', error);
+        }
+
+        try {
+            await loadProgramStudi();
+        } catch (error) {
+            console.error('Gagal memuat daftar program studi:', error);
+        }
+
+        try {
+            await activateTable(currentTableId);
+        } catch (error) {
+            renderError(error.message);
+        }
+    })();
 </script>
 @endsection

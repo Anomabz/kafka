@@ -24,7 +24,7 @@
             <div @isset($labelId) id="{{ $labelId }}" @endisset class="text-[11px] leading-snug text-muted sm:text-[12px]">{{ $label }}</div>
             <div id="{{ $id }}" class="metric-value is-loading mt-1.5 text-[21px] font-extrabold leading-none text-ink sm:mt-2 sm:text-[26px]">0</div>
         </div>
-        <div class="grid h-8 w-8 shrink-0 place-items-center rounded-lg sm:h-9 sm:w-9 sm:rounded-xl {{ $t['chip'] }}">
+        <div id="{{ $id }}-icon" class="grid h-8 w-8 shrink-0 place-items-center rounded-lg sm:h-9 sm:w-9 sm:rounded-xl {{ $t['chip'] }}">
             {!! $icon !!}
         </div>
     </div>

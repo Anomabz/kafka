@@ -8,8 +8,14 @@ services:
     volumes:
       - .:/var/www/html
     environment:
-      APP_ENV: local
-      APP_DEBUG: "true"
+      # Default aman (production, debug off) -- lihat riwayat: .env sendiri
+      # sempat diubah ke production/false tapi env var compose di sini
+      # menang atas .env (Symfony Dotenv tidak menimpa env var yang sudah
+      # ada), jadi APP_DEBUG=true tetap aktif walau .env sudah benar.
+      # Override lewat .env di root project ini (bukan .env Laravel) kalau
+      # perlu debug mode sementara.
+      APP_ENV: "${APP_ENV:-production}"
+      APP_DEBUG: "${APP_DEBUG:-false}"
       RUN_MIGRATIONS: "${RUN_MIGRATIONS:-true}"
       DB_CONNECTION: mysql
       DB_HOST: db

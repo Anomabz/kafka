@@ -7,7 +7,7 @@
     tampil saat link dibagikan — bukan "link polos".
 --}}
 @php
-    $seoTitle = 'SAPTO — Sistem Aplikasi Pelaporan Tridharma Universitas Sriwijaya';
+    $seoTitle = 'SAPTO — Sistem Akreditasi Perguruan Tinggi Online Universitas Sriwijaya';
     $seoDesc = 'Portal pelaporan data Tridharma (pendidikan, penelitian, dan pengabdian kepada masyarakat) Universitas Sriwijaya untuk kebutuhan akreditasi program studi (BAN-PT/LAM).';
     $seoImage = asset('images/og-sapto.png');
     $seoUrl = url('/');
@@ -38,3 +38,53 @@
 <meta name="twitter:description" content="{{ $seoDesc }}">
 <meta name="twitter:image" content="{{ $seoImage }}">
 <meta name="twitter:image:alt" content="SAPTO — Universitas Sriwijaya">
+
+{{-- JSON-LD: dua entitas terpisah (bukan digabung) supaya Google jelas
+     membedakan "SAPTO" (aplikasi) dari "Universitas Sriwijaya" (induknya),
+     ditautkan lewat isPartOf/publisher. Ini yang paling menentukan buat
+     query brand seperti "sapto unsri": entity understanding, bukan sekadar
+     keyword di teks.
+
+     Kunci "@type"/"@id"/dst dibentuk lewat konkatenasi ('@'.'type'), BUKAN
+     ditulis literal -- Blade men-scan seluruh isi file untuk pola @kata
+     sebagai directive (mis. "@context" cocok dengan directive bawaan
+     Laravel) SEBELUM PHP-nya jalan, termasuk di dalam string literal.
+     Ditulis literal, Blade diam-diam mengganti string itu jadi kode PHP
+     directive-nya sendiri dan JSON-nya rusak. --}}
+@php
+    $ld = [
+        '@'.'context' => 'https://schema.org',
+        '@'.'graph' => [
+            [
+                '@'.'type' => 'CollegeOrUniversity',
+                '@'.'id' => 'https://unsri.ac.id/#organization',
+                'name' => 'Universitas Sriwijaya',
+                'alternateName' => 'UNSRI',
+                'url' => 'https://unsri.ac.id',
+            ],
+            [
+                '@'.'type' => 'WebApplication',
+                '@'.'id' => $seoUrl.'#software',
+                'name' => 'SAPTO',
+                'alternateName' => 'Sistem Akreditasi Perguruan Tinggi Online',
+                'url' => $seoUrl,
+                'description' => $seoDesc,
+                'inLanguage' => 'id-ID',
+                'applicationCategory' => 'GovernmentApplication',
+                'operatingSystem' => 'Any (web-based)',
+                'isAccessibleForFree' => false,
+                'isPartOf' => ['@'.'id' => 'https://unsri.ac.id/#organization'],
+                'publisher' => ['@'.'id' => 'https://unsri.ac.id/#organization'],
+            ],
+            [
+                '@'.'type' => 'WebSite',
+                '@'.'id' => $seoUrl.'#website',
+                'name' => $seoTitle,
+                'url' => $seoUrl,
+                'inLanguage' => 'id-ID',
+                'isPartOf' => ['@'.'id' => 'https://unsri.ac.id/#organization'],
+            ],
+        ],
+    ];
+@endphp
+<script type="application/ld+json">{!! json_encode($ld, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) !!}</script>

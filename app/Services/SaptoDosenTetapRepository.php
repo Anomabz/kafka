@@ -126,7 +126,16 @@ class SaptoDosenTetapRepository
             $query = DB::table('list_penugasan_dosen')
                 ->select('id_dosen', 'nama_dosen', 'nidn', 'nuptk', 'jk', 'id_prodi', 'nama_program_studi')
                 ->where('a_sp_homebase', '1')
-                ->whereRaw('substr(nama_tahun_ajaran,1,4) = ?', [(string) $ts]);
+                ->whereRaw('substr(nama_tahun_ajaran,1,4) = ?', [(string) $ts])
+                // Beberapa baris homebase menunjuk ke unit non-akademik (biro,
+                // bukan program studi) — pegawai biro bukan dosen. Filter
+                // hanya id_prodi yang benar-benar terdaftar di program_studi.
+                ->whereIn('id_prodi', function ($sub) {
+                    $sub->select('id_prodi')
+                        ->from('program_studi')
+                        ->whereNotNull('nama_program_studi')
+                        ->where('nama_program_studi', '<>', '');
+                });
 
             if ($scopeProdiIds !== null) {
                 $query->whereIn('id_prodi', $scopeProdiIds);

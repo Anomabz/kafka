@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" id="theme-color-meta" content="#e7ecf5">
     <title>Masuk — SAPTO Universitas Sriwijaya</title>
-    <link rel="icon" href="{{ asset('images/logo-unsri.png') }}" type="image/png">
+    <link rel="icon" href="{{ asset('images/logo-unsri.webp') }}" type="image/webp">
     @include('components.seo-meta')
     <script>
         (function () {
@@ -16,7 +16,7 @@
                 }
                 document.documentElement.setAttribute('data-theme', t);
                 var m = document.getElementById('theme-color-meta');
-                if (m) m.setAttribute('content', t === 'dark' ? '#060a13' : '#e7ecf5');
+                if (m) m.setAttribute('content', t === 'dark' ? '#0a0a0c' : '#e7ecf5');
             } catch (e) {}
         })();
     </script>
@@ -28,9 +28,12 @@
          * page re-skins with the rest of the app on the light/dark toggle.
          */
         .auth-shell {
-            display: grid;
-            place-items: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
             min-height: 100vh;
+            min-height: 100dvh;
             padding: 1.5rem;
         }
 
@@ -47,12 +50,41 @@
             align-items: center;
             gap: 0.75rem;
             width: 100%;
-            max-width: 62rem;
-            margin: 0 auto 1.25rem;
+            max-width: 24rem;
+            margin: 0 auto 1.5rem;
         }
 
         @media (min-width: 1024px) {
             .auth-mobile-brand {
+                display: none;
+            }
+        }
+
+        /* Kartu stat kecil khusus mobile — di desktop info yang sama sudah
+           ada di .auth-context (panel bermerek kiri), jadi cukup diulang di
+           sini dengan porsi lebih ringkas supaya mobile tidak terasa cuma
+           form kosong tanpa konteks/identitas produk. */
+        .auth-mobile-stat {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            width: 100%;
+            max-width: 24rem;
+            margin: 0 auto 1.25rem;
+            padding: 0.75rem 1rem;
+            border-radius: 0.9rem;
+        }
+
+        .auth-mobile-stat-number {
+            flex-shrink: 0;
+            font-size: 22px;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            color: var(--color-accent);
+        }
+
+        @media (min-width: 1024px) {
+            .auth-mobile-stat {
                 display: none;
             }
         }
@@ -102,8 +134,8 @@
             color: #f3faf8;
             background:
                 radial-gradient(38rem 30rem at 108% -12%, rgba(255, 255, 255, 0.16), transparent 60%),
-                radial-gradient(30rem 26rem at -12% 112%, rgba(110, 231, 212, 0.18), transparent 60%),
-                linear-gradient(155deg, #081018 0%, #0b241f 32%, #0a6b5e 78%, #0f9d8b 100%);
+                radial-gradient(30rem 26rem at -12% 112%, rgba(129, 140, 248, 0.18), transparent 60%),
+                linear-gradient(155deg, #081018 0%, #151a3d 32%, #312e81 78%, #4338ca 100%);
         }
 
         .auth-context::before {
@@ -126,7 +158,7 @@
         }
 
         .auth-context .bg-accent {
-            background-color: #6ee7d4;
+            background-color: #a5b4fc;
         }
 
         .auth-context-inner {
@@ -156,7 +188,7 @@
             font-size: 46px;
             font-weight: 800;
             line-height: 1;
-            color: #6ee7d4;
+            color: #a5b4fc;
             letter-spacing: -0.02em;
         }
 
@@ -193,7 +225,19 @@
             display: flex;
             flex-direction: column;
             justify-content: center;
-            padding: 3rem;
+            padding: 2rem 1.5rem;
+        }
+
+        @media (min-width: 480px) {
+            .auth-card {
+                padding: 2.5rem 2rem;
+            }
+        }
+
+        @media (min-width: 1024px) {
+            .auth-card {
+                padding: 3rem;
+            }
         }
 
         .auth-card-inner {
@@ -232,7 +276,7 @@
             height: 26px;
             border-radius: 999px;
             background: rgba(255, 255, 255, 0.12);
-            color: #6ee7d4;
+            color: #a5b4fc;
         }
 
         .auth-pillar-icon svg {
@@ -444,7 +488,7 @@
         <div class="auth-mobile-brand">
             <div class="auth-logo grid shrink-0 place-items-center">
                 <img
-                    src="{{ asset('images/logo-unsri.png') }}"
+                    src="{{ asset('images/logo-unsri.webp') }}"
                     alt="Lambang Universitas Sriwijaya"
                     class="h-full w-full object-contain"
                 />
@@ -454,8 +498,13 @@
                     <span class="auth-wordmark font-extrabold tracking-tight text-ink">SAPTO</span>
                     <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-accent"></span>
                 </div>
-                <p class="text-[12px] font-medium text-muted">Universitas Sriwijaya</p>
+                <p class="text-[12px] font-medium text-muted">Sistem Akreditasi Perguruan Tinggi Online</p>
             </div>
+        </div>
+
+        <div class="auth-mobile-stat glass">
+            <span class="auth-mobile-stat-number">45</span>
+            <span class="text-[12px] leading-snug text-muted">tabel pelaporan Tridharma BAN-PT dalam satu sistem</span>
         </div>
 
         <div class="auth-grid">
@@ -464,7 +513,7 @@
                     <div class="flex items-center gap-3">
                         <div class="auth-logo grid shrink-0 place-items-center">
                             <img
-                                src="{{ asset('images/logo-unsri.png') }}"
+                                src="{{ asset('images/logo-unsri.webp') }}"
                                 alt="Lambang Universitas Sriwijaya"
                                 class="h-full w-full object-contain"
                             />
@@ -474,14 +523,14 @@
                                 <span class="auth-wordmark font-extrabold tracking-tight text-ink">SAPTO</span>
                                 <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-accent"></span>
                             </div>
-                            <p class="text-[12px] font-medium text-muted">Universitas Sriwijaya</p>
+                            <p class="text-[12px] font-medium text-muted">Sistem Akreditasi Perguruan Tinggi Online</p>
                         </div>
                     </div>
 
-                    <h2 class="auth-context-headline">Satu portal untuk seluruh pelaporan Tridharma UNSRI</h2>
+                    <h2 class="auth-context-headline">Satu sistem akreditasi online untuk seluruh program studi Universitas Sriwijaya</h2>
 
                     <p class="auth-mt-5 auth-tagline text-[13px] leading-relaxed text-muted">
-                        Data pendidikan, penelitian, dan pengabdian masyarakat dari tiap fakultas dan program studi — terkumpul rapi dalam satu sistem.
+                        Kelola dan pantau kelengkapan data akreditasi BAN-PT/LAM — dari capaian dosen, penelitian, hingga profil lulusan — dalam satu dashboard yang selalu sinkron dengan data resmi kampus.
                     </p>
                 </div>
 
@@ -598,7 +647,7 @@
                     </button>
                 </form>
 
-                <p class="auth-mt-4 text-center text-[12px] text-muted">SAPTO Universitas Sriwijaya</p>
+                <p class="auth-mt-4 text-center text-[12px] text-muted">SAPTO — Sistem Akreditasi Perguruan Tinggi Online</p>
               </div>
             </div>
         </div>

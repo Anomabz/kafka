@@ -3,8 +3,11 @@
 namespace Tests\Feature;
 
 use App\Models\Korprodi;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class SsoPasswordLoginTest extends TestCase
@@ -24,6 +27,9 @@ class SsoPasswordLoginTest extends TestCase
 
         $response->assertRedirect('/');
         $this->assertSame('Budi', session('sso_user')['name']);
+        // Intro splash muncul tiap kali login (flash, sekali pakai) --
+        // bukan disimpan permanen di sessionStorage browser.
+        $this->assertTrue(session('show_intro'));
     }
 
     public function test_credentials_valid_at_sso_but_not_a_korprodi_are_denied(): void
@@ -47,6 +53,49 @@ class SsoPasswordLoginTest extends TestCase
         $follow->assertOk();
         $follow->assertSee('Akses ditolak');
         $follow->assertSee('Firdaus Masdung');
+    }
+
+    public function test_sso_account_listed_as_admin_gets_full_access_without_being_korprodi(): void
+    {
+        // Kebalikan test di atas: NIP yang sama, tapi kali ini terdaftar
+        // sebagai admin di tabel users -> lolos tanpa harus jadi korprodi,
+        // dan sesinya membawa is_admin sehingga SaptoUserContext memberi
+        // scope 'universitas'. Password lokal tidak dipakai di jalur ini.
+        User::create([
+            'name' => 'Firdaus Masdung',
+            'email' => 'firdaus@unsri.ac.id',
+            'nomor_identitas' => '9999999',
+            'is_admin' => true,
+            'password' => Hash::make(Str::random(64)),
+        ]);
+
+        Http::fake([
+            '*/protocol/openid-connect/token' => Http::response(['access_token' => 'abc', 'id_token' => 'idt']),
+            '*/protocol/openid-connect/userinfo' => Http::response(['sub' => '2', 'name' => 'Firdaus Masdung', 'email' => 'firdaus@unsri.ac.id', 'nomor_identitas' => '9999999', 'unit_kerja' => 'Fasilkom']),
+        ]);
+
+        $response = $this->post('/login', ['username' => 'firdaus', 'password' => 'right']);
+
+        $response->assertRedirect('/');
+        $this->assertTrue(session('sso_user')['is_admin']);
+        $this->assertSame('Fasilkom', session('sso_user')['unit_kerja']);
+    }
+
+    public function test_is_admin_claim_from_keycloak_is_never_trusted(): void
+    {
+        // Kalau realm suatu saat mengirim klaim bernama is_admin, klaim itu
+        // tidak boleh menaikkan hak akses: statusnya selalu ditimpa hasil
+        // pengecekan tabel users lokal (SsoController::ssoSessionUser()).
+        Korprodi::create(['nip' => '199999999999999001', 'nama' => 'Budi', 'kode_program_studi' => '55201']);
+
+        Http::fake([
+            '*/protocol/openid-connect/token' => Http::response(['access_token' => 'abc', 'id_token' => 'idt']),
+            '*/protocol/openid-connect/userinfo' => Http::response(['sub' => '1', 'name' => 'Budi', 'email' => 'budi@example.test', 'nomor_identitas' => '199999999999999001', 'is_admin' => true]),
+        ]);
+
+        $this->post('/login', ['username' => 'budi', 'password' => 'right'])->assertRedirect('/');
+
+        $this->assertFalse(session('sso_user')['is_admin']);
     }
 
     public function test_wrong_credentials_send_back_to_login_with_unregistered_popup(): void

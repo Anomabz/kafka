@@ -9,6 +9,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 /**
@@ -80,13 +81,20 @@ class SsoController extends Controller
             return redirect()->route('login')->with('unregistered_hint', $data['username']);
         }
 
-        if (! $this->isKorprodi($userinfo->json())) {
+        $ssoUser = $this->ssoSessionUser($userinfo->json());
+
+        // Admin SAPTO tidak wajib ada di tabel korprodi — hak aksesnya
+        // universitas, bukan per prodi.
+        if (! $ssoUser['is_admin'] && ! $this->isKorprodi($ssoUser)) {
+            $this->logAccessDenied($ssoUser, $data['username']);
+
             return redirect()->route('login')->with('not_korprodi_hint', $userinfo->json('name') ?: $data['username']);
         }
 
         $request->session()->regenerate();
-        $request->session()->put('sso_user', $userinfo->json());
+        $request->session()->put('sso_user', $ssoUser);
         $request->session()->put('sso_id_token', $token->json('id_token'));
+        $request->session()->flash('show_intro', true);
 
         return redirect()->intended('/');
     }
@@ -139,13 +147,19 @@ class SsoController extends Controller
             abort(400, 'Gagal mengambil data pengguna dari SSO.');
         }
 
-        if (! $this->isKorprodi($userinfo->json())) {
+        $ssoUser = $this->ssoSessionUser($userinfo->json());
+
+        // Sama seperti authenticate(): admin lolos tanpa harus jadi korprodi.
+        if (! $ssoUser['is_admin'] && ! $this->isKorprodi($ssoUser)) {
+            $this->logAccessDenied($ssoUser, (string) $userinfo->json('preferred_username'));
+
             return redirect()->route('login')->with('not_korprodi_hint', $userinfo->json('name') ?: $userinfo->json('preferred_username'));
         }
 
         $request->session()->regenerate();
-        $request->session()->put('sso_user', $userinfo->json());
+        $request->session()->put('sso_user', $ssoUser);
         $request->session()->put('sso_id_token', $token->json('id_token'));
+        $request->session()->flash('show_intro', true);
 
         return redirect()->intended('/');
     }
@@ -162,6 +176,65 @@ class SsoController extends Controller
         $nip = trim((string) ($userinfo['nomor_identitas'] ?? ''));
 
         return $nip !== '' && Korprodi::query()->where('nip', $nip)->exists();
+    }
+
+    /**
+     * Kredensialnya benar di Keycloak tapi NIP-nya tidak dikenali SAPTO.
+     *
+     * Yang dicatat adalah `nomor_identitas` yang BENAR-BENAR dikirim Keycloak,
+     * karena itulah satu-satunya cara memastikan formatnya sama dengan kolom
+     * `korprodi.nip` (18 digit). Kalau realm ternyata mengirim NIDN atau ID
+     * pegawai yang lebih pendek, seluruh korprodi akan tertolak dan penyebabnya
+     * cuma kelihatan dari sini.
+     *
+     * @param  array<string, mixed>  $ssoUser
+     */
+    private function logAccessDenied(array $ssoUser, string $username): void
+    {
+        Log::warning('Login SSO ditolak: NIP tidak terdaftar sebagai korprodi/admin SAPTO.', [
+            'username' => $username,
+            'nomor_identitas_dari_sso' => $ssoUser['nomor_identitas'] ?? null,
+            'panjang_nomor_identitas' => strlen(trim((string) ($ssoUser['nomor_identitas'] ?? ''))),
+            'unit_kerja' => $ssoUser['unit_kerja'] ?? null,
+        ]);
+    }
+
+    /**
+     * Akun SSO yang terdaftar sebagai admin SAPTO di tabel `users`
+     * (is_admin = true, dicocokkan lewat nomor_identitas) mendapat akses
+     * penuh 'universitas' — lihat SaptoUserContext::fromRequest().
+     *
+     * Bedanya dengan attemptLocalAdminLogin(): di sana tabel `users` dipakai
+     * untuk OTENTIKASI (cek hash password) karena akunnya memang di luar SSO.
+     * Di sini identitas sudah dijamin Keycloak, jadi `users` cuma berperan
+     * sebagai daftar "siapa yang admin" — passwordnya tidak dipakai sama
+     * sekali dan boleh acak.
+     */
+    private function isSaptoAdmin(array $userinfo): bool
+    {
+        $nip = trim((string) ($userinfo['nomor_identitas'] ?? ''));
+
+        return $nip !== '' && User::query()
+            ->where('is_admin', true)
+            ->where('nomor_identitas', $nip)
+            ->exists();
+    }
+
+    /**
+     * Bentuk isi session `sso_user` dari userinfo Keycloak.
+     *
+     * `is_admin` SELALU ditulis ulang dari hasil pengecekan tabel users, tidak
+     * pernah diambil dari respons Keycloak — kalau realm suatu saat mengirim
+     * klaim bernama sama, klaim itu tidak boleh bisa menaikkan hak akses.
+     *
+     * @param  array<string, mixed>  $userinfo
+     * @return array<string, mixed>
+     */
+    private function ssoSessionUser(array $userinfo): array
+    {
+        $userinfo['is_admin'] = $this->isSaptoAdmin($userinfo);
+
+        return $userinfo;
     }
 
     /**
@@ -191,6 +264,7 @@ class SsoController extends Controller
             'nomor_identitas' => $admin->nomor_identitas,
             'is_admin' => true,
         ]);
+        $request->session()->flash('show_intro', true);
 
         return redirect()->intended('/');
     }
