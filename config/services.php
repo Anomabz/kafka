@@ -59,4 +59,11 @@ return [
         ],
     ],
 
+    'telegram' => [
+        'bot_token' => env('TELEGRAM_BOT_TOKEN'),
+        // Bagian acak di URL webhook (/telegram/webhook/{secret}) supaya
+        // cuma Telegram yang bisa memicu pendaftaran chat id baru.
+        'webhook_secret' => env('TELEGRAM_WEBHOOK_SECRET'),
+    ],
+
 ];

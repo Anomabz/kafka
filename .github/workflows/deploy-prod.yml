@@ -6,7 +6,31 @@ on:
       - dev-prod
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: pdo_sqlite
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-progress
+
+      - name: Generate app key
+        run: cp .env.example .env && php artisan key:generate
+
+      # phpunit.xml sudah memaksa sqlite in-memory (lihat tests/TestCase.php)
+      # jadi tidak butuh service database di runner ini.
+      - name: Run test suite
+        run: php artisan test
+
   deploy-production:
+    needs: test
     runs-on: ubuntu-latest
 
     steps:

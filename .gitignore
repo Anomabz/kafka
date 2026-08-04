@@ -26,6 +26,7 @@
 /storage/pail
 /vendor
 /database/database.sqlite
+/BACKUPP_SAPTO_PROD/*.sql.gz
 _ide_helper.php
 Homestead.json
 Homestead.yaml

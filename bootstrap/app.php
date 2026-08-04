@@ -1,5 +1,6 @@
 <?php
 
+use App\Support\TelegramNotifier;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -21,6 +22,9 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->append(\App\Http\Middleware\SecurityHeaders::class);
 
+        // Telegram POST ke webhook ini tanpa token CSRF (bukan form browser).
+        $middleware->validateCsrfTokens(except: ['telegram/webhook/*']);
+
         // Server ini di belakang reverse proxy eksternal (TLS di-terminate
         // di luar container) -- tanpa ini, Request::isSecure() salah baca
         // skema jadi http meski publiknya https, bikin cookie Secure/HSTS/
@@ -30,6 +34,10 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->trustProxies(at: '*');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        $exceptions->report(function (\Throwable $e) {
+            TelegramNotifier::report($e);
+        });
+
         // /sapto/mahasiswa-asing* juga endpoint JSON walau di-routing lewat
         // web.php, bukan api.php (lihat EnsureSsoAuthenticated yang sudah
         // pakai expectsJson() untuk alasan yang sama) — jangan cuma is('api/*').

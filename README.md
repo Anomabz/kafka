@@ -284,6 +284,12 @@ menjatuhkan seluruh stack ini selama 25 jam (2026-07-26). Aturannya:
 kalau `/up` mati atau ada service compose yang tidak `running`, dan mencatat
 ke `storage/logs/watchdog.log`.
 
+`docker/backup-db.sh` (cron tiap hari jam 03:00) men-dump `sapto_db` ke
+`BACKUPP_SAPTO_PROD/sapto_db_<timestamp>.sql.gz` dan membuang dump yang lebih
+tua dari 14 hari. Ini satu-satunya sumber pemulihan untuk `users` dan
+`korprodi` — tabel-tabel lain adalah mirror Feeder yang bisa disinkron ulang,
+tapi dua tabel itu data asli SAPTO. Log di `storage/logs/backup.log`.
+
 **Branch.** `main` adalah branch utama; kerja harian lewat `dev-prod`, `DEV`,
 atau branch pribadi (`dev-<nama>`), digabung ke `main` lewat pull request.
 Branch tidak aktif diarsipkan ke namespace `archive/`.

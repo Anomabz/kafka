@@ -1,16 +1,17 @@
 <?php
 
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\ImpersonationController;
 use App\Http\Controllers\Api\Sapto\MahasiswaController; // <-- 1. Import Controllernya di sini
 use App\Http\Controllers\Auth\SsoController;
+use App\Support\TelegramNotifier;
 
 // Own SAPTO-branded login form. Credentials are validated against Keycloak
 // server-side (grant_type=password); only when that can't decide (direct
 // grants disabled, MFA/required actions pending, ...) do we fall back to
 // /auth/login's redirect to the hosted Keycloak page. Opening the app must
 // never bounce straight to the SSO domain without this page in between.
-Route::get('/__worker_test', function () { sleep(3); return 'slow'; }); // TEMP verification, removed right after
 Route::get('/login', [SsoController::class, 'showLoginForm'])->name('login');
 Route::post('/login', [SsoController::class, 'authenticate'])
     ->middleware('throttle:6,1')
@@ -22,6 +23,25 @@ Route::get('/credits', fn () => view('credits'));
 Route::get('/auth/login', [SsoController::class, 'login'])->name('sso.login');
 Route::get('/auth/callback', [SsoController::class, 'callback'])->name('sso.callback');
 Route::get('/auth/logout', [SsoController::class, 'logout'])->name('sso.logout');
+
+// Webhook @saptostatusbot: chat mana pun yang tahu {secret} bisa daftar
+// sendiri untuk terima alert error 5xx. Secret di URL path itulah gerbangnya
+// -- kalau salah, cocokkan dulu ke config baru proses body.
+Route::post('/telegram/webhook/{secret}', function (Request $request, string $secret) {
+    if (! hash_equals((string) config('services.telegram.webhook_secret'), $secret)) {
+        abort(404);
+    }
+
+    $chatId = $request->input('message.chat.id');
+    if ($chatId) {
+        $isNew = TelegramNotifier::registerChatId($chatId);
+        TelegramNotifier::sendTo($chatId, $isNew
+            ? '✅ Chat ini terdaftar untuk alert error SAPTO.'
+            : 'Chat ini sudah terdaftar.');
+    }
+
+    return response()->noContent();
+})->middleware('throttle:30,1');
 
 // Catatan: route /dev/login-as lama dihapus. Dulu di-gate app()->environment
 // ('local'), tapi container ini berjalan sebagai APP_ENV=local sehingga
