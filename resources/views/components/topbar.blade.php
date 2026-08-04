@@ -20,7 +20,7 @@
                 <span id="breadcrumb-group"></span>
             </span>
         </nav>
-        <h1 id="page-title" class="truncate text-[15px] font-bold leading-tight text-ink sm:overflow-visible sm:whitespace-normal sm:text-[17px] lg:text-[21px]">
+        <h1 id="page-title" class="truncate text-[15px] font-semibold leading-tight text-ink sm:overflow-visible sm:whitespace-normal sm:text-[17px] lg:text-[19px]">
             Tabel 3.a.2) Dosen Pembimbing Utama Tugas Akhir
         </h1>
         <p id="page-description" class="mt-1 hidden text-[12px] leading-relaxed text-muted sm:block sm:text-[13px]">

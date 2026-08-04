@@ -7,7 +7,7 @@
     tampil saat link dibagikan — bukan "link polos".
 --}}
 @php
-    $seoTitle = 'SAPTO — Sistem Akreditasi Perguruan Tinggi Online Universitas Sriwijaya';
+    $seoTitle = 'SAPTO v1.0 - UNSRI — Sistem Akreditasi Perguruan Tinggi Online Universitas Sriwijaya';
     $seoDesc = 'Portal pelaporan data Tridharma (pendidikan, penelitian, dan pengabdian kepada masyarakat) Universitas Sriwijaya untuk kebutuhan akreditasi program studi (BAN-PT/LAM).';
     $seoImage = asset('images/og-sapto.png');
     $seoUrl = url('/');

@@ -58,7 +58,11 @@
     --glass-border: rgba(255, 255, 255, 0.60);
     --glass-hi: rgba(255, 255, 255, 0.75);
     --glass-shadow: 0 12px 34px -14px rgba(15, 27, 45, 0.30);
-    --glass-blur: 20px;
+    /* backdrop-filter blur cost scales with radius -- 20px+ stacked across a
+       dozen concurrent glass panels (sidebar, sticky topbar, cards, inputs)
+       is the main cause of scroll frame drops on weaker/mobile GPUs. 14px
+       reads almost identically but is materially cheaper to composite. */
+    --glass-blur: 14px;
 
     --row-hover: rgba(15, 27, 45, 0.04);
     --skeleton: rgba(15, 27, 45, 0.10);
@@ -113,7 +117,7 @@
     --glass-border: rgba(255, 255, 255, 0.10);
     --glass-hi: rgba(255, 255, 255, 0.12);
     --glass-shadow: 0 22px 46px -18px rgba(0, 0, 0, 0.60);
-    --glass-blur: 22px;
+    --glass-blur: 14px;
 
     --row-hover: rgba(255, 255, 255, 0.045);
     --skeleton: rgba(255, 255, 255, 0.10);
@@ -177,6 +181,31 @@
         --side-border: rgba(255, 255, 255, 0.08);
         --aura-1: rgba(129, 140, 248, 0.045);
         --aura-2: rgba(100, 116, 139, 0.06);
+    }
+}
+
+/* Phones are both where "spek kurang" lives and where a large blur radius is
+   least visible on a small screen -- cut it further there. Repeats every
+   selector that sets --glass-blur (light default / explicit dark / OS-dark)
+   at matching specificity so this wins in all three regardless of source
+   order; a plain `:root { }` here would lose to `:root[data-theme]`. */
+@media (max-width: 768px) {
+    :root,
+    :root[data-theme='dark'],
+    :root:not([data-theme]) {
+        --glass-blur: 8px;
+    }
+}
+
+/* Respect the OS-level "reduce transparency" setting (Windows/macOS/iOS) --
+   it exists for exactly this: weaker GPUs and motion/vestibular sensitivity.
+   Panels fall back to a solid-ish surface instead of blurring. */
+@media (prefers-reduced-transparency: reduce) {
+    :root {
+        --glass-blur: 0px;
+        --glass-bg: var(--color-surface);
+        --glass-bg-strong: var(--color-surface);
+        --side-bg: var(--color-surface);
     }
 }
 
@@ -395,8 +424,11 @@ body::before {
     /* ---- Sidebar ---- */
     .side-glass {
         background: var(--side-bg);
-        -webkit-backdrop-filter: blur(26px) saturate(120%);
-        backdrop-filter: blur(26px) saturate(120%);
+        /* Was a hardcoded 26px, the single heaviest blur in the app and
+           always on-screen -- now shares --glass-blur so it drops with the
+           rest of the panels (and the mobile override below). */
+        -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(120%);
+        backdrop-filter: blur(var(--glass-blur)) saturate(120%);
         border-right: 1px solid var(--side-border);
         color: var(--side-text);
     }

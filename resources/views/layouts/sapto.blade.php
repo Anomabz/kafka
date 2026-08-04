@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" id="theme-color-meta" content="#e7ecf5">
-    <title>@yield('title', 'SAPTO — Sistem Akreditasi Perguruan Tinggi Online Universitas Sriwijaya')</title>
+    <title>@yield('title', 'SAPTO v1.0 - UNSRI — Sistem Akreditasi Perguruan Tinggi Online Universitas Sriwijaya')</title>
     <link rel="icon" href="{{ asset('images/logo-unsri.webp') }}" type="image/webp">
     @include('components.seo-meta')
     {{-- Set the theme before first paint to avoid a light/dark flash. Only an

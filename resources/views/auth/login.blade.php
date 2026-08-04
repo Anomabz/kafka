@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" id="theme-color-meta" content="#e7ecf5">
-    <title>Masuk — SAPTO Universitas Sriwijaya</title>
+    <title>Masuk — SAPTO v1.0 - UNSRI</title>
     <link rel="icon" href="{{ asset('images/logo-unsri.webp') }}" type="image/webp">
     @include('components.seo-meta')
     <script>
@@ -35,6 +35,36 @@
             min-height: 100vh;
             min-height: 100dvh;
             padding: 1.5rem;
+            position: relative;
+            isolation: isolate;
+            /* Gerbang kampus UNSRI, sengaja diredupkan lewat gradient + foto
+               yang sudah diproses gelap/blur -- supaya .auth-card (glass) di
+               atasnya tetap gampang dibaca dan tidak baku hantam warna
+               dengan .auth-context yang gradasinya sudah gelap juga. Fixed
+               background ini cuma berlaku di halaman login (scoped ke sini),
+               tidak menyentuh app.css/halaman lain. */
+            background:
+                linear-gradient(165deg, rgba(5, 9, 16, 0.88) 0%, rgba(11, 15, 30, 0.78) 45%, rgba(30, 27, 75, 0.6) 100%),
+                url('{{ asset('images/login-bg.jpg') }}') center/cover no-repeat fixed;
+        }
+
+        /* Baris brand mobile duduk langsung di atas foto (bukan di dalam
+           kartu glass), dan foto itu sekarang selalu gelap terlepas dari
+           tema -- teks perlu warna terang tetap supaya tidak tenggelam saat
+           tema terang dipilih (text-ink jadi gelap di tema terang). */
+        .auth-mobile-brand,
+        .auth-mobile-brand .text-ink {
+            color: #f8fdfc;
+        }
+
+        .auth-mobile-brand .text-muted,
+        .auth-mobile-stat .text-muted {
+            color: rgba(243, 250, 248, 0.72);
+        }
+
+        .auth-mobile-stat.glass {
+            background: rgba(255, 255, 255, 0.14);
+            border-color: rgba(255, 255, 255, 0.22);
         }
 
         .auth-grid {
