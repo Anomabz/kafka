@@ -3,9 +3,8 @@
 namespace App\Services;
 
 use App\Services\Concerns\ComputesGraduationYear;
+use App\Services\Concerns\CountsLulusanPerProdi;
 use App\Services\Concerns\ResolvesSaptoScope;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
 
 /**
  * Tabel 8.d.1) Waktu Tunggu Lulusan. Per program studi (BAN-PT: "Diisi oleh
@@ -15,10 +14,10 @@ use Illuminate\Support\Facades\DB;
  * terpisah seperti 3.b.4, tapi satu tabel yang kolomnya berubah:
  * - Diploma Tiga: Jumlah Lulusan, Jumlah Lulusan Terlacak, Jumlah Lulusan
  *   yang Dipesan Sebelum Lulus, lalu WT < 3 bulan / 3-6 bulan / > 6 bulan.
- * - Sarjana (S1): Jumlah Lulusan, Jumlah Lulusan Terlacak, lalu
+ * - Sarjana (S1, S2, S3): Jumlah Lulusan, Jumlah Lulusan Terlacak, lalu
  *   WT < 6 bulan / 6-18 bulan / > 18 bulan (tanpa kolom "dipesan").
- * Jenjang lain (S2/S3/Sp-1/Sp-2/Profesi) tidak punya varian tabel ini di
- * form BAN-PT -- notice, bukan tabel kosong.
+ * Jenjang lain (Sp-1/Sp-2/Profesi) tidak punya varian tabel ini di form
+ * BAN-PT -- notice, bukan tabel kosong.
  *
  * Sumber "Jumlah Lulusan": list_mahasiswa_lulus_do, tahun lulus lewat
  * ComputesGraduationYear (sama seperti Tabel 8.a & 8.c, supaya ketiganya
@@ -31,7 +30,10 @@ use Illuminate\Support\Facades\DB;
 class SaptoWaktuTungguLulusanRepository
 {
     use ComputesGraduationYear;
+    use CountsLulusanPerProdi;
     use ResolvesSaptoScope;
+
+    private const CACHE_NAMESPACE = 'waktu-tunggu';
 
     /** TS-4, TS-3, TS-2 -- baris tabel, tetap sama untuk kedua varian jenjang. */
     private const BACK_YEARS = [4, 3, 2];
@@ -62,7 +64,7 @@ class SaptoWaktuTungguLulusanRepository
         }
 
         $years = array_map(fn (int $back): int => $ts - $back, self::BACK_YEARS);
-        $lulusanByYear = $this->lulusanCounts((string) $programStudi['id'], $years);
+        $lulusanByYear = $this->lulusanCountsByYear(self::CACHE_NAMESPACE, (string) $programStudi['id'], $years);
 
         $columns = $this->columnsForVariant($variant);
         $numericKeys = collect($columns)
@@ -111,19 +113,21 @@ class SaptoWaktuTungguLulusanRepository
             ['key' => 'jumlah_terlacak', 'label' => 'Jumlah Lulusan yang Terlacak', 'align' => 'num'],
         ];
 
+        $wtGroup = 'Jumlah Lulusan Terlacak dengan Waktu Tunggu Mendapatkan Pekerjaan';
+
         if ($variant === 'd3') {
             return array_merge($base, [
                 ['key' => 'jumlah_dipesan', 'label' => 'Jumlah Lulusan yang Dipesan Sebelum Lulus', 'align' => 'num'],
-                ['key' => 'wt_1', 'label' => 'WT < 3 Bulan', 'align' => 'num'],
-                ['key' => 'wt_2', 'label' => '3 ≤ WT ≤ 6 Bulan', 'align' => 'num'],
-                ['key' => 'wt_3', 'label' => 'WT > 6 Bulan', 'align' => 'num'],
+                ['key' => 'wt_1', 'label' => 'WT < 3 Bulan', 'align' => 'num', 'group' => $wtGroup],
+                ['key' => 'wt_2', 'label' => '3 ≤ WT ≤ 6 Bulan', 'align' => 'num', 'group' => $wtGroup],
+                ['key' => 'wt_3', 'label' => 'WT > 6 Bulan', 'align' => 'num', 'group' => $wtGroup],
             ]);
         }
 
         return array_merge($base, [
-            ['key' => 'wt_1', 'label' => 'WT < 6 Bulan', 'align' => 'num'],
-            ['key' => 'wt_2', 'label' => '6 ≤ WT ≤ 18 Bulan', 'align' => 'num'],
-            ['key' => 'wt_3', 'label' => 'WT > 18 Bulan', 'align' => 'num'],
+            ['key' => 'wt_1', 'label' => 'WT < 6 Bulan', 'align' => 'num', 'group' => $wtGroup],
+            ['key' => 'wt_2', 'label' => '6 ≤ WT ≤ 18 Bulan', 'align' => 'num', 'group' => $wtGroup],
+            ['key' => 'wt_3', 'label' => 'WT > 18 Bulan', 'align' => 'num', 'group' => $wtGroup],
         ]);
     }
 
@@ -137,42 +141,9 @@ class SaptoWaktuTungguLulusanRepository
     {
         return match (strtoupper(trim((string) $jenjang))) {
             'D3' => 'd3',
-            'S1' => 'sarjana',
+            'S1', 'S2', 'S3' => 'sarjana',
             default => null,
         };
-    }
-
-    /**
-     * Jumlah lulusan per tahun lulus untuk satu prodi.
-     *
-     * @param  array<int, int>  $years
-     * @return array<int, int> tahun => jumlah
-     */
-    private function lulusanCounts(string $prodiId, array $years): array
-    {
-        $cacheKey = 'sapto:waktu-tunggu:lulusan:v1:'.md5(json_encode([$prodiId, $years]));
-
-        return Cache::remember($cacheKey, $this->cacheTtl(), function () use ($prodiId, $years): array {
-            $yearStrings = array_map(fn (int $y): string => (string) $y, $years);
-            $yearExpr = $this->graduationYearSql();
-            $placeholders = implode(',', array_fill(0, count($yearStrings), '?'));
-
-            $rows = DB::select("
-                select {$yearExpr} as thn, count(*) as jumlah
-                from list_mahasiswa_lulus_do
-                where nama_jenis_keluar = 'Lulus'
-                  and id_prodi = ?
-                  and {$yearExpr} in ({$placeholders})
-                group by {$yearExpr}
-            ", array_merge([$prodiId], $yearStrings));
-
-            $result = [];
-            foreach ($rows as $row) {
-                $result[(int) $row->thn] = (int) $row->jumlah;
-            }
-
-            return $result;
-        });
     }
 
     /**
@@ -213,22 +184,7 @@ class SaptoWaktuTungguLulusanRepository
      */
     public function availableYears(): array
     {
-        return Cache::remember('sapto:waktu-tunggu:years:v1', $this->cacheTtl(), function (): array {
-            $yearExpr = $this->graduationYearSql();
-
-            $rows = DB::select("
-                select distinct {$yearExpr} as thn
-                from list_mahasiswa_lulus_do
-                where nama_jenis_keluar = 'Lulus'
-                  and {$yearExpr} is not null
-                order by thn desc
-            ");
-
-            return array_values(array_filter(
-                array_map(fn (object $row): int => (int) $row->thn, $rows),
-                fn (int $year): bool => $year >= 2000 && $year <= 2100
-            ));
-        });
+        return $this->lulusanAvailableYears(self::CACHE_NAMESPACE);
     }
 
     private function latestYear(): int

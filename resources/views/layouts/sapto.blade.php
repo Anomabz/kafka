@@ -286,6 +286,8 @@
 
     @yield('overlays')
 
+    <div id="toast-stack" class="toast-stack" aria-live="polite" aria-atomic="false"></div>
+
     @yield('scripts')
 </body>
 </html>

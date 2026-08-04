@@ -9,12 +9,13 @@ use Tests\TestCase;
 
 /**
  * Tabel 8.d.1) Waktu Tunggu Lulusan. Satu tabel, dua varian kolom menurut
- * jenjang prodi terpilih (Diploma Tiga / Sarjana) -- lihat
- * SaptoWaktuTungguLulusanRepository. Kolom tracer study (terlacak/dipesan/
- * waktu tunggu) tidak punya sumber data sama sekali di database ini, jadi
- * yang diuji terutama: baris "Jumlah Lulusan" terhitung benar per TS-4/
- * TS-3/TS-2, kolom yang benar muncul per jenjang, dan jenjang di luar
- * D3/S1 (mis. S2) mendapat notice, bukan tabel kosong.
+ * jenjang prodi terpilih -- Diploma Tiga, atau Sarjana (S1/S2/S3 dianggap
+ * satu varian "Sarjana") -- lihat SaptoWaktuTungguLulusanRepository. Kolom
+ * tracer study (terlacak/dipesan/waktu tunggu) tidak punya sumber data sama
+ * sekali di database ini, jadi yang diuji terutama: baris "Jumlah Lulusan"
+ * terhitung benar per TS-4/TS-3/TS-2, kolom yang benar muncul per jenjang,
+ * S1/S2/S3 semua masuk varian Sarjana, dan jenjang di luar D3/S1/S2/S3
+ * (mis. Sp-1) mendapat notice, bukan tabel kosong.
  *
  * Sesi admin (is_admin) dipakai, bukan korprodi: role 'prodi' mengunci
  * program_studi_id ke satu prodi tetap (lihat SaptoUserContext::
@@ -39,6 +40,8 @@ class SaptoWaktuTungguLulusanTest extends TestCase
             ['id_prodi' => 'P1', 'kode_program_studi' => '55201', 'nama_program_studi' => 'Teknik Informatika', 'status' => 'AKTIF', 'id_jenjang_pendidikan' => 1, 'nama_jenjang_pendidikan' => 'S1'],
             ['id_prodi' => 'P3', 'kode_program_studi' => '55301', 'nama_program_studi' => 'Manajemen Informatika', 'status' => 'AKTIF', 'id_jenjang_pendidikan' => 2, 'nama_jenjang_pendidikan' => 'D3'],
             ['id_prodi' => 'P4', 'kode_program_studi' => '55401', 'nama_program_studi' => 'Ilmu Komputer', 'status' => 'AKTIF', 'id_jenjang_pendidikan' => 3, 'nama_jenjang_pendidikan' => 'S2'],
+            ['id_prodi' => 'P5', 'kode_program_studi' => '55501', 'nama_program_studi' => 'Ilmu Komputer (S3)', 'status' => 'AKTIF', 'id_jenjang_pendidikan' => 4, 'nama_jenjang_pendidikan' => 'S3'],
+            ['id_prodi' => 'P6', 'kode_program_studi' => '55601', 'nama_program_studi' => 'Psikologi Profesi', 'status' => 'AKTIF', 'id_jenjang_pendidikan' => 5, 'nama_jenjang_pendidikan' => 'Sp-1'],
         ]);
 
         DB::table('list_mahasiswa_lulus_do')->insert([
@@ -58,6 +61,12 @@ class SaptoWaktuTungguLulusanTest extends TestCase
             $this->lulus('P3', '20201'),
             $this->lulus('P3', '20221'),
             $this->lulus('P3', '20221'),
+
+            // P4 (S2): TS-2=2022 (1).
+            $this->lulus('P4', '20221'),
+
+            // P5 (S3): TS-2=2022 (1).
+            $this->lulus('P5', '20221'),
         ]);
     }
 
@@ -129,11 +138,37 @@ class SaptoWaktuTungguLulusanTest extends TestCase
         $this->assertSame('3 ≤ WT ≤ 6 Bulan', $response->json('columns.6.label'));
         $this->assertSame('WT > 6 Bulan', $response->json('columns.7.label'));
 
+        // WT 1-3 berbagi header kelompok (colspan) -- "Dipesan" (kolom 4) tidak ikut grup.
+        $group = 'Jumlah Lulusan Terlacak dengan Waktu Tunggu Mendapatkan Pekerjaan';
+        $this->assertNull($response->json('columns.4.group'));
+        $this->assertSame($group, $response->json('columns.5.group'));
+        $this->assertSame($group, $response->json('columns.7.group'));
+
         $rows = $response->json('rows');
         $this->assertSame(1, $rows[0]['jumlah_lulusan']); // TS-4 2020
         $this->assertSame(0, $rows[1]['jumlah_lulusan']); // TS-3 2021, tidak ada lulusan
         $this->assertSame(2, $rows[2]['jumlah_lulusan']); // TS-2 2022
         $this->assertSame(0, $rows[0]['jumlah_dipesan']);
+    }
+
+    public function test_s2_and_s3_use_sarjana_variant(): void
+    {
+        foreach (['P4', 'P5'] as $prodiId) {
+            $response = $this->getJson("/api/sapto/tables/waktu-tunggu/summary?ts=2024&program_studi_id={$prodiId}")
+                ->assertOk()
+                ->assertJsonPath('notice', null);
+
+            $columnKeys = collect($response->json('columns'))->pluck('key')->all();
+            $this->assertSame(
+                ['no', 'tahun_lulus', 'jumlah_lulusan', 'jumlah_terlacak', 'wt_1', 'wt_2', 'wt_3'],
+                $columnKeys,
+                "Prodi {$prodiId}: S2/S3 harus pakai varian Sarjana (tanpa kolom dipesan)."
+            );
+            $this->assertSame('WT < 6 Bulan', $response->json('columns.4.label'));
+
+            $rows = $response->json('rows');
+            $this->assertSame(1, $rows[2]['jumlah_lulusan']); // TS-2 2022
+        }
     }
 
     public function test_no_program_studi_selected_returns_notice(): void
@@ -147,11 +182,11 @@ class SaptoWaktuTungguLulusanTest extends TestCase
 
     public function test_unsupported_jenjang_returns_notice_not_empty_table(): void
     {
-        $response = $this->getJson('/api/sapto/tables/waktu-tunggu/summary?ts=2024&program_studi_id=P4')
+        $response = $this->getJson('/api/sapto/tables/waktu-tunggu/summary?ts=2024&program_studi_id=P6')
             ->assertOk()
             ->assertJsonPath('rows', []);
 
         $this->assertStringContainsString('Diploma Tiga atau Sarjana', $response->json('notice'));
-        $this->assertStringContainsString('S2', $response->json('notice'));
+        $this->assertStringContainsString('Sp-1', $response->json('notice'));
     }
 }

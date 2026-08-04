@@ -13,6 +13,13 @@
         </svg>
     </button>
     <div class="min-w-0 flex-1">
+        <nav id="breadcrumb" aria-label="Breadcrumb" class="mb-0.5 flex items-center gap-1 text-[11px] font-medium text-muted">
+            <span>Beranda</span>
+            <span id="breadcrumb-group-wrap" class="hidden items-center gap-1">
+                <svg class="h-3 w-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+                <span id="breadcrumb-group"></span>
+            </span>
+        </nav>
         <h1 id="page-title" class="truncate text-[15px] font-bold leading-tight text-ink sm:overflow-visible sm:whitespace-normal sm:text-[17px] lg:text-[21px]">
             Tabel 3.a.2) Dosen Pembimbing Utama Tugas Akhir
         </h1>

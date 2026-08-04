@@ -59,6 +59,19 @@
 <script>
     const tables = @json($tables);
     const currentYear = new Date().getFullYear();
+
+    // Sama seperti $groupLabels di sidebar.blade.php (dikelompokkan dari
+    // digit pertama table.code) -- breadcrumb butuh nama kategori yang sama.
+    const GROUP_LABELS = {
+        '1': 'Kerjasama Tridharma',
+        '2': 'Seleksi & Mahasiswa Asing',
+        '3': 'Dosen',
+        '4': 'Penggunaan Dana',
+        '5': 'Kurikulum & Pembelajaran',
+        '6': 'Penelitian Melibatkan Mahasiswa',
+        '7': 'PkM Melibatkan Mahasiswa',
+        '8': 'Capaian & Profil Lulusan',
+    };
     const PAGE_SIZE = 12; // baris per halaman, semua tabel
     // Akses korprodi biasa selalu dikunci ke satu program studi (lihat
     // SaptoUserContext::fromRequest) — canSelectFakultas/canSelectProgramStudi
@@ -95,6 +108,9 @@
         sharedFilterBar: document.getElementById('shared-filter-bar'),
         pageTitle: document.getElementById('page-title'),
         pageDescription: document.getElementById('page-description'),
+        breadcrumbGroupWrap: document.getElementById('breadcrumb-group-wrap'),
+        breadcrumbGroup: document.getElementById('breadcrumb-group'),
+        toastStack: document.getElementById('toast-stack'),
         tableStatus: document.getElementById('table-status'),
         tableSearch: document.getElementById('table-search'),
         tableExport: document.getElementById('table-export'),
@@ -154,6 +170,109 @@
     const maFilter = { fakultasId: 'all', prodiId: 'all', searchQuery: '' };
 
     let currentTableId = @json($activeTableId ?? 'kerjasama-pendidikan');
+
+    // Bookmarkable/shareable state: baca ?table=&ts=&fakultas=&prodi= dari URL
+    // saat load supaya link yang dibagikan membuka tabel+filter yang sama.
+    // Harus jalan sebelum loadFakultas/loadProgramStudi/activateTable pertama
+    // (lihat IIFE boot di akhir file) karena render select fakultas/prodi
+    // membaca state.fakultasId/programStudiId yang di-set di sini.
+    (() => {
+        const params = new URLSearchParams(window.location.search);
+        const tableParam = params.get('table');
+
+        if (tableParam && tables.some((item) => item.id === tableParam)) {
+            currentTableId = tableParam;
+        }
+
+        const tsParam = params.get('ts');
+        if (tsParam) {
+            state.ts = Number(tsParam);
+            state.maTs = Number(tsParam);
+        }
+
+        const fakultasParam = params.get('fakultas');
+        if (fakultasParam) {
+            state.fakultasId = fakultasParam;
+            maFilter.fakultasId = fakultasParam;
+        }
+
+        const prodiParam = params.get('prodi');
+        if (prodiParam) {
+            state.programStudiId = prodiParam;
+            maFilter.prodiId = prodiParam;
+        }
+    })();
+
+    // Tulis tabel+filter aktif ke URL (replaceState, tidak menambah entri
+    // history) supaya halaman ini bisa di-bookmark/dibagikan. Dipanggil dari
+    // activateTable() (ganti tabel) dan renderSummary()/renderMaSummary()
+    // (ganti TS/fakultas/prodi).
+    function syncUrl() {
+        const params = new URLSearchParams();
+        params.set('table', currentTableId);
+
+        if (currentTableId === 'mahasiswa-asing') {
+            if (state.maTs !== null) params.set('ts', state.maTs);
+            if (maFilter.fakultasId !== 'all') params.set('fakultas', maFilter.fakultasId);
+            if (maFilter.prodiId !== 'all') params.set('prodi', maFilter.prodiId);
+        } else {
+            if (state.ts !== null) params.set('ts', state.ts);
+            if (state.canSelectFakultas && state.fakultasId !== 'all') params.set('fakultas', state.fakultasId);
+            if (state.canSelectProgramStudi && state.programStudiId !== 'all') params.set('prodi', state.programStudiId);
+        }
+
+        const query = params.toString();
+        history.replaceState(null, '', query ? `${location.pathname}?${query}` : location.pathname);
+    }
+
+    // Breadcrumb "Beranda / <kategori>" di atas judul halaman -- kategori
+    // sama dengan grup sidebar (lihat GROUP_LABELS di atas).
+    function updateBreadcrumb(table) {
+        const groupKey = table ? String(table.code).split('.')[0] : null;
+        const groupLabel = groupKey ? GROUP_LABELS[groupKey] : null;
+
+        if (groupLabel) {
+            els.breadcrumbGroup.textContent = groupLabel;
+            els.breadcrumbGroupWrap.classList.remove('hidden');
+            els.breadcrumbGroupWrap.classList.add('flex');
+        } else {
+            els.breadcrumbGroupWrap.classList.add('hidden');
+            els.breadcrumbGroupWrap.classList.remove('flex');
+        }
+    }
+
+    // Notifikasi kecil di pojok kanan bawah untuk konfirmasi aksi (mis.
+    // export berhasil) yang tidak perlu mengganggu alur kerja dengan modal.
+    let toastSeq = 0;
+    function showToast(message, type = 'success') {
+        if (!els.toastStack) return;
+
+        const el = document.createElement('div');
+        el.id = `toast-${++toastSeq}`;
+        el.className = `toast${type === 'error' ? ' is-error' : ''}`;
+        el.setAttribute('role', type === 'error' ? 'alert' : 'status');
+
+        const iconPath = type === 'error'
+            ? 'M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z'
+            : 'M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4 12 14.01l-3-3';
+
+        el.innerHTML = `
+            <svg class="toast-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${iconPath}" /></svg>
+            <span class="flex-1">${escapeHtml(message)}</span>
+            <button type="button" class="toast-close" aria-label="Tutup notifikasi">
+                <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
+            </button>
+        `;
+
+        const dismiss = () => {
+            el.classList.add('is-leaving');
+            el.addEventListener('animationend', () => el.remove(), { once: true });
+        };
+
+        el.querySelector('.toast-close').addEventListener('click', dismiss);
+        els.toastStack.appendChild(el);
+        setTimeout(dismiss, 4000);
+    }
 
     // TS awal belum diketahui sampai summary pertama memberi tahu tahun akademik
     // apa saja yang ada di database. Tampilkan placeholder dulu.
@@ -349,15 +468,26 @@
         }
     }
 
+    // Skeleton beberapa baris x beberapa kolom (bukan satu bar penuh lebar)
+    // supaya sekilas terlihat seperti bentuk tabel sungguhan selagi data
+    // dimuat, bukan cuma satu garis abu-abu.
+    const SKELETON_BAR_WIDTHS = ['w-full', 'w-5/6', 'w-2/3', 'w-3/4', 'w-1/2'];
+
+    function skeletonRows(colCount, rowCount = 6) {
+        return Array.from({ length: rowCount }).map((_, r) => `
+            <tr>
+                ${Array.from({ length: colCount }).map((__, c) => `
+                    <td class="sp-skeleton-td"><div class="sp-skeleton-bar ${SKELETON_BAR_WIDTHS[(r + c) % SKELETON_BAR_WIDTHS.length]}"></div></td>
+                `).join('')}
+            </tr>
+        `).join('');
+    }
+
     function setLoading() {
         metricEls.forEach((el) => el.classList.add('is-loading'));
         els.tableStatus.textContent = 'Memuat data...';
         els.tableHead.innerHTML = '';
-        els.tableBody.innerHTML = Array.from({ length: 6 }).map(() => `
-            <tr>
-                <td class="sp-skeleton-td" colspan="12"><div class="sp-skeleton-bar w-full max-w-md"></div></td>
-            </tr>
-        `).join('');
+        els.tableBody.innerHTML = skeletonRows(6);
         els.tableFoot.innerHTML = '';
         els.tablePagination.innerHTML = '';
     }
@@ -430,6 +560,8 @@
         } else {
             renderDosenSummary(summary);
         }
+
+        syncUrl();
     }
 
     function renderDosenSummary(summary) {
@@ -460,6 +592,39 @@
         renderGenericTable(summary);
     }
 
+    // Header dua baris untuk kolom yang punya `group` (mis. Tabel 8.d.1/8.d.2
+    // BAN-PT: "Jumlah Lulusan Terlacak dengan ..." membentang di atas
+    // beberapa sub-kolom). Kolom tanpa `group` dapat rowspan 2 supaya tetap
+    // sejajar; kolom `group` yang sama & berurutan digabung jadi satu <th
+    // colspan>. Dipisah dari renderGenericTable supaya jalur tanpa grup
+    // (mayoritas tabel) tidak kena overhead ini.
+    function renderGroupedHead(cols) {
+        const top = [];
+        const bottom = [];
+
+        for (let i = 0; i < cols.length;) {
+            const c = cols[i];
+
+            if (!c.group) {
+                top.push(`<th rowspan="2" class="sp-th ${c.align === 'num' ? 'sp-th-num' : ''} ${i === 0 ? 'sp-th-sticky' : ''}">${escapeHtml(c.label)}</th>`);
+                i += 1;
+                continue;
+            }
+
+            let span = 0;
+            while (i + span < cols.length && cols[i + span].group === c.group) span += 1;
+            top.push(`<th class="sp-th sp-th-group" colspan="${span}">${escapeHtml(c.group)}</th>`);
+
+            for (let j = 0; j < span; j += 1) {
+                bottom.push(`<th class="sp-th ${cols[i + j].align === 'num' ? 'sp-th-num' : ''}">${escapeHtml(cols[i + j].label)}</th>`);
+            }
+
+            i += span;
+        }
+
+        return `<tr>${top.join('')}</tr><tr>${bottom.join('')}</tr>`;
+    }
+
     // Render tabel generik dari definisi kolom + baris envelope backend.
     function renderGenericTable(summary) {
         const cols = summary.columns || [];
@@ -478,7 +643,7 @@
         // horizontal di layar sempit -- lihat komentar .table-scroll di
         // app.css untuk kenapa ini butuh background solid, bukan cuma
         // position:sticky saja.
-        els.tableHead.innerHTML = `<tr>${cols.map((c, i) =>
+        els.tableHead.innerHTML = cols.some((c) => c.group) ? renderGroupedHead(cols) : `<tr>${cols.map((c, i) =>
             `<th class="sp-th ${c.align === 'num' ? 'sp-th-num' : ''} ${i === 0 ? 'sp-th-sticky' : ''}">${escapeHtml(c.label)}</th>`).join('')}</tr>`;
 
         if (!summary.rows.length) {
@@ -899,11 +1064,7 @@
         maMetricEls.forEach((el) => el.classList.add('is-loading'));
         els.maTableStatus.textContent = 'Memuat data...';
         els.maTableHead.innerHTML = '';
-        els.maTableBody.innerHTML = Array.from({ length: 6 }).map(() => `
-            <tr>
-                <td class="sp-skeleton-td" colspan="11"><div class="sp-skeleton-bar w-full max-w-md"></div></td>
-            </tr>
-        `).join('');
+        els.maTableBody.innerHTML = skeletonRows(6);
         els.maTableFoot.innerHTML = '';
     }
 
@@ -941,6 +1102,7 @@
         els.maTableStatus.textContent = rows.length ? `${rows.length} program studi` : 'Belum ada data';
 
         renderMaTable(rows, totals);
+        syncUrl();
     }
 
     function maRowTotals(rows) {
@@ -1171,8 +1333,26 @@
         'waktu-tunggu': {
             endpoint: 'waktu-tunggu',
             unit: 'tahun lulus',
-            description: 'Jumlah lulusan per tahun lulus (TS-4/TS-3/TS-2) untuk satu program studi, mengikuti format Tabel 8.d.1 BAN-PT -- kolomnya berbeda untuk prodi Diploma Tiga vs Sarjana; jenjang lain (S2/S3/Profesi) tidak punya varian tabel ini. Cuma "Jumlah Lulusan" yang terisi dari data lulusan; kolom "Terlacak", "Dipesan Sebelum Lulus", dan seluruh kategori waktu tunggu selalu 0 karena butuh data tracer study alumni yang belum ada sumbernya di sistem -- isi manual dari hasil tracer study terpisah.',
+            description: 'Jumlah lulusan per tahun lulus (TS-4/TS-3/TS-2) untuk satu program studi, mengikuti format Tabel 8.d.1 BAN-PT -- kolomnya berbeda untuk prodi Diploma Tiga vs Sarjana (S1/S2/S3); jenjang lain (Sp-1/Sp-2/Profesi) tidak punya varian tabel ini. Cuma "Jumlah Lulusan" yang terisi dari data lulusan; kolom "Terlacak", "Dipesan Sebelum Lulus", dan seluruh kategori waktu tunggu selalu 0 karena butuh data tracer study alumni yang belum ada sumbernya di sistem -- isi manual dari hasil tracer study terpisah.',
             icons: ['cap', 'users', 'swap', 'calendar'],
+        },
+        'kesesuaian-bidang-kerja': {
+            endpoint: 'kesesuaian-bidang-kerja',
+            unit: 'tahun lulus',
+            description: 'Jumlah lulusan per tahun lulus (TS-4/TS-3/TS-2) untuk satu program studi, mengikuti format Tabel 8.d.2 BAN-PT. Cuma "Jumlah Lulusan" yang terisi dari data lulusan; kolom "Terlacak" dan tingkat kesesuaian bidang kerja (Rendah/Sedang/Tinggi) selalu 0 karena butuh data tracer study alumni yang belum ada sumbernya di sistem -- isi manual dari hasil tracer study terpisah.',
+            icons: ['cap', 'users', 'swap', 'calendar'],
+        },
+        'tempat-kerja': {
+            endpoint: 'tempat-kerja',
+            unit: 'tahun lulus',
+            description: 'Jumlah lulusan per tahun lulus (TS-4/TS-3/TS-2) untuk satu program studi, mengikuti format Tabel 8.e.1 BAN-PT. Cuma "Jumlah Lulusan" yang terisi dari data lulusan; kolom "Terlacak" dan tingkat/ukuran tempat kerja (Lokal/Nasional/Multinasional) selalu 0 karena butuh data tracer study alumni yang belum ada sumbernya di sistem -- isi manual dari hasil tracer study terpisah.',
+            icons: ['cap', 'users', 'briefcase', 'calendar'],
+        },
+        'referensi-kepuasan-pengguna': {
+            endpoint: 'referensi-kepuasan-pengguna',
+            unit: 'tahun lulus',
+            description: 'Jumlah lulusan per tahun lulus (TS-4/TS-3/TS-2) untuk satu program studi beserta jumlah tanggapan kepuasan pengguna yang terlacak, mengikuti format Tabel Referensi 8.e.2 BAN-PT (denominator untuk Tabel 8.e.2 Kepuasan Pengguna Lulusan). Cuma "Jumlah Lulusan" yang terisi dari data lulusan; "Jumlah Tanggapan ... Terlacak" selalu 0 karena butuh data tracer study/survei pengguna lulusan yang belum ada sumbernya di sistem -- isi manual dari hasil tracer study terpisah.',
+            icons: ['cap', 'users', 'chart', 'calendar'],
         },
         'prestasi-akademik': {
             endpoint: 'prestasi-akademik',
@@ -1284,6 +1464,7 @@
 
         const table = tables.find((item) => item.id === tableId);
         els.pageTitle.textContent = table?.name || 'SAPTO';
+        updateBreadcrumb(table);
 
         els.tablePage.classList.add('hidden');
         els.maPage.classList.add('hidden');
@@ -1321,6 +1502,8 @@
             els.placeholderPage.classList.remove('hidden');
             els.placeholderTitle.textContent = table?.name || 'Tabel SAPTO';
         }
+
+        syncUrl();
     }
 
     function sumYearCounts(counts) {
@@ -1755,6 +1938,7 @@
             : exportDosenRows(state.summary);
 
         downloadCsv(exportFilenameFor(currentTableId), rows);
+        showToast(`${Math.max(rows.length - 1, 0)} baris berhasil diekspor ke Excel.`);
     });
 
     els.maTableExport?.addEventListener('click', () => {
@@ -1762,7 +1946,10 @@
             return;
         }
 
-        downloadCsv(exportFilenameFor('mahasiswa-asing'), exportMaRows());
+        const rows = exportMaRows();
+
+        downloadCsv(exportFilenameFor('mahasiswa-asing'), rows);
+        showToast(`${Math.max(rows.length - 1, 0)} baris berhasil diekspor ke Excel.`);
     });
 
     // Toggle layar penuh untuk seluruh halaman (pakai Fullscreen API bawaan
