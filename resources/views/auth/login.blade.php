@@ -4,7 +4,10 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" id="theme-color-meta" content="#e7ecf5">
-    <title>Masuk — SAPTO v1.0 - UNSRI</title>
+    {{-- Judul halaman = sinyal on-page terkuat, jadi diawali nama yang
+         benar-benar dicari orang ("sapto unsri"), bukan kata "Masuk" atau
+         nomor versi. Versi tetap ada di kaki kartu. --}}
+    <title>SAPTO Unsri — Sistem Akreditasi Perguruan Tinggi Online</title>
     <link rel="icon" href="{{ asset('images/logo-unsri.webp') }}" type="image/webp">
     @include('components.seo-meta')
     <script>
@@ -93,7 +96,7 @@
         /* Kartu stat kecil khusus mobile — di desktop info yang sama sudah
            ada di .auth-context (panel bermerek kiri), jadi cukup diulang di
            sini dengan porsi lebih ringkas supaya mobile tidak terasa cuma
-           form kosong tanpa konteks/identitas produk. */
+           tombol kosong tanpa konteks/identitas produk. */
         .auth-mobile-stat {
             display: flex;
             align-items: center;
@@ -121,8 +124,8 @@
 
         /*
          * Mobile gets its own layout, not just the desktop one squeezed into
-         * one column: only the form shows (that's the actual task) — the
-         * branded panel is desktop-only, restored at the 1024px breakpoint.
+         * one column: only the "Masuk" card shows (that's the actual task) —
+         * the branded panel is desktop-only, restored at the 1024px breakpoint.
          */
         .auth-context {
             display: none;
@@ -334,7 +337,14 @@
         }
 
         .auth-heading {
-            font-size: 19px;
+            font-size: 26px;
+            line-height: 1.15;
+        }
+
+        @media (min-width: 480px) {
+            .auth-heading {
+                font-size: 30px;
+            }
         }
 
         .auth-tagline {
@@ -351,6 +361,7 @@
 
         .auth-submit {
             padding: 0.625rem 1rem;
+            text-decoration: none;
             transition: opacity 120ms ease;
         }
 
@@ -368,48 +379,201 @@
             }
         }
 
-        .auth-input-wrap {
+        /* --- Kartu "Masuk": isinya sengaja berlapis (eyebrow, headline
+           besar, CTA menyala, 3 langkah, catatan sesi bersama) supaya kartu
+           tidak jadi slab kosong sejak form kredensialnya dipindah ke
+           Keycloak. Semua warna pakai token app.css biar ikut tema. --- */
+        .auth-card {
             position: relative;
+            overflow: hidden;
         }
 
-        .auth-input-wrap .field-icon {
+        /* Glow sudut + garis aksen di tepi atas: dua sentuhan kecil yang
+           menyambungkan kartu ke panel kiri, supaya permukaan glass-nya tidak
+           terbaca sebagai kotak abu-abu polos. */
+        .auth-card::before {
+            content: '';
             position: absolute;
-            left: 0.8rem;
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--color-muted);
+            top: -8rem;
+            right: -8rem;
+            width: 22rem;
+            height: 22rem;
+            border-radius: 999px;
+            background: radial-gradient(circle, rgba(99, 102, 241, 0.28), transparent 68%);
             pointer-events: none;
         }
 
-        .auth-input-wrap input.filter-select {
-            padding-left: 2.5rem;
-        }
-
-        .auth-input-wrap input[type='password'].filter-select,
-        .auth-input-wrap input.has-toggle {
-            padding-right: 2.5rem;
-        }
-
-        .field-toggle {
+        .auth-card::after {
+            content: '';
             position: absolute;
-            right: 0.5rem;
-            top: 50%;
-            transform: translateY(-50%);
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #312e81 0%, #4338ca 40%, #6366f1 70%, #a5b4fc 100%);
+            pointer-events: none;
+        }
+
+        .auth-card-inner {
+            position: relative;
+            z-index: 1;
+        }
+
+        .auth-accent-word {
+            color: var(--color-accent);
+        }
+
+        /* CTA utama: satu-satunya aksi di halaman ini, jadi dibikin paling
+           berat secara visual (gradasi + glow senada panel kiri). */
+        .auth-cta {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.55rem;
+            width: 100%;
+            margin-top: 1.4rem;
+            padding: 0.95rem 1.25rem;
+            border-radius: 0.9rem;
+            font-size: 14px;
+            font-weight: 800;
+            color: #ffffff;
+            text-decoration: none;
+            background: linear-gradient(135deg, #4338ca 0%, #6366f1 55%, #312e81 100%);
+            box-shadow: 0 12px 26px -10px rgba(67, 56, 202, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+            transition: transform 140ms ease, box-shadow 140ms ease, filter 140ms ease;
+        }
+
+        .auth-cta:hover {
+            transform: translateY(-1px);
+            filter: brightness(1.06);
+            box-shadow: 0 16px 32px -10px rgba(67, 56, 202, 0.95), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+        }
+
+        .auth-cta svg {
+            width: 16px;
+            height: 16px;
+            transition: transform 140ms ease;
+        }
+
+        .auth-cta:hover svg {
+            transform: translateX(3px);
+        }
+
+        .auth-divider {
+            display: flex;
+            align-items: center;
+            gap: 0.7rem;
+            margin-top: 1.6rem;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--color-muted);
+        }
+
+        .auth-divider::before,
+        .auth-divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: currentColor;
+            opacity: 0.28;
+        }
+
+        .auth-steps {
+            list-style: none;
+            margin: 1.1rem 0 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 0.9rem;
+        }
+
+        .auth-steps li {
+            position: relative;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+        }
+
+        /* Garis penyambung antar nomor langkah -- bikin tiga item terbaca
+           sebagai satu alur, bukan tiga bullet lepas. */
+        .auth-steps li:not(:last-child)::before {
+            content: '';
+            position: absolute;
+            left: 11px;
+            top: 26px;
+            bottom: -0.9rem;
+            width: 1px;
+            background: linear-gradient(180deg, var(--color-accent-line), transparent);
+        }
+
+        .auth-step-num {
+            flex-shrink: 0;
             display: grid;
             place-items: center;
-            width: 1.75rem;
-            height: 1.75rem;
-            border-radius: 0.6rem;
-            color: var(--color-muted);
-            cursor: pointer;
-            background: transparent;
-            border: none;
-            transition: color 120ms ease, background 120ms ease;
-        }
-
-        .field-toggle:hover {
+            width: 23px;
+            height: 23px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 800;
             color: var(--color-accent);
             background: var(--color-accent-soft);
+            box-shadow: inset 0 0 0 1px var(--color-accent-line);
+        }
+
+        .auth-step-text {
+            font-size: 12px;
+            line-height: 1.45;
+            color: var(--color-muted);
+        }
+
+        .auth-step-text strong {
+            display: block;
+            font-size: 12.5px;
+            font-weight: 700;
+            color: var(--color-ink);
+        }
+
+        .auth-note {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.55rem;
+            margin-top: 1.5rem;
+            padding: 0.7rem 0.85rem;
+            border-radius: 0.8rem;
+            font-size: 11.5px;
+            line-height: 1.45;
+            color: var(--color-muted);
+            background: var(--color-accent-soft);
+            box-shadow: inset 0 0 0 1px var(--color-accent-line);
+        }
+
+        .auth-foot {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            margin-top: 1.6rem;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            color: var(--color-muted);
+        }
+
+        .auth-foot span {
+            width: 4px;
+            height: 4px;
+            border-radius: 999px;
+            background: var(--color-accent);
+        }
+
+        .auth-note svg {
+            width: 14px;
+            height: 14px;
+            flex-shrink: 0;
+            margin-top: 1px;
+            color: var(--color-accent);
         }
 
         .auth-modal-backdrop {
@@ -466,22 +630,6 @@
             font-size: 13px;
             line-height: 1.5;
             color: var(--color-muted);
-        }
-
-        .auth-modal-countdown {
-            margin-top: 0.9rem;
-            font-size: 12px;
-            color: var(--color-muted);
-        }
-
-        .auth-modal-countdown strong {
-            color: var(--color-accent);
-            font-variant-numeric: tabular-nums;
-        }
-
-        .auth-modal .auth-submit {
-            margin-top: 1.1rem;
-            text-decoration: none;
         }
 
         @media (prefers-reduced-motion: no-preference) {
@@ -613,71 +761,54 @@
 
             <div class="auth-card glass-strong rounded-2xl">
               <div class="auth-card-inner">
-                <h1 class="auth-heading font-extrabold tracking-tight text-ink">Masuk ke SAPTO</h1>
-                <p class="mt-1 text-[13px] text-muted">Gunakan akun SSO Universitas Sriwijaya Anda.</p>
+                <h1 class="auth-heading font-extrabold tracking-tight text-ink">Selamat datang di <span class="auth-accent-word">SAPTO</span></h1>
+                <p class="mt-1 text-[13px] text-muted">Portal pelaporan akreditasi Tridharma untuk koordinator program studi Universitas Sriwijaya.</p>
 
-                <form method="POST" action="{{ route('login.attempt') }}" class="auth-mt-5 space-y-4">
-                    @csrf
-                    <div class="auth-field">
-                        <label for="username" class="mb-1 block text-[12px] font-semibold text-muted">Username</label>
-                        <div class="auth-input-wrap">
-                            <svg class="field-icon icon-16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/>
-                                <circle cx="10" cy="7" r="4"/>
-                            </svg>
-                            <input
-                                type="text"
-                                name="username"
-                                id="username"
-                                value="{{ old('username') }}"
-                                required
-                                autofocus
-                                autocomplete="username"
-                                class="filter-select"
-                            />
-                        </div>
-                        @error('username')
-                            <p class="mt-1 text-[12px] text-warn">{{ $message }}</p>
-                        @enderror
-                    </div>
+                <a href="{{ route('sso.login') }}" id="login-submit" class="auth-cta">
+                    <span id="login-submit-label">Masuk</span>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M5 12h13m-5-6 6 6-6 6"/>
+                    </svg>
+                </a>
 
-                    <div class="auth-field">
-                        <label for="password" class="mb-1 block text-[12px] font-semibold text-muted">Kata Sandi</label>
-                        <div class="auth-input-wrap">
-                            <svg class="field-icon icon-16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                <rect x="4" y="10.5" width="16" height="9.5" rx="2"/>
-                                <path d="M7.5 10.5V7a4.5 4.5 0 0 1 9 0v3.5"/>
-                            </svg>
-                            <input
-                                type="password"
-                                name="password"
-                                id="password"
-                                required
-                                autocomplete="current-password"
-                                class="filter-select has-toggle"
-                            />
-                            <button type="button" id="password-toggle" class="field-toggle" aria-label="Tampilkan kata sandi" aria-pressed="false">
-                                <svg id="password-toggle-icon" class="icon-16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                    <path d="M1.5 12S5 5 12 5s10.5 7 10.5 7-3.5 7-10.5 7S1.5 12 1.5 12Z"/>
-                                    <circle cx="12" cy="12" r="3"/>
-                                </svg>
-                            </button>
-                        </div>
-                        @error('password')
-                            <p class="mt-1 text-[12px] text-warn">{{ $message }}</p>
-                        @enderror
-                    </div>
+                <div class="auth-divider">Cara masuk</div>
 
-                    <button
-                        type="submit"
-                        id="login-submit"
-                        class="auth-submit inline-flex w-full items-center justify-center gap-2 rounded-xl bg-accent text-[13px] font-bold text-white"
-                    >
-                        Masuk
-                    </button>
-                </form>
+                <ol class="auth-steps">
+                    <li>
+                        <span class="auth-step-num">1</span>
+                        <span class="auth-step-text">
+                            <strong>Tekan tombol di atas</strong>
+                            Anda dialihkan ke halaman login resmi portal SSO Unsri.
+                        </span>
+                    </li>
+                    <li>
+                        <span class="auth-step-num">2</span>
+                        <span class="auth-step-text">
+                            <strong>Masukkan akun Unsri di sana</strong>
+                            Kata sandi diketik di halaman SSO, tidak pernah di SAPTO.
+                        </span>
+                    </li>
+                    <li>
+                        <span class="auth-step-num">3</span>
+                        <span class="auth-step-text">
+                            <strong>Kembali otomatis</strong>
+                            Begitu login berhasil, SAPTO langsung terbuka.
+                        </span>
+                    </li>
+                </ol>
 
-                <p class="auth-mt-4 text-center text-[12px] text-muted">SAPTO — Sistem Akreditasi Perguruan Tinggi Online</p>
+                <p class="auth-note">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M12 21s7-3.6 7-9V6l-7-3-7 3v6c0 5.4 7 9 7 9Z"/>
+                    </svg>
+                    Sudah login di aplikasi kampus lain? Sesinya sama — Anda langsung masuk tanpa mengetik ulang.
+                </p>
+
+                <p class="auth-foot">
+                    SAPTO v1.0
+                    <span></span>
+                    Universitas Sriwijaya
+                </p>
               </div>
             </div>
         </div>
@@ -712,69 +843,13 @@
         </div>
     @endif
 
-    @if ($unregisteredHint)
-        @php($ssoRedirectUrl = route('sso.login', ['login_hint' => $unregisteredHint]))
-        <div class="auth-modal-backdrop" id="unregistered-backdrop">
-            <div
-                class="auth-modal glass-strong rounded-2xl"
-                role="alertdialog"
-                aria-modal="true"
-                aria-labelledby="unregistered-title"
-                aria-describedby="unregistered-desc"
-                tabindex="-1"
-            >
-                <button type="button" id="unregistered-close" class="theme-toggle auth-modal-close" aria-label="Tutup">
-                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-                    </svg>
-                </button>
-
-                <div class="auth-modal-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <path d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/>
-                    </svg>
-                </div>
-                <h2 id="unregistered-title" class="auth-modal-title">Akun tidak terdaftar</h2>
-                <p id="unregistered-desc" class="auth-modal-desc">Akun Anda tidak terdaftar, silakan register.</p>
-                <p class="auth-modal-countdown">
-                    Mengalihkan ke portal SSO dalam <strong id="unregistered-countdown">5</strong> detik…
-                </p>
-                <a
-                    href="{{ $ssoRedirectUrl }}"
-                    id="unregistered-register-btn"
-                    class="auth-submit inline-flex w-full items-center justify-center gap-2 rounded-xl bg-accent text-[13px] font-bold text-white"
-                >
-                    Register Sekarang
-                </a>
-            </div>
-        </div>
-    @endif
-
     <script>
         (function () {
-            var pwToggle = document.getElementById('password-toggle');
-            var pwInput = document.getElementById('password');
-            var pwIcon = document.getElementById('password-toggle-icon');
-            if (pwToggle && pwInput) {
-                pwToggle.addEventListener('click', function () {
-                    var showing = pwInput.type === 'text';
-                    pwInput.type = showing ? 'password' : 'text';
-                    pwToggle.setAttribute('aria-pressed', String(!showing));
-                    pwToggle.setAttribute('aria-label', showing ? 'Tampilkan kata sandi' : 'Sembunyikan kata sandi');
-                    if (pwIcon) {
-                        pwIcon.innerHTML = showing
-                            ? '<path d="M1.5 12S5 5 12 5s10.5 7 10.5 7-3.5 7-10.5 7S1.5 12 1.5 12Z"/><circle cx="12" cy="12" r="3"/>'
-                            : '<path d="M3 3l18 18M10.6 10.6a3 3 0 0 0 4.24 4.24M9.9 5.1A10.6 10.6 0 0 1 12 5c7 0 10.5 7 10.5 7a13.4 13.4 0 0 1-3.1 3.9M6.3 6.3C3.4 8.2 1.5 12 1.5 12s1.6 3.2 4.6 5.2A10.4 10.4 0 0 0 12 19"/>';
-                    }
-                });
-            }
-
-            var form = document.querySelector('form[action="{{ route('login.attempt') }}"]');
-            var submitBtn = document.getElementById('login-submit');
-            if (form && submitBtn) {
-                form.addEventListener('submit', function () {
-                    submitBtn.disabled = true;
-                    submitBtn.textContent = 'Memproses…';
+            var loginBtn = document.getElementById('login-submit');
+            var loginLabel = document.getElementById('login-submit-label');
+            if (loginBtn && loginLabel) {
+                loginBtn.addEventListener('click', function () {
+                    loginLabel.textContent = 'Mengalihkan ke SSO…';
                 });
             }
 
@@ -786,35 +861,6 @@
                 if (notKorprodiClose) notKorprodiClose.addEventListener('click', function () { notKorprodiBackdrop.remove(); });
                 document.addEventListener('keydown', function (e) {
                     if (e.key === 'Escape') notKorprodiBackdrop.remove();
-                });
-            }
-
-            var registerBtn = document.getElementById('unregistered-register-btn');
-            var countdownEl = document.getElementById('unregistered-countdown');
-            var backdrop = document.getElementById('unregistered-backdrop');
-            var closeBtn = document.getElementById('unregistered-close');
-            if (registerBtn && countdownEl && backdrop) {
-                var modal = document.querySelector('.auth-modal');
-                if (modal) modal.focus();
-
-                var seconds = 5;
-                var timer = setInterval(function () {
-                    seconds -= 1;
-                    countdownEl.textContent = String(seconds);
-                    if (seconds <= 0) {
-                        clearInterval(timer);
-                        window.location.href = registerBtn.href;
-                    }
-                }, 1000);
-
-                var closeModal = function () {
-                    clearInterval(timer);
-                    backdrop.remove();
-                };
-
-                if (closeBtn) closeBtn.addEventListener('click', closeModal);
-                document.addEventListener('keydown', function (e) {
-                    if (e.key === 'Escape') closeModal();
                 });
             }
         })();

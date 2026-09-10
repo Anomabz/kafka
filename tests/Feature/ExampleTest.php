@@ -8,27 +8,37 @@ use Tests\TestCase;
 class ExampleTest extends TestCase
 {
     /**
-     * '/' sits behind sso.auth (see routes/web.php) — an unauthenticated
-     * visitor lands on the app's own branded /login page, not straight on
-     * the external Keycloak domain.
+     * Root adalah satu-satunya pintu masuk: tamu dilayani welcome page di URL
+     * itu juga (tanpa redirect ke /login, tanpa dilempar ke domain Keycloak),
+     * jadi address bar tetap "sapto.unsri.ac.id".
      */
-    public function test_unauthenticated_visitor_is_redirected_to_local_login_page(): void
+    public function test_root_serves_the_welcome_page_without_redirecting(): void
     {
         $response = $this->get('/');
 
-        $response->assertRedirect(route('login'));
+        $response->assertOk();
+        $response->assertSee(route('sso.login'), false);
+        $response->assertDontSee('type="password"', false);
     }
 
     /**
-     * The /login page renders SAPTO's own form — it must not redirect to
-     * Keycloak automatically. Falling back to the hosted SSO page only
-     * happens after a failed submit (see SsoPasswordLoginTest).
+     * /login sudah tidak punya halaman sendiri -- disisakan cuma untuk
+     * bookmark lama.
      */
-    public function test_login_page_renders_its_own_form_without_redirecting(): void
+    public function test_the_old_login_url_redirects_to_root(): void
     {
-        $response = $this->get(route('login'));
+        $this->get('/login')->assertRedirect('/');
+    }
 
-        $response->assertOk();
-        $response->assertSee(route('login.attempt'), false);
+    /**
+     * Halaman dalam yang dibuka tanpa sesi dipantulkan ke root, dan alamat
+     * aslinya disimpan supaya user kembali ke sana setelah login.
+     */
+    public function test_a_deep_link_without_a_session_bounces_to_root_and_is_remembered(): void
+    {
+        $response = $this->get('/admin/login-as');
+
+        $response->assertRedirect('/');
+        $this->assertSame(url('/admin/login-as'), session('url.intended'));
     }
 }

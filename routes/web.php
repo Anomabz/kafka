@@ -7,15 +7,15 @@ use App\Http\Controllers\Api\Sapto\MahasiswaController; // <-- 1. Import Control
 use App\Http\Controllers\Auth\SsoController;
 use App\Support\TelegramNotifier;
 
-// Own SAPTO-branded login form. Credentials are validated against Keycloak
-// server-side (grant_type=password); only when that can't decide (direct
-// grants disabled, MFA/required actions pending, ...) do we fall back to
-// /auth/login's redirect to the hosted Keycloak page. Opening the app must
-// never bounce straight to the SSO domain without this page in between.
-Route::get('/login', [SsoController::class, 'showLoginForm'])->name('login');
-Route::post('/login', [SsoController::class, 'authenticate'])
-    ->middleware('throttle:6,1')
-    ->name('login.attempt');
+// Welcome page bermerek SAPTO tidak punya URL sendiri lagi: tamu yang membuka
+// root langsung dilayani halaman itu oleh EnsureSsoAuthenticated, jadi address
+// bar tetap "sapto.unsri.ac.id". /login disisakan cuma sebagai pengalihan untuk
+// bookmark lama (dan supaya route('login') tetap sah).
+//
+// Tidak ada form kredensial milik SAPTO sama sekali: password diketik di
+// halaman login bawaan Keycloak, jadi sesi SSO-nya dipakai bersama aplikasi
+// kampus lain — yang sudah login di app lain tidak perlu mengetik apa pun.
+Route::redirect('/login', '/')->name('login');
 
 // Easter egg — sengaja tidak ditautkan dari nav manapun.
 Route::get('/credits', fn () => view('credits'));

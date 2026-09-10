@@ -5,9 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\Korprodi;
 use App\Models\User;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -18,7 +16,7 @@ use Illuminate\Support\Str;
  */
 class SsoController extends Controller
 {
-    private function base(): string
+    public static function base(): string
     {
         $c = config('services.sso');
 
@@ -28,75 +26,6 @@ class SsoController extends Controller
     private function redirectUri(): string
     {
         return config('services.sso.redirect_uri') ?: route('sso.callback');
-    }
-
-    public function showLoginForm(Request $request)
-    {
-        if ($request->session()->has('sso_user')) {
-            return redirect('/');
-        }
-
-        return view('auth.login', [
-            'unregisteredHint' => $request->session()->get('unregistered_hint'),
-            'notKorprodiHint' => $request->session()->get('not_korprodi_hint'),
-        ]);
-    }
-
-    /**
-     * NIM/username + password typed on our own page, validated against
-     * Keycloak via the Resource Owner Password Credentials grant. Requires
-     * "Direct Access Grants" enabled on the app-sapto client. Any failure —
-     * wrong credentials, account needs something only Keycloak's hosted UI
-     * can do (required actions, MFA, ...), direct grants disabled — sends
-     * the visitor back to /login, which shows a popup that redirects to the
-     * hosted SSO login after a short countdown (or immediately via its
-     * "Register Sekarang" button).
-     */
-    public function authenticate(Request $request)
-    {
-        $data = $request->validate([
-            'username' => ['required', 'string'],
-            'password' => ['required', 'string'],
-        ]);
-
-        if ($adminRedirect = $this->attemptLocalAdminLogin($request, $data)) {
-            return $adminRedirect;
-        }
-
-        $token = Http::asForm()->post($this->base().'/token', [
-            'grant_type' => 'password',
-            'client_id' => config('services.sso.client_id'),
-            'client_secret' => config('services.sso.client_secret'),
-            'username' => $data['username'],
-            'password' => $data['password'],
-            'scope' => 'openid profile email',
-        ]);
-
-        if ($token->failed() || ! $token->json('access_token')) {
-            return redirect()->route('login')->with('unregistered_hint', $data['username']);
-        }
-
-        $userinfo = Http::withToken($token->json('access_token'))->get($this->base().'/userinfo');
-        if ($userinfo->failed()) {
-            return redirect()->route('login')->with('unregistered_hint', $data['username']);
-        }
-
-        $ssoUser = $this->ssoSessionUser($userinfo->json());
-
-        // Admin SAPTO tidak wajib ada di tabel korprodi — hak aksesnya
-        // universitas, bukan per prodi.
-        if (! $ssoUser['is_admin'] && ! $this->isKorprodi($ssoUser)) {
-            $this->logAccessDenied($ssoUser, $data['username']);
-
-            return redirect()->route('login')->with('not_korprodi_hint', $userinfo->json('name') ?: $data['username']);
-        }
-
-        $request->session()->regenerate();
-        $request->session()->put('sso_user', $ssoUser);
-        $request->session()->put('sso_id_token', $token->json('id_token'));
-        $request->session()->flash('show_intro', true);
-
-        return redirect()->intended('/');
     }
 
     public function login(Request $request)
@@ -112,11 +41,7 @@ class SsoController extends Controller
             'state' => $state,
         ];
 
-        if ($request->filled('login_hint')) {
-            $params['login_hint'] = $request->string('login_hint');
-        }
-
-        return redirect()->away($this->base().'/auth?'.http_build_query($params));
+        return redirect()->away(self::base().'/auth?'.http_build_query($params));
     }
 
     public function callback(Request $request)
@@ -130,7 +55,7 @@ class SsoController extends Controller
             abort(400, 'State OAuth tidak valid. Silakan ulangi login.');
         }
 
-        $token = Http::asForm()->post($this->base().'/token', [
+        $token = Http::asForm()->post(self::base().'/token', [
             'grant_type' => 'authorization_code',
             'client_id' => config('services.sso.client_id'),
             'client_secret' => config('services.sso.client_secret'),
@@ -142,23 +67,27 @@ class SsoController extends Controller
             abort(400, 'Gagal menukar authorization code menjadi token.');
         }
 
-        $userinfo = Http::withToken($token->json('access_token'))->get($this->base().'/userinfo');
+        $userinfo = Http::withToken($token->json('access_token'))->get(self::base().'/userinfo');
         if ($userinfo->failed()) {
             abort(400, 'Gagal mengambil data pengguna dari SSO.');
         }
 
         $ssoUser = $this->ssoSessionUser($userinfo->json());
 
-        // Sama seperti authenticate(): admin lolos tanpa harus jadi korprodi.
+        // Admin SAPTO tidak wajib ada di tabel korprodi — hak aksesnya
+        // universitas, bukan per prodi.
         if (! $ssoUser['is_admin'] && ! $this->isKorprodi($ssoUser)) {
             $this->logAccessDenied($ssoUser, (string) $userinfo->json('preferred_username'));
 
-            return redirect()->route('login')->with('not_korprodi_hint', $userinfo->json('name') ?: $userinfo->json('preferred_username'));
+            return redirect('/')->with('not_korprodi_hint', $userinfo->json('name') ?: $userinfo->json('preferred_username'));
         }
 
         $request->session()->regenerate();
         $request->session()->put('sso_user', $ssoUser);
         $request->session()->put('sso_id_token', $token->json('id_token'));
+        // Dipakai EnsureSsoAuthenticated untuk mendeteksi logout yang terjadi
+        // di aplikasi kampus lain (single logout).
+        $request->session()->put('sso_refresh_token', $token->json('refresh_token'));
         $request->session()->flash('show_intro', true);
 
         return redirect()->intended('/');
@@ -201,22 +130,38 @@ class SsoController extends Controller
 
     /**
      * Akun SSO yang terdaftar sebagai admin SAPTO di tabel `users`
-     * (is_admin = true, dicocokkan lewat nomor_identitas) mendapat akses
-     * penuh 'universitas' — lihat SaptoUserContext::fromRequest().
+     * (is_admin = true) mendapat akses penuh 'universitas' — lihat
+     * SaptoUserContext::fromRequest().
      *
-     * Bedanya dengan attemptLocalAdminLogin(): di sana tabel `users` dipakai
-     * untuk OTENTIKASI (cek hash password) karena akunnya memang di luar SSO.
-     * Di sini identitas sudah dijamin Keycloak, jadi `users` cuma berperan
-     * sebagai daftar "siapa yang admin" — passwordnya tidak dipakai sama
-     * sekali dan boleh acak.
+     * Dicocokkan lewat nomor_identitas ATAU email, karena realm tidak selalu
+     * mengirim `nomor_identitas`: log 2026-09-10 mencatat akun SSO yang valid
+     * ditolak dengan klaim itu null. Email selalu ada dan sama-sama dijamin
+     * Keycloak,
+     * jadi aman dipakai sebagai kunci kedua. Identitas dijamin Keycloak, jadi
+     * `users` cuma berperan sebagai daftar "siapa yang admin" — kolom password
+     * tidak dipakai sama sekali dan boleh acak.
      */
     private function isSaptoAdmin(array $userinfo): bool
     {
         $nip = trim((string) ($userinfo['nomor_identitas'] ?? ''));
+        $email = trim((string) ($userinfo['email'] ?? ''));
 
-        return $nip !== '' && User::query()
+        // Tanpa satu pun kunci, jangan pernah menjalankan query -- where()
+        // dengan closure kosong akan cocok ke SEMUA admin.
+        if ($nip === '' && $email === '') {
+            return false;
+        }
+
+        return User::query()
             ->where('is_admin', true)
-            ->where('nomor_identitas', $nip)
+            ->where(function ($q) use ($nip, $email) {
+                if ($nip !== '') {
+                    $q->orWhere('nomor_identitas', $nip);
+                }
+                if ($email !== '') {
+                    $q->orWhere('email', $email);
+                }
+            })
             ->exists();
     }
 
@@ -237,45 +182,13 @@ class SsoController extends Controller
         return $userinfo;
     }
 
-    /**
-     * Login lokal khusus developer SAPTO — bukan lewat Keycloak sama sekali
-     * (akunnya memang tidak ada di SSO kampus). Kredensial dicek terhadap
-     * hash bcrypt di kolom users.password (Hash::check), bukan Keycloak.
-     * Akun dengan is_admin=true dapat akses penuh semua fakultas/prodi —
-     * lihat SaptoUserContext::fromRequest(), yang mengenali sesi ini lewat
-     * flag 'is_admin' dan memberi role 'universitas' tanpa cek tabel korprodi.
-     */
-    private function attemptLocalAdminLogin(Request $request, array $data): ?RedirectResponse
-    {
-        $admin = User::query()
-            ->where('is_admin', true)
-            ->where('nomor_identitas', $data['username'])
-            ->first();
-
-        if (! $admin || ! Hash::check($data['password'], $admin->password)) {
-            return null;
-        }
-
-        $request->session()->regenerate();
-        $request->session()->put('sso_user', [
-            'sub' => 'local-admin-'.$admin->id,
-            'name' => $admin->name,
-            'email' => $admin->email,
-            'nomor_identitas' => $admin->nomor_identitas,
-            'is_admin' => true,
-        ]);
-        $request->session()->flash('show_intro', true);
-
-        return redirect()->intended('/');
-    }
-
     public function logout(Request $request)
     {
         $idToken = $request->session()->pull('sso_id_token');
         $request->session()->flush();
         $request->session()->regenerate();
 
-        return redirect()->away($this->base().'/logout?'.http_build_query(array_filter([
+        return redirect()->away(self::base().'/logout?'.http_build_query(array_filter([
             'client_id' => config('services.sso.client_id'),
             'post_logout_redirect_uri' => url('/'),
             'id_token_hint' => $idToken,

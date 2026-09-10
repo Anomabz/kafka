@@ -25,8 +25,9 @@ class SaptoUserContext
      * to for anyone.
      *
      * The one exception: accounts flagged is_admin=true in the local `users`
-     * table (SsoController::attemptLocalAdminLogin — a small, deliberate set
-     * of developer/maintainer accounts outside SSO, not a general role) get
+     * table (SsoController::isSaptoAdmin — a small, deliberate set of
+     * maintainer accounts matched by NIP after SSO login, not a general
+     * role) get
      * full 'universitas' access, same as any query-driven fakultas_id/
      * program_studi_id below.
      */

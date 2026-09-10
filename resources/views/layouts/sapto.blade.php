@@ -219,8 +219,8 @@
 </head>
 <body class="bg-canvas text-ink font-sans text-[14px] antialiased">
     {{-- show_intro adalah session flash (di-set oleh SsoController tepat
-         setelah login berhasil, lihat authenticate()/callback()/
-         attemptLocalAdminLogin) -- otomatis kebaca cuma sekali di request
+         setelah login berhasil, lihat callback()) -- otomatis kebaca cuma
+         sekali di request
          berikutnya lalu hilang sendiri. Jadi intro ini muncul tiap kali
          login, bukan tiap kali tab/browser baru buka halaman. --}}
     @if (session('show_intro'))
