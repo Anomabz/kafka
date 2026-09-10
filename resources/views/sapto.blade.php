@@ -1393,6 +1393,12 @@
             description: 'Jumlah judul penelitian dosen tetap program studi (DTPS) per sumber pembiayaan pada TS-2/TS-1/TS, mengikuti format Tabel 3.b.2 BAN-PT. Klasifikasi "Lembaga Luar Negeri" berbasis skema penelitian (heuristik teks, perlu diverifikasi manual); judul yang didanai lebih dari satu sumber dihitung di tiap kategori yang berlaku.',
             icons: ['book', 'book', 'book', 'calendar'],
         },
+        'pkm-dtps': {
+            endpoint: 'pkm-dtps',
+            unit: 'kategori sumber pembiayaan',
+            description: 'Jumlah judul PkM (Pengabdian kepada Masyarakat) dosen tetap program studi (DTPS) per sumber pembiayaan pada TS-2/TS-1/TS, mengikuti format Tabel 3.b.3 BAN-PT -- struktur sama seperti Tabel 3.b.2 Penelitian DTPS. Klasifikasi "Lembaga Luar Negeri" berbasis skema PkM (heuristik teks, perlu diverifikasi manual); judul yang didanai lebih dari satu sumber dihitung di tiap kategori yang berlaku.',
+            icons: ['briefcase', 'book', 'book', 'calendar'],
+        },
         'publikasi-ilmiah-dtps': {
             endpoint: 'publikasi-ilmiah-dtps',
             unit: 'jenis publikasi',
@@ -1403,6 +1409,30 @@
             endpoint: 'pagelaran-dtps',
             unit: 'jenis publikasi',
             description: 'Untuk program VOKASI (Diploma Tiga/Sarjana Terapan/Magister Terapan/Doktor Terapan). Baris 1-7 (jurnal & seminar) dihitung sama persis dengan Tabel 3.b.4 versi akademik; bedanya baris 8-10 adalah pagelaran/pameran/presentasi dalam forum, bukan tulisan di media massa -- karena itu koran/majalah populer tidak ikut dihitung di sini. DTPS didasarkan pada penugasan homebase terakhir dari SISTER (sister_list_penugasan) untuk jenjang D3/D4/Sarjana Terapan/Magister Terapan/Doktor Terapan. Ketiga baris pagelaran selalu 0 karena sumbernya belum ada di SISTER (tabel pembicara/orasi ilmiah/penghargaan masih kosong), begitu juga "Seminar wilayah/lokal/PT" -- isi manual.',
+            icons: ['book', 'book', 'book', 'calendar'],
+        },
+        'buku-dtps': {
+            endpoint: 'buku-dtps',
+            unit: 'judul buku/book chapter',
+            description: 'Tabel 3.b.7 Bagian IV: daftar judul buku ber-ISBN & book chapter DTPS (Monograf, Buku Referensi, Buku, Book Chapter Nasional/Internasional) pada TS-2/TS-1/TS -- beda dari tabel 3.b lain, ini daftar per judul, bukan matriks hitung. Sumber sister_detail_publikasi, DTPS lewat roster homebase SISTER (sister_list_penugasan) sama seperti Tabel 3.b.4, mencakup semua jenjang (tidak dibagi akademik/vokasi).',
+            icons: ['book', 'book', 'book', 'calendar'],
+        },
+        'teknologi-dtps': {
+            endpoint: 'teknologi-dtps',
+            unit: 'judul luaran',
+            description: 'Tabel 3.b.7 Bagian III: daftar judul teknologi tepat guna, produk (terstandarisasi/tersertifikasi), karya seni, dan rekayasa sosial DTPS pada TS-2/TS-1/TS -- daftar per judul, sama bentuknya dengan Bagian IV (Buku ber-ISBN). Sumber sister_detail_kekayaan_intelektual, DTPS lewat roster homebase SISTER (sister_list_penugasan) sama seperti Tabel 3.b.4, mencakup semua jenjang (tidak dibagi akademik/vokasi).',
+            icons: ['book', 'book', 'book', 'calendar'],
+        },
+        'hki-paten-dtps': {
+            endpoint: 'hki-paten-dtps',
+            unit: 'judul luaran',
+            description: 'Tabel 3.b.7 Bagian I: daftar HKI Paten & Paten Sederhana DTPS pada TS-2/TS-1/TS -- daftar per judul, sama bentuknya dengan Bagian III/IV. Sumber sister_detail_kekayaan_intelektual (kode paten nasional/internasional -- SISTER tidak membedakan "sederhana" secara kode terpisah), DTPS lewat roster homebase SISTER (sister_list_penugasan) sama seperti Tabel 3.b.4, mencakup semua jenjang (tidak dibagi akademik/vokasi).',
+            icons: ['book', 'book', 'book', 'calendar'],
+        },
+        'hki-hak-cipta-dtps': {
+            endpoint: 'hki-hak-cipta-dtps',
+            unit: 'judul luaran',
+            description: 'Tabel 3.b.7 Bagian II: daftar HKI Hak Cipta, Desain Produk Industri, dll. DTPS pada TS-2/TS-1/TS -- daftar per judul, sama bentuknya dengan Bagian I/III/IV. Sumber sister_detail_kekayaan_intelektual (kode hak cipta nasional/internasional, mengecualikan Produk Teknologi Tepat Guna yang sudah dihitung di Bagian III), DTPS lewat roster homebase SISTER (sister_list_penugasan) sama seperti Tabel 3.b.4, mencakup semua jenjang (tidak dibagi akademik/vokasi).',
             icons: ['book', 'book', 'book', 'calendar'],
         },
     };

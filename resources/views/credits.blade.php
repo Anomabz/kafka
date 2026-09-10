@@ -1,330 +1,438 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="theme-color" content="#050a12">
-    <meta name="robots" content="noindex, nofollow">
-    <title>¯\_(ツ)_/¯ — SAPTO</title>
-    <link rel="icon" href="{{ asset('images/logo-unsri.webp') }}" type="image/webp">
-    <link rel="preconnect" href="https://fonts.bunny.net">
-    <link href="https://fonts.bunny.net/css?family=plus-jakarta-sans:400,600,700,800" rel="stylesheet">
-    <style>
-        * { box-sizing: border-box; }
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>¯\_(ツ)_/¯ — SAPTO</title>
+<link rel="preconnect" href="https://fonts.bunny.net">
+<link href="https://fonts.bunny.net/css?family=share-tech-mono|vt323" rel="stylesheet">
+<style>
+  :root{
+    --bg: #000000;
+    --green: #2bff88;
+    --green-dim: rgba(43,255,136,.55);
+    --red: #ff3b30;
+    --panel: rgba(0,0,0,.82);
+    --border: rgba(43,255,136,.35);
+  }
 
-        html, body {
-            margin: 0;
-            min-height: 100vh;
-            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #050a12;
-            color: #f3faf8;
-        }
+  *{ box-sizing:border-box; }
 
-        body {
-            position: relative;
-            display: grid;
-            place-items: center;
-            padding: 2rem 1.25rem;
-            overflow-x: hidden;
-        }
+  html,body{
+    margin:0;
+    min-height:100vh;
+    background:var(--bg);
+    color:var(--green);
+    font-family:'Share Tech Mono', ui-monospace, monospace;
+  }
 
-        /* Cursor-follow spotlight, set via JS on mousemove */
-        .spotlight {
-            position: fixed;
-            inset: 0;
-            z-index: 0;
-            pointer-events: none;
-            background: radial-gradient(600px circle at var(--x, 50%) var(--y, 30%), rgba(129, 140, 248, 0.14), transparent 60%);
-            transition: background 0.05s linear;
-        }
+  body{
+    position:relative;
+    display:grid;
+    place-items:center;
+    padding:2.5rem 1.1rem;
+    overflow-x:hidden;
+  }
 
-        /* Drifting aurora blobs */
-        .aurora {
-            position: fixed;
-            inset: -10%;
-            z-index: -1;
-            filter: blur(70px);
-            opacity: 0.75;
-        }
+  canvas#matrix{
+    position:fixed; inset:0; z-index:0;
+    display:block;
+  }
 
-        .aurora span {
-            position: absolute;
-            border-radius: 50%;
-            mix-blend-mode: screen;
-        }
+  .vignette{
+    position:fixed; inset:0; z-index:1; pointer-events:none;
+    background: radial-gradient(120% 90% at 50% 45%, transparent 40%, rgba(0,0,0,.75) 100%);
+  }
 
-        .aurora span:nth-child(1) {
-            width: 32rem; height: 32rem;
-            top: -8%; left: -8%;
-            background: radial-gradient(circle, #4338ca, transparent 65%);
-            animation: drift1 22s ease-in-out infinite;
-        }
+  .scanlines{
+    position:fixed; inset:0; z-index:2; pointer-events:none;
+    background: repeating-linear-gradient(to bottom, rgba(43,255,136,.035) 0 1px, transparent 1px 3px);
+    opacity:.5;
+  }
 
-        .aurora span:nth-child(2) {
-            width: 28rem; height: 28rem;
-            bottom: -10%; right: -6%;
-            background: radial-gradient(circle, #a5b4fc, transparent 65%);
-            animation: drift2 26s ease-in-out infinite;
-        }
+  .flicker{
+    position:fixed; inset:0; z-index:3; pointer-events:none;
+    background: rgba(43,255,136,.02);
+    animation: flicker 6.5s infinite;
+  }
+  @keyframes flicker{
+    0%, 96%, 100%{ opacity:0; }
+    97%{ opacity:1; }
+    98%{ opacity:.2; }
+    99%{ opacity:.7; }
+  }
 
-        .aurora span:nth-child(3) {
-            width: 24rem; height: 24rem;
-            top: 40%; left: 55%;
-            background: radial-gradient(circle, #312e81, transparent 65%);
-            animation: drift3 30s ease-in-out infinite;
-        }
+  .panel{
+    position:relative;
+    z-index:4;
+    width:100%;
+    max-width:36rem;
+    background:var(--panel);
+    border:1px solid var(--border);
+    padding:2.1rem 1.9rem 1.8rem;
+    box-shadow: 0 0 60px rgba(43,255,136,.08), 0 40px 90px -30px rgba(0,0,0,.9);
+    opacity:0;
+    transform:translateY(18px);
+    animation: rise .5s ease forwards;
+  }
 
-        @keyframes drift1 {
-            0%, 100% { transform: translate(0, 0) scale(1); }
-            50% { transform: translate(6%, 8%) scale(1.15); }
-        }
+  .corner{ position:absolute; width:16px; height:16px; border:0 solid var(--green); }
+  .corner.tl{ top:-1px; left:-1px; border-top-width:2px; border-left-width:2px; }
+  .corner.tr{ top:-1px; right:-1px; border-top-width:2px; border-right-width:2px; }
+  .corner.bl{ bottom:-1px; left:-1px; border-bottom-width:2px; border-left-width:2px; }
+  .corner.br{ bottom:-1px; right:-1px; border-bottom-width:2px; border-right-width:2px; }
 
-        @keyframes drift2 {
-            0%, 100% { transform: translate(0, 0) scale(1); }
-            50% { transform: translate(-8%, -6%) scale(1.1); }
-        }
+  .warn{
+    font-size:11px;
+    letter-spacing:.12em;
+    color:var(--red);
+    text-align:center;
+    margin-bottom:1.1rem;
+    animation: blink-warn 1.6s step-end infinite;
+  }
+  @keyframes blink-warn{ 0%,49%{ opacity:1; } 50%,100%{ opacity:.25; } }
 
-        @keyframes drift3 {
-            0%, 100% { transform: translate(-50%, -50%) scale(1); }
-            50% { transform: translate(-55%, -42%) scale(1.2); }
-        }
+  .log{ font-size:12.5px; line-height:1.85; margin-bottom:1.3rem; }
+  .l{
+    opacity:0; transform:translateY(4px);
+    animation: rise .35s ease forwards;
+    animation-delay: calc(var(--d,0) * 160ms + .2s);
+    color: rgba(43,255,136,.75);
+  }
+  .ok{ color:var(--green); font-weight:700; }
 
-        .noise {
-            position: fixed;
-            inset: 0;
-            z-index: -1;
-            background-image: radial-gradient(rgba(255, 255, 255, 0.14) 1px, transparent 1px);
-            background-size: 26px 26px;
-            mask-image: radial-gradient(52rem 42rem at 50% 0%, black, transparent 75%);
-            -webkit-mask-image: radial-gradient(52rem 42rem at 50% 0%, black, transparent 75%);
-        }
+  .glitch{
+    position:relative;
+    margin: .2rem 0 .3rem;
+    font-family:'VT323', monospace;
+    font-size:clamp(3.6rem, 15vw, 6rem);
+    letter-spacing:.04em;
+    line-height:.9;
+    text-align:center;
+    color:var(--green);
+    text-shadow: 0 0 14px rgba(43,255,136,.6), 0 0 40px rgba(43,255,136,.25);
+  }
+  .glitch::before, .glitch::after{
+    content: attr(data-text);
+    position:absolute; inset:0;
+    background:transparent;
+  }
+  .glitch::before{
+    color:#ff3b30;
+    animation: glitch-1 3.4s infinite linear;
+  }
+  .glitch::after{
+    color:#00e5ff;
+    animation: glitch-2 2.9s infinite linear;
+  }
+  @keyframes glitch-1{
+    0%, 92%{ clip-path: inset(0 0 100% 0); transform:translate(0,0); opacity:0; }
+    93%{ clip-path: inset(10% 0 55% 0); transform:translate(-4px,1px); opacity:.85; }
+    94.5%{ clip-path: inset(55% 0 8% 0); transform:translate(3px,-1px); opacity:.85; }
+    96%{ clip-path: inset(30% 0 40% 0); transform:translate(-2px,2px); opacity:.5; }
+    97%, 100%{ clip-path: inset(0 0 100% 0); transform:translate(0,0); opacity:0; }
+  }
+  @keyframes glitch-2{
+    0%, 90%{ clip-path: inset(0 0 100% 0); transform:translate(0,0); opacity:0; }
+    91%{ clip-path: inset(60% 0 5% 0); transform:translate(3px,-2px); opacity:.8; }
+    92.5%{ clip-path: inset(5% 0 70% 0); transform:translate(-3px,1px); opacity:.8; }
+    94%{ clip-path: inset(40% 0 30% 0); transform:translate(2px,2px); opacity:.5; }
+    95%, 100%{ clip-path: inset(0 0 100% 0); transform:translate(0,0); opacity:0; }
+  }
 
-        .stage {
-            position: relative;
-            z-index: 1;
-            width: 100%;
-            max-width: 46rem;
-            text-align: center;
-        }
+  .sub{
+    text-align:center;
+    font-size:10.5px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color: rgba(43,255,136,.6);
+    margin: 0 0 1.7rem;
+  }
 
-        .badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.4rem;
-            padding: 0.35rem 0.9rem;
-            border-radius: 999px;
-            border: 1px solid rgba(129, 140, 248, 0.4);
-            background: rgba(129, 140, 248, 0.1);
-            color: #a5b4fc;
-            font-size: 12px;
-            font-weight: 700;
-            letter-spacing: 0.14em;
-            text-transform: uppercase;
-            opacity: 0;
-            animation: rise 0.6s 0.05s ease forwards;
-        }
+  .section-label{
+    font-size:12px;
+    color: rgba(43,255,136,.7);
+    margin-bottom:.7rem;
+    opacity:0; transform:translateY(4px);
+    animation: rise .35s ease forwards;
+    animation-delay: 1.05s;
+  }
 
-        .badge .dot {
-            width: 6px; height: 6px;
-            border-radius: 50%;
-            background: #a5b4fc;
-            box-shadow: 0 0 0 0 rgba(129, 140, 248, 0.6);
-            animation: pulse-dot 1.8s ease-in-out infinite;
-        }
+  .agents{ display:flex; flex-direction:column; gap:.5rem; margin-bottom:1.4rem; }
+  .agent{
+    display:flex; flex-wrap:wrap; align-items:center; gap:.7rem;
+    padding:.55rem .7rem;
+    border:1px solid var(--border);
+    background: rgba(43,255,136,.03);
+    opacity:0; transform:translateY(6px);
+    animation: rise .35s ease forwards;
+    animation-delay: calc(var(--d,0) * 110ms + 1.2s);
+    transition: border-color .2s ease, background .2s ease;
+  }
+  .agent:hover{ border-color:var(--green); background: rgba(43,255,136,.08); }
 
-        @keyframes pulse-dot {
-            0% { box-shadow: 0 0 0 0 rgba(129, 140, 248, 0.55); }
-            70% { box-shadow: 0 0 0 8px rgba(129, 140, 248, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(129, 140, 248, 0); }
-        }
+  .dot{
+    flex:none; width:8px; height:8px; border-radius:50%;
+    background:var(--green);
+    box-shadow: 0 0 6px var(--green);
+    animation: pulse-dot 1.8s ease-in-out infinite;
+  }
+  @keyframes pulse-dot{ 0%,100%{ opacity:1; } 50%{ opacity:.35; } }
 
-        h1 {
-            margin: 1.1rem 0 0.6rem;
-            font-size: clamp(2.8rem, 9vw, 5rem);
-            font-weight: 800;
-            letter-spacing: -0.04em;
-            line-height: 1;
-            cursor: default;
-            user-select: none;
-            background: linear-gradient(110deg, #ffffff 10%, #a5b4fc 45%, #4338ca 70%, #ffffff 100%);
-            background-size: 260% auto;
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
-            opacity: 0;
-            animation: rise 0.7s 0.15s ease forwards, shimmer 6s linear infinite;
-        }
+  .who{ flex:1 1 auto; min-width:0; }
+  .name{
+    display:block; font-size:13px; color:var(--green);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .id{ display:block; font-size:10.5px; color: rgba(43,255,136,.55); margin-top:1px; }
 
-        @keyframes shimmer {
-            to { background-position: -260% center; }
-        }
+  .tag{
+    flex:none;
+    font-size:10px; letter-spacing:.06em;
+    color: rgba(43,255,136,.85);
+    border:1px solid var(--border);
+    padding:.2rem .5rem;
+  }
 
-        .tagline {
-            margin: 0 0 3rem;
-            color: rgba(243, 250, 248, 0.68);
-            font-size: 15.5px;
-            opacity: 0;
-            animation: rise 0.7s 0.25s ease forwards;
-        }
+  .prompt-line{
+    font-size:13px; color:var(--green);
+    opacity:0; transform:translateY(4px);
+    animation: rise .35s ease forwards;
+    animation-delay: 1.7s;
+  }
+  .cursor{
+    display:inline-block; width:.55em; margin-left:2px;
+    background:var(--green); color:var(--green);
+    animation: blink 1s step-end infinite;
+  }
 
-        .crew {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
-            gap: 1rem;
-            text-align: left;
-        }
+  .footer{
+    position:relative;
+    z-index:4;
+    margin-top:1.1rem;
+    font-size:10.5px;
+    letter-spacing:.06em;
+    color: rgba(43,255,136,.45);
+    text-align:center;
+  }
 
-        .card {
-            position: relative;
-            display: flex;
-            align-items: center;
-            gap: 0.9rem;
-            padding: 1.15rem 1.25rem;
-            border-radius: 18px;
-            border: 1px solid rgba(255, 255, 255, 0.13);
-            background: linear-gradient(160deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.03));
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            overflow: hidden;
-            opacity: 0;
-            transform: translateY(16px);
-            animation: rise 0.6s ease forwards;
-            transition: border-color 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
-        }
+  @keyframes rise{ to{ opacity:1; transform:translateY(0); } }
+  @keyframes blink{ 0%,49%{ opacity:1; } 50%,100%{ opacity:0; } }
 
-        .card::before {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background: radial-gradient(120px circle at var(--mx, 50%) var(--my, 50%), rgba(129, 140, 248, 0.22), transparent 70%);
-            opacity: 0;
-            transition: opacity 0.25s ease;
-        }
+  :focus-visible{ outline:2px solid var(--green); outline-offset:2px; }
 
-        .card:hover {
-            border-color: rgba(129, 140, 248, 0.55);
-            transform: translateY(-4px);
-            box-shadow: 0 14px 32px -18px rgba(67, 56, 202, 0.55);
-        }
+  body.sudo-mode .panel{
+    border-color: rgba(255,59,48,.6);
+    box-shadow: 0 0 60px rgba(255,59,48,.18), 0 40px 90px -30px rgba(0,0,0,.9);
+    transition: border-color .3s ease, box-shadow .3s ease;
+  }
+  body.sudo-mode .corner{ border-color:#ff3b30; }
 
-        .card:hover::before {
-            opacity: 1;
-        }
+  .sudo-overlay{
+    position:fixed; inset:0; z-index:50;
+    display:flex; align-items:center; justify-content:center;
+    background: rgba(0,0,0,.88);
+    opacity:0; pointer-events:none;
+    transition: opacity .25s ease;
+    padding:1.5rem;
+  }
+  .sudo-overlay.show{ opacity:1; pointer-events:auto; }
+  .sudo-box{
+    max-width:26rem;
+    border:1px solid rgba(255,59,48,.5);
+    background:rgba(0,0,0,.92);
+    padding:1.6rem 1.5rem;
+    font-size:12.5px; line-height:1.8;
+    color: rgba(255,59,48,.85);
+    box-shadow: 0 0 60px rgba(255,59,48,.15);
+  }
+  .sudo-box p{ margin:0 0 .5rem; }
+  .sudo-ok{ color:#ff3b30; font-weight:700; }
+  .sudo-secret{ color:#fff; font-size:13.5px; margin:.7rem 0 !important; }
+  .sudo-hint{ color: rgba(255,59,48,.5); font-size:10.5px; margin-top:.8rem !important; }
 
-        .card:nth-child(1) { animation-delay: 0.35s; }
-        .card:nth-child(2) { animation-delay: 0.44s; }
-        .card:nth-child(3) { animation-delay: 0.53s; }
-        .card:nth-child(4) { animation-delay: 0.62s; }
+  @media (max-width:480px){
+    .panel{ padding:1.7rem 1.3rem 1.5rem; }
+    .agent{ padding:.5rem .6rem; }
+    .tag{ margin-left: calc(8px + .7rem); }
+  }
 
-        .avatar {
-            position: relative;
-            z-index: 1;
-            flex: none;
-            width: 2.9rem;
-            height: 2.9rem;
-            border-radius: 50%;
-            display: grid;
-            place-items: center;
-            font-weight: 800;
-            font-size: 14px;
-            color: #06120f;
-            background: linear-gradient(135deg, var(--c1), var(--c2));
-        }
-
-        .card .meta {
-            position: relative;
-            z-index: 1;
-            min-width: 0;
-        }
-
-        .card .no {
-            font-size: 10.5px;
-            font-weight: 700;
-            letter-spacing: 0.12em;
-            color: #a5b4fc;
-        }
-
-        .card .name {
-            margin-top: 0.15rem;
-            font-size: 1rem;
-            font-weight: 700;
-            color: #f8fdfc;
-            line-height: 1.25;
-        }
-
-        footer {
-            margin-top: 2.75rem;
-            font-size: 12.5px;
-            color: rgba(243, 250, 248, 0.45);
-            opacity: 0;
-            animation: rise 0.7s 0.85s ease forwards;
-        }
-
-        footer .heart {
-            display: inline-block;
-            color: #a5b4fc;
-            animation: beat 1.4s ease-in-out infinite;
-        }
-
-        @keyframes beat {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.25); }
-        }
-
-        @keyframes rise {
-            from { opacity: 0; transform: translateY(14px); }
-            to   { opacity: 1; transform: translateY(0); }
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-            .badge, h1, .tagline, .card, footer { animation: none !important; opacity: 1; transform: none; }
-            .aurora span, footer .heart { animation: none !important; }
-        }
-    </style>
+  @media (prefers-reduced-motion: reduce){
+    .panel, .l, .agent, .section-label, .prompt-line{
+      animation:none !important; opacity:1 !important; transform:none !important;
+    }
+    .glitch::before, .glitch::after{ display:none; }
+    .cursor, .dot, .warn, .flicker{ animation:none !important; }
+  }
+</style>
 </head>
 <body>
-    <div class="aurora"><span></span><span></span><span></span></div>
-    <div class="noise"></div>
-    <div class="spotlight"></div>
+<!-- psst... kalau nyasar sampai baca source, coba konami code: ↑ ↑ ↓ ↓ ← → ← → B A -->
 
-    <div class="stage">
-        <span class="badge"><span class="dot"></span>You found it</span>
-        <h1>SAPTO</h1>
-        <p class="tagline">Dibangun oleh tim kecil yang sering begadang demi angka-angka BAN-PT ini benar.</p>
+<canvas id="matrix"></canvas>
+<div class="vignette"></div>
+<div class="scanlines"></div>
+<div class="flicker"></div>
 
-        <div class="crew">
-            @foreach ([
-                ['name' => 'Abdul Karim', 'c1' => '#a5b4fc', 'c2' => '#4338ca'],
-                ['name' => 'Bemby Dwigantara Anom', 'c1' => '#c4b5fd', 'c2' => '#6d28d9'],
-                ['name' => 'Haziratul Qudsi', 'c1' => '#93c5fd', 'c2' => '#2563eb'],
-                ['name' => 'Arya Kusuma', 'c1' => '#c7d2fe', 'c2' => '#312e81'],
-            ] as $i => $person)
-                <div class="card" style="--c1: {{ $person['c1'] }}; --c2: {{ $person['c2'] }}">
-                    <div class="avatar">{{ collect(explode(' ', $person['name']))->map(fn ($w) => mb_substr($w, 0, 1))->take(2)->implode('') }}</div>
-                    <div class="meta">
-                        <div class="no">{{ sprintf('%02d', $i + 1) }}</div>
-                        <div class="name">{{ $person['name'] }}</div>
-                    </div>
-                </div>
-            @endforeach
-        </div>
+<main class="panel">
+  <span class="corner tl"></span><span class="corner tr"></span>
+  <span class="corner bl"></span><span class="corner br"></span>
 
-        <footer>Made with <span class="heart">&#9679;</span> at SAPTO &middot; Universitas Sriwijaya</footer>
+  <div class="warn">[ UNAUTHORIZED ACCESS DETECTED ]</div>
+
+  <div class="log">
+    <p class="l" style="--d:0">&gt; initializing sapto_core.sys</p>
+    <p class="l" style="--d:1">&gt; bypassing auth layer... <span class="ok">[OK]</span></p>
+    <p class="l" style="--d:2">&gt; decrypting ban-pt_database.sql... <span class="ok">[OK]</span></p>
+    <p class="l" style="--d:3">&gt; access level: <span class="ok">GUEST</span></p>
+  </div>
+
+  <h1 class="glitch" data-text="SAPTO">SAPTO</h1>
+  <p class="sub">Sistem Akreditasi BAN-PT &middot; Universitas Sriwijaya</p>
+
+  <div class="section-label">&gt; whoami --team</div>
+  <div class="agents">
+    <div class="agent" style="--d:0">
+      <span class="dot"></span>
+      <span class="who"><span class="name">Bemby Dwigantara Anom</span><span class="id">ID// 09011182429015</span></span>
+      <span class="tag">[FRONTEND]</span>
     </div>
+    <div class="agent" style="--d:1">
+      <span class="dot"></span>
+      <span class="who"><span class="name">Abdul Karim</span><span class="id">ID// 09011282429038</span></span>
+      <span class="tag">[BACKEND]</span>
+    </div>
+    <div class="agent" style="--d:2">
+      <span class="dot"></span>
+      <span class="who"><span class="name">Arya Kusuma</span><span class="id">ID// 09011282429035</span></span>
+      <span class="tag">[DEVOPS]</span>
+    </div>
+    <div class="agent" style="--d:3">
+      <span class="dot"></span>
+      <span class="who"><span class="name">Haziratul Qudsi</span><span class="id">ID// 09011282429040</span></span>
+      <span class="tag">[BACKEND]</span>
+    </div>
+  </div>
 
-    <script>
-        document.addEventListener('mousemove', function (e) {
-            document.documentElement.style.setProperty('--x', e.clientX + 'px');
-            document.documentElement.style.setProperty('--y', e.clientY + 'px');
-        });
+  <p class="prompt-line">guest@sapto:~$ <span class="cursor">&#9608;</span></p>
+</main>
 
-        document.querySelectorAll('.card').forEach(function (card) {
-            card.addEventListener('mousemove', function (e) {
-                var r = card.getBoundingClientRect();
-                card.style.setProperty('--mx', (e.clientX - r.left) + 'px');
-                card.style.setProperty('--my', (e.clientY - r.top) + 'px');
-            });
-        });
-    </script>
+<p class="footer">CONNECTION SECURE &middot; TRACE COMPLETE</p>
+
+<div class="sudo-overlay" id="sudoOverlay" aria-hidden="true">
+  <div class="sudo-box">
+    <p>&gt; sudo su</p>
+    <p>[sudo] password for guest: ********</p>
+    <p class="sudo-ok">access escalated. welcome, root.</p>
+    <p>&gt; echo $SECRET</p>
+    <p class="sudo-secret">Kamu nemu easter egg di dalam easter egg. Niat banget dah &#128373;&#65039;</p>
+    <p class="sudo-hint">tim SAPTO berterima kasih udah iseng sampai sini. klik di mana aja buat nutup.</p>
+  </div>
+</div>
+
+<script>
+(function(){
+  var canvas = document.getElementById('matrix');
+  var ctx = canvas.getContext('2d');
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  var fontSize = 15;
+  var columns, drops;
+
+  function setup(){
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    columns = Math.floor(canvas.width / fontSize);
+    drops = new Array(columns).fill(1);
+  }
+  setup();
+  window.addEventListener('resize', setup);
+
+  var chars = 'アイウエオカキクケコサシスセソタチツテト0123456789SAPTO'.split('');
+  var matrixColor = '#2bff88';
+
+  function draw(){
+    ctx.fillStyle = 'rgba(0,0,0,0.08)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = matrixColor;
+    ctx.font = fontSize + 'px monospace';
+    for (var i = 0; i < drops.length; i++){
+      var text = chars[Math.floor(Math.random() * chars.length)];
+      ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+      if (drops[i] * fontSize > canvas.height && Math.random() > 0.975){
+        drops[i] = 0;
+      }
+      drops[i]++;
+    }
+  }
+
+  if (reduce){
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  } else {
+    setInterval(draw, 45);
+  }
+
+  /* console easter egg — for the ones who open devtools */
+  console.log('%cSAPTO', 'color:#2bff88;font-size:32px;font-weight:bold;font-family:monospace;text-shadow:0 0 8px #2bff88;');
+  console.log('%cKamu buka console ya? Dasar developer sejati. \uD83D\uDD75\uFE0F', 'color:#2bff88;font-family:monospace;font-size:12px;');
+  console.log('%cPsst... coba masukin Konami Code: \u2191 \u2191 \u2193 \u2193 \u2190 \u2192 \u2190 \u2192 B A', 'color:#7b8494;font-family:monospace;font-size:11px;');
+
+  /* konami code easter egg */
+  var overlay = document.getElementById('sudoOverlay');
+  var seq = ['ArrowUp','ArrowUp','ArrowDown','ArrowDown','ArrowLeft','ArrowRight','ArrowLeft','ArrowRight','b','a'];
+  var pos = 0;
+  var revertTimer, hideTimer;
+
+  function triggerSudo(){
+    if (!reduce){
+      matrixColor = '#ff3b30';
+      clearTimeout(revertTimer);
+      revertTimer = setTimeout(function(){ matrixColor = '#2bff88'; }, 6000);
+    }
+    document.body.classList.add('sudo-mode');
+    overlay.classList.add('show');
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(closeSudo, 6000);
+  }
+
+  function closeSudo(){
+    overlay.classList.remove('show');
+    document.body.classList.remove('sudo-mode');
+  }
+
+  overlay.addEventListener('click', closeSudo);
+
+  document.addEventListener('keydown', function(e){
+    var key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    if (key === seq[pos]){
+      pos++;
+      if (pos === seq.length){
+        triggerSudo();
+        pos = 0;
+      }
+    } else {
+      pos = (key === seq[0]) ? 1 : 0;
+    }
+  });
+
+  /* mobile fallback: tap the glitch title 7x fast */
+  var titleEl = document.querySelector('.glitch');
+  if (titleEl){
+    var tapCount = 0, tapTimer;
+    titleEl.addEventListener('click', function(){
+      tapCount++;
+      clearTimeout(tapTimer);
+      tapTimer = setTimeout(function(){ tapCount = 0; }, 1200);
+      if (tapCount >= 7){
+        triggerSudo();
+        tapCount = 0;
+      }
+    });
+  }
+})();
+</script>
+
 </body>
 </html>

@@ -8,9 +8,10 @@ use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
- * Tabel 8.a (IPK Lulusan, format per tahun lulus), 8.c (Masa Studi, matriks
- * kohort per prodi), dan 3.a.1 (Dosen Tetap PT). Tabel sumber dibuat oleh
- * migration guarded khusus test (di produksi sudah ada dari sinkronisasi).
+ * Tabel 8.a (IPK Lulusan, format per tahun lulus) dan 3.a.1 (Dosen Tetap
+ * PT). Tabel sumber dibuat oleh migration guarded khusus test (di produksi
+ * sudah ada dari sinkronisasi). Tabel 8.c (Masa Studi) punya test file
+ * sendiri -- lihat SaptoMasaStudiTest.
  */
 class SaptoNewTablesTest extends TestCase
 {
@@ -27,7 +28,6 @@ class SaptoNewTablesTest extends TestCase
         ]]);
         $this->seedReference();
         $this->seedLulusan();
-        $this->seedIntake();
         $this->seedPenugasan();
 
         // Auto-scopes this session to P1 (kode 55201) via the korprodi
@@ -95,34 +95,6 @@ class SaptoNewTablesTest extends TestCase
     public function test_ipk_lulusan_respects_fakultas_scope(): void
     {
         $this->markTestSkipped('Fakultas-wide scope is pending entitlement data — see SaptoUserContext::fromRequest().');
-    }
-
-    public function test_masa_studi_requires_program_studi(): void
-    {
-        $this->markTestSkipped('Every session now always resolves to a specific program studi — see SaptoUserContext::fromRequest().');
-    }
-
-    public function test_masa_studi_cohort_matrix_for_selected_prodi(): void
-    {
-        $response = $this->getJson('/api/sapto/tables/masa-studi/summary?ts=2024')
-            ->assertOk()
-            ->assertJsonPath('table_code', '8.c')
-            ->assertJsonPath('program_studi.id', 'P1');
-
-        $rows = collect($response->json('rows'));
-
-        // Jenjang S1 -> kohort TS-6..TS-3 (2018..2021).
-        $c2019 = $rows->firstWhere('tahun_masuk', '2019 (TS-5)');
-        $this->assertSame(3, $c2019['diterima']);        // 3 mahasiswa baru 2019
-        $this->assertSame(1, $c2019['g_1']);             // 1 lulus 2023 (akhir TS-1)
-        $this->assertSame(1, $c2019['g_0']);             // 1 lulus 2024 (akhir TS)
-        $this->assertSame(2, $c2019['lulus_sd_ts']);
-        $this->assertEquals(4.25, $c2019['masa_studi_rata']);
-
-        $c2020 = $rows->firstWhere('tahun_masuk', '2020 (TS-4)');
-        $this->assertSame(2, $c2020['diterima']);
-        $this->assertSame(2, $c2020['g_0']);             // 2 lulus 2024
-        $this->assertEquals(4.0, $c2020['masa_studi_rata']);
     }
 
     public function test_dosen_tetap_lists_homebase_roster(): void
@@ -281,25 +253,6 @@ class SaptoNewTablesTest extends TestCase
             'tgl_masuk_sp' => $masuk,
             'tgl_sk_yudisium' => $yudisium,
         ];
-    }
-
-    private function seedIntake(): void
-    {
-        $rows = [];
-        // 3 mahasiswa baru P1 angkatan 2019, 2 angkatan 2020.
-        foreach ([['2019', 3], ['2020', 2]] as [$year, $count]) {
-            for ($i = 0; $i < $count; $i++) {
-                $rows[] = [
-                    'id_prodi' => 'P1',
-                    'nama_jenis_daftar' => 'Peserta didik baru',
-                    'id_periode_masuk' => $year.'1',
-                ];
-            }
-        }
-        // Mahasiswa pindahan (bukan "Peserta didik baru") -> tak dihitung diterima.
-        $rows[] = ['id_prodi' => 'P1', 'nama_jenis_daftar' => 'Pindahan', 'id_periode_masuk' => '20191'];
-
-        DB::table('list_riwayat_pendidikan_mahasiswa')->insert($rows);
     }
 
     private function seedPenugasan(): void

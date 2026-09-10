@@ -13,11 +13,29 @@ use Illuminate\Support\Facades\DB;
  * angkatan (tahun masuk) ditampilkan: jumlah mahasiswa diterima, jumlah lulus
  * pada akhir tiap TS, total lulusan s.d. TS, dan rata-rata masa studi.
  *
- * Sumber:
- * - Lulusan & masa studi: list_mahasiswa_lulus_do (angkatan, tahun lulus dari
- *   id_periode_keluar, tanggal masuk->yudisium).
- * - Jumlah diterima: list_riwayat_pendidikan_mahasiswa (jenis daftar "Peserta
- *   didik baru", tahun masuk dari id_periode_masuk).
+ * Sumber: satu tabel, list_mahasiswa (roster lengkap -- aktif, lulus, DO
+ * sekaligus), bukan gabungan list_riwayat_pendidikan_mahasiswa +
+ * list_mahasiswa_lulus_do seperti sebelumnya. Alasan ganti (diverifikasi
+ * lewat query manual sebelum implementasi):
+ * - "Diterima" dari list_riwayat_pendidikan_mahasiswa (jenis daftar "Peserta
+ *   didik baru" saja) melewatkan mahasiswa pindahan/jalur lain -- di data
+ *   nyata, undercount ~1-9 mahasiswa/tahun pada kohort terbaru dibanding
+ *   hitung langsung dari id_periode di list_mahasiswa.
+ * - Rata-rata masa studi berbasis tanggal (tgl_masuk_sp -> tgl_sk_yudisium)
+ *   diam-diam membuang baris dengan tanggal kosong/tidak valid (~5% pada satu
+ *   angkatan yang dicek). Dihitung dari selisih id_periode (indeks
+ *   semester/2) malah mencakup semua lulusan yang id_periode-nya valid, jauh
+ *   lebih jarang kosong daripada kolom tanggal.
+ * - Angka "Lulus" per tahun sendiri sudah cocok persis antara kedua sumber
+ *   (list_mahasiswa vs list_mahasiswa_lulus_do) untuk kohort yang dicek --
+ *   bukan itu yang salah, cuma sumbernya disatukan.
+ *
+ * id_periode_keluar kosong pada ~18% baris "Lulus" (sama seperti gap yang
+ * didokumentasikan di ComputesGraduationYear untuk list_mahasiswa_lulus_do,
+ * kebanyakan lulusan lama) -- tahun lulus fallback ke tanggal_keluar bila
+ * id_periode_keluar tidak bisa dipakai, supaya baris itu tetap terhitung di
+ * kolom "Lulus Akhir TS-x"; hanya rata-rata masa studi (butuh presisi
+ * semester) yang melewati baris itu bila fallback-nya juga gagal.
  *
  * Jumlah kolom "lulus pada akhir TS-x" dan angkatan yang ditampilkan mengikuti
  * pola jenjang (diploma tiga / sarjana / magister / doktor).
@@ -25,8 +43,6 @@ use Illuminate\Support\Facades\DB;
 class SaptoMasaStudiRepository
 {
     use ResolvesSaptoScope;
-
-    private const HARI_PER_TAHUN = 365.25;
 
     public function __construct(
         private readonly SaptoProgramStudiRepository $client,
@@ -113,67 +129,91 @@ class SaptoMasaStudiRepository
 
     /**
      * Ambil data lulusan per angkatan (grad per tahun + masa studi) dan jumlah
-     * diterima per angkatan untuk satu prodi.
+     * diterima per angkatan untuk satu prodi -- satu pass atas list_mahasiswa,
+     * satu baris per mahasiswa (lihat docblock kelas untuk alasan pindah
+     * sumber).
      *
      * @param  array<int, int>  $cohortYears
      * @return array{cohorts: array<int, array{grad: array<int, int>, masa_total: float, masa_n: int}>, diterima: array<int, int>}
      */
     private function cohortData(string $prodiId, array $cohortYears, int $ts): array
     {
-        $cacheKey = 'sapto:masa-studi:cohort:v1:'.md5(json_encode([$prodiId, $cohortYears, $ts]));
+        $cacheKey = 'sapto:masa-studi:cohort:v2:'.md5(json_encode([$prodiId, $cohortYears, $ts]));
 
         return Cache::remember($cacheKey, $this->cacheTtl(), function () use ($prodiId, $cohortYears): array {
             $cohortStrings = array_map(fn (int $y): string => (string) $y, $cohortYears);
 
-            // Lulusan prodi ini yang angkatannya termasuk kohort yang dilacak.
-            $graduates = DB::table('list_mahasiswa_lulus_do')
-                ->select('angkatan', 'id_periode_keluar', 'tgl_masuk_sp', 'tgl_sk_yudisium', 'tanggal_keluar', 'tgl_keluar')
-                ->where('nama_jenis_keluar', 'Lulus')
+            // substr, bukan LEFT()/REGEXP -- portabel MySQL & SQLite (sama
+            // seperti ComputesGraduationYear). id_periode yang terlalu pendek
+            // untuk dicocokkan (~0.08% baris di data nyata) otomatis tidak
+            // masuk IN karena substr-nya tidak akan match salah satu tahun kohort.
+            $students = DB::table('list_mahasiswa')
+                ->select('id_periode', 'id_periode_keluar', 'tanggal_keluar', 'nama_status_mahasiswa')
                 ->where('id_prodi', $prodiId)
-                ->whereIn('angkatan', $cohortStrings)
+                ->whereIn(DB::raw('substr(id_periode,1,4)'), $cohortStrings)
                 ->cursor();
 
             $cohorts = [];
-            foreach ($graduates as $row) {
-                $angkatan = (int) $row->angkatan;
-                $gradYear = $this->graduationYear($row);
+            $diterima = [];
+
+            foreach ($students as $row) {
+                $periodeMasuk = (string) $row->id_periode;
+                $angkatan = (int) substr($periodeMasuk, 0, 4);
+
+                $diterima[$angkatan] = ($diterima[$angkatan] ?? 0) + 1;
+
+                if ((string) $row->nama_status_mahasiswa !== 'Lulus') {
+                    continue;
+                }
+
+                $periodeKeluar = (string) ($row->id_periode_keluar ?? '');
+                $idxLulus = $this->periodeIndex($periodeKeluar);
+                $gradYear = $idxLulus !== null ? (int) substr($periodeKeluar, 0, 4) : null;
+
+                // id_periode_keluar kosong/tidak valid pada ~18% baris Lulus
+                // (kebanyakan lulusan lama) -- pulihkan tahun dari tanggal_keluar
+                // supaya baris ini tetap terhitung di "Lulus Akhir TS-x", sama
+                // seperti fallback di ComputesGraduationYear untuk tabel lain.
+                if ($gradYear === null) {
+                    $date = $this->parseDate((string) ($row->tanggal_keluar ?? ''));
+                    $gradYear = $date?->format('Y') !== null ? (int) $date->format('Y') : null;
+                }
 
                 if ($gradYear === null || $gradYear < 2000) {
                     continue;
                 }
 
-                if (! isset($cohorts[$angkatan])) {
-                    $cohorts[$angkatan] = ['grad' => [], 'masa_total' => 0.0, 'masa_n' => 0];
-                }
-
+                $cohorts[$angkatan] ??= ['grad' => [], 'masa_total' => 0.0, 'masa_n' => 0];
                 $cohorts[$angkatan]['grad'][$gradYear] = ($cohorts[$angkatan]['grad'][$gradYear] ?? 0) + 1;
 
-                $years = $this->masaStudiTahun(
-                    (string) $row->tgl_masuk_sp,
-                    (string) ($row->tgl_sk_yudisium ?: ($row->tanggal_keluar ?: $row->tgl_keluar)),
-                );
-                if ($years !== null) {
-                    $cohorts[$angkatan]['masa_total'] += $years;
+                // Rata-rata masa studi butuh presisi semester (idx masuk & lulus
+                // dua-duanya valid) -- baris yang cuma lolos lewat fallback
+                // tanggal_keluar tetap terhitung sebagai lulusan, tapi dilewati
+                // di sini karena idx_lulus-nya tidak ada.
+                $idxMasuk = $this->periodeIndex($periodeMasuk);
+                if ($idxMasuk !== null && $idxLulus !== null) {
+                    $cohorts[$angkatan]['masa_total'] += ($idxLulus - $idxMasuk + 1) / 2.0;
                     $cohorts[$angkatan]['masa_n']++;
                 }
             }
 
-            // Jumlah mahasiswa baru (diterima) per tahun masuk.
-            $diterimaRows = DB::table('list_riwayat_pendidikan_mahasiswa')
-                ->selectRaw('substr(id_periode_masuk,1,4) as thn, count(*) as n')
-                ->where('id_prodi', $prodiId)
-                ->where('nama_jenis_daftar', 'Peserta didik baru')
-                ->whereIn(DB::raw('substr(id_periode_masuk,1,4)'), $cohortStrings)
-                ->groupBy(DB::raw('substr(id_periode_masuk,1,4)'))
-                ->get();
-
-            $diterima = [];
-            foreach ($diterimaRows as $row) {
-                $diterima[(int) $row->thn] = (int) $row->n;
-            }
-
             return ['cohorts' => $cohorts, 'diterima' => $diterima];
         });
+    }
+
+    /**
+     * Indeks semester dari id_periode berformat YYYYS (S: 1=ganjil, 2=genap),
+     * mis. "20221" -> 2022*2+0 = 4044, "20222" -> 2022*2+1 = 4045 -- selisih
+     * dua indeks ini, dibagi 2, memberi lama studi dalam tahun dengan presisi
+     * semester tanpa perlu tanggal kalender.
+     */
+    private function periodeIndex(string $periode): ?int
+    {
+        if (preg_match('/^([0-9]{4})([0-9])$/', $periode, $m) !== 1) {
+            return null;
+        }
+
+        return ((int) $m[1]) * 2 + ((int) $m[2] === 2 ? 1 : 0);
     }
 
     /**
@@ -197,45 +237,6 @@ class SaptoMasaStudiRepository
 
         // S1, D4/Sarjana Terapan, Profesi, dan lainnya -> pola sarjana.
         return [[6, 5, 4, 3], [6, 5, 4, 3, 2, 1, 0]];
-    }
-
-    /**
-     * Tahun lulus sebuah baris lulusan. Utamakan id_periode_keluar (YYYYS);
-     * bila kosong, pulihkan dari tanggal keluar/yudisium (DD-MM-YYYY atau
-     * YYYY-MM-DD). Selaras dengan SaptoIpkLulusanRepository::graduationYearSql()
-     * agar 8.a & 8.c menghitung lulusan yang sama.
-     */
-    private function graduationYear(object $row): ?int
-    {
-        $periode = (string) ($row->id_periode_keluar ?? '');
-
-        if ($periode !== '') {
-            return (int) substr($periode, 0, 4);
-        }
-
-        foreach ([$row->tanggal_keluar ?? null, $row->tgl_keluar ?? null, $row->tgl_sk_yudisium ?? null] as $tanggal) {
-            $date = $this->parseDate((string) ($tanggal ?? ''));
-
-            if ($date !== null) {
-                return (int) $date->format('Y');
-            }
-        }
-
-        return null;
-    }
-
-    private function masaStudiTahun(string $masuk, string $keluar): ?float
-    {
-        $start = $this->parseDate($masuk);
-        $end = $this->parseDate($keluar);
-
-        if ($start === null || $end === null) {
-            return null;
-        }
-
-        $years = (($end->getTimestamp() - $start->getTimestamp()) / 86400) / self::HARI_PER_TAHUN;
-
-        return ($years <= 0 || $years > 15) ? null : $years;
     }
 
     private function parseDate(string $value): ?DateTimeImmutable
@@ -308,11 +309,11 @@ class SaptoMasaStudiRepository
      */
     public function availableYears(): array
     {
-        return Cache::remember('sapto:masa-studi:years:v1', $this->cacheTtl(), function (): array {
+        return Cache::remember('sapto:masa-studi:years:v2', $this->cacheTtl(), function (): array {
             $rows = DB::select("
                 select distinct substr(id_periode_keluar,1,4) as thn
-                from list_mahasiswa_lulus_do
-                where nama_jenis_keluar = 'Lulus'
+                from list_mahasiswa
+                where nama_status_mahasiswa = 'Lulus'
                   and id_periode_keluar is not null
                   and id_periode_keluar <> ''
                 order by thn desc
@@ -333,7 +334,7 @@ class SaptoMasaStudiRepository
     private function sourcePayload(): array
     {
         return [
-            'name' => 'Pangkalan Data UNSRI (sinkronisasi lokal)',
+            'name' => 'list_mahasiswa (sinkronisasi lokal)',
             'partial' => false,
         ];
     }

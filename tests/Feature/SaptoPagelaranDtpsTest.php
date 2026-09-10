@@ -97,9 +97,8 @@ class SaptoPagelaranDtpsTest extends TestCase
     }
 
     /**
-     * Perbedaan pokok dengan varian akademik: koran/majalah populer dihitung
-     * sebagai "media massa nasional" di sana, tapi di tabel vokasi tidak ada
-     * barisnya sehingga tidak boleh ikut terhitung di mana pun.
+     * Koran/majalah populer tidak punya baris di varian vokasi -> tidak
+     * boleh ikut terhitung di mana pun pada tabel ini.
      */
     public function test_koran_majalah_is_not_counted_in_the_vocational_variant(): void
     {
@@ -111,11 +110,41 @@ class SaptoPagelaranDtpsTest extends TestCase
             ->assertOk()->json('rows'))->keyBy('jenis_publikasi');
 
         $this->assertSame(0, $rows['Jumlah']['jumlah']);
+    }
 
-        // Judul yang sama tetap terhitung di varian akademik.
-        $akademik = collect($this->getJson('/api/sapto/tables/publikasi-ilmiah-dtps/summary?ts=2024')
+    /**
+     * Kebalikan dari test di atas: "Tulisan di media massa nasional" cuma
+     * ada di varian akademik. Butuh prodi & dosen jenjang S1 terpisah --
+     * roster DTPS per id_sdm cuma satu jenjang (ROW_NUMBER ambil penugasan
+     * terakhir), jadi D1 (D3) di setUp() tidak relevan untuk kasus ini.
+     * Juga membuktikan roster akademik vs vokasi tidak saling bocor lewat
+     * cache (lihat ResolvesPublikasiDtpsRoster -- cache key ikut sertakan
+     * jenjangValues).
+     */
+    public function test_koran_majalah_is_counted_in_the_academic_variant(): void
+    {
+        $this->withSession(['sso_user' => [
+            'sub' => 'test-akademik', 'name' => 'Test Akademik', 'email' => 'test-akademik@example.test',
+            'nomor_identitas' => '199999999999999002',
+        ]]);
+        DB::table('program_studi')->insert([
+            ['id_prodi' => 'P2', 'kode_program_studi' => '55202', 'nama_program_studi' => 'Sistem Informasi', 'status' => 'AKTIF', 'id_jenjang_pendidikan' => 1, 'nama_jenjang_pendidikan' => 'S1'],
+        ]);
+        \App\Models\Korprodi::create([
+            'nip' => '199999999999999002',
+            'nama' => 'Test Korprodi Akademik',
+            'kode_program_studi' => '55202',
+        ]);
+        DB::table('sister_list_penugasan')->insert([
+            ['id' => 'PG3', 'id_sdm' => 'D4', 'jenjang_pendidikan' => 'S1', 'unit_kerja' => 'Sistem Informasi', 'tanggal_mulai' => '2020-01-01', 'tanggal_keluar' => null, 'apakah_penugasan_homebase' => '1', 'perguruan_tinggi' => 'Universitas Sriwijaya'],
+        ]);
+        DB::table('sister_list_publikasi')->insert([
+            ['id' => 'K2', 'id_sdm' => 'D4', 'jenis_publikasi' => 'Koran/majalah populer/majalah umum', 'tanggal' => '2024-04-01'],
+        ]);
+
+        $rows = collect($this->getJson('/api/sapto/tables/publikasi-ilmiah-dtps/summary?ts=2024')
             ->assertOk()->json('rows'))->keyBy('jenis_publikasi');
 
-        $this->assertSame(1, $akademik['Tulisan di media massa nasional']['ts']);
+        $this->assertSame(1, $rows['Tulisan di media massa nasional']['ts']);
     }
 }
