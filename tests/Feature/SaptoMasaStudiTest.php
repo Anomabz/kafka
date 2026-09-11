@@ -40,10 +40,11 @@ class SaptoMasaStudiTest extends TestCase
             ['id_prodi' => 'P2', 'kode_program_studi' => '55301', 'nama_program_studi' => 'Manajemen Informatika', 'status' => 'AKTIF', 'id_jenjang_pendidikan' => 22, 'nama_jenjang_pendidikan' => 'D3'],
         ]);
 
-        \App\Models\Korprodi::create([
+        \App\Models\Penugasan::create([
+            'peran' => 'korprodi',
             'nip' => '199999999999999001',
             'nama' => 'Test Korprodi',
-            'kode_program_studi' => '55201',
+            'lingkup' => '55201',
         ]);
     }
 
@@ -117,10 +118,11 @@ class SaptoMasaStudiTest extends TestCase
             'sub' => 'test-d3', 'name' => 'Test D3', 'email' => 'test-d3@example.test',
             'nomor_identitas' => '199999999999999002',
         ]]);
-        \App\Models\Korprodi::create([
+        \App\Models\Penugasan::create([
+            'peran' => 'korprodi',
             'nip' => '199999999999999002',
             'nama' => 'Test Korprodi D3',
-            'kode_program_studi' => '55301',
+            'lingkup' => '55301',
         ]);
 
         $response = $this->getJson('/api/sapto/tables/masa-studi/summary?ts=2024')

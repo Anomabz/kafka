@@ -837,7 +837,7 @@
                 </div>
                 <h2 id="not-korprodi-title" class="auth-modal-title">Akses ditolak</h2>
                 <p id="not-korprodi-desc" class="auth-modal-desc">
-                    Akun <strong>{{ $notKorprodiHint }}</strong> belum terdaftar sebagai koordinator program studi (korprodi) di SAPTO.
+                    Akun <strong>{{ $notKorprodiHint }}</strong> belum terdaftar di SAPTO. Hubungi admin SAPTO untuk didaftarkan sebagai korprodi, dekan, atau rektor.
                 </p>
             </div>
         </div>

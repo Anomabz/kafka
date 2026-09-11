@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
-use App\Models\Korprodi;
+use App\Models\Penugasan;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -74,9 +74,8 @@ class SsoController extends Controller
 
         $ssoUser = $this->ssoSessionUser($userinfo->json());
 
-        // Admin SAPTO tidak wajib ada di tabel korprodi — hak aksesnya
-        // universitas, bukan per prodi.
-        if (! $ssoUser['is_admin'] && ! $this->isKorprodi($ssoUser)) {
+        // Admin SAPTO tidak wajib punya penugasan — hak aksesnya universitas.
+        if (! $ssoUser['is_admin'] && ! $this->hasPenugasan($ssoUser)) {
             $this->logAccessDenied($ssoUser, (string) $userinfo->json('preferred_username'));
 
             return redirect('/')->with('not_korprodi_hint', $userinfo->json('name') ?: $userinfo->json('preferred_username'));
@@ -94,34 +93,34 @@ class SsoController extends Controller
     }
 
     /**
-     * SAPTO hanya bisa diakses koordinator program studi (korprodi) yang NIP
-     * (nomor_identitas)-nya terdaftar di tabel korprodi — deny-by-default yang
-     * sama dengan SaptoUserContext::fromRequest(), tapi ditegakkan sedini
-     * mungkin (saat login) alih-alih membiarkan akun yang valid di SSO tapi
-     * tak terdaftar sebagai korprodi masuk ke shell aplikasi lebih dulu.
+     * SAPTO hanya bisa diakses akun yang didaftarkan admin di /admin/peran
+     * (korprodi, dekan, atau rektor) — deny-by-default yang sama dengan
+     * SaptoUserContext::fromRequest(), tapi ditegakkan sedini mungkin (saat
+     * login) alih-alih membiarkan akun SSO yang sah tapi tidak terdaftar masuk
+     * ke shell aplikasi lebih dulu.
      */
-    private function isKorprodi(array $userinfo): bool
+    private function hasPenugasan(array $userinfo): bool
     {
-        $nip = trim((string) ($userinfo['nomor_identitas'] ?? ''));
-
-        return $nip !== '' && Korprodi::query()->where('nip', $nip)->exists();
+        return Penugasan::query()
+            ->untukIdentitas($userinfo['nomor_identitas'] ?? null, $userinfo['email'] ?? null)
+            ->exists();
     }
 
     /**
-     * Kredensialnya benar di Keycloak tapi NIP-nya tidak dikenali SAPTO.
+     * Kredensialnya benar di Keycloak tapi akunnya tidak terdaftar di SAPTO.
      *
-     * Yang dicatat adalah `nomor_identitas` yang BENAR-BENAR dikirim Keycloak,
-     * karena itulah satu-satunya cara memastikan formatnya sama dengan kolom
-     * `korprodi.nip` (18 digit). Kalau realm ternyata mengirim NIDN atau ID
-     * pegawai yang lebih pendek, seluruh korprodi akan tertolak dan penyebabnya
-     * cuma kelihatan dari sini.
+     * Yang dicatat adalah `nomor_identitas` dan `email` yang BENAR-BENAR
+     * dikirim Keycloak, karena itulah satu-satunya cara tahu kenapa baris di
+     * /admin/peran tidak kena: format NIP berbeda, klaim NIP kosong, atau
+     * email yang didaftarkan admin tidak sama persis.
      *
      * @param  array<string, mixed>  $ssoUser
      */
     private function logAccessDenied(array $ssoUser, string $username): void
     {
-        Log::warning('Login SSO ditolak: NIP tidak terdaftar sebagai korprodi/admin SAPTO.', [
+        Log::warning('Login SSO ditolak: akun tidak terdaftar di penugasan/admin SAPTO.', [
             'username' => $username,
+            'email_dari_sso' => $ssoUser['email'] ?? null,
             'nomor_identitas_dari_sso' => $ssoUser['nomor_identitas'] ?? null,
             'panjang_nomor_identitas' => strlen(trim((string) ($ssoUser['nomor_identitas'] ?? ''))),
             'unit_kerja' => $ssoUser['unit_kerja'] ?? null,

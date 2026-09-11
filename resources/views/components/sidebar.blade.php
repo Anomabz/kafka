@@ -61,8 +61,26 @@
     // Avatar deterministik dari DiceBear — seed pakai identitas stabil
     // (nomor_identitas/nama) supaya tiap orang dapat wajah yang konsisten,
     // bukan cuma huruf inisial.
+    // Admin SAPTO memakai lambang UNSRI: akunnya mewakili pengelola
+    // sistem, bukan wajah perorangan.
     $avatarSeed = $ssoUser['nomor_identitas'] ?? $userName;
-    $avatarUrl = 'https://api.dicebear.com/9.x/avataaars/svg?seed='.urlencode($avatarSeed);
+    $avatarIsLogo = (bool) ($ssoUser['is_admin'] ?? false);
+    // Peran yang tampil di profil diturunkan dari SaptoUserContext -- sumber
+    // yang sama yang membatasi data -- bukan ditebak dari klaim SSO. Akun
+    // tanpa penugasan (mis. "Uji akun tanpa akses" di Login sebagai) tidak
+    // boleh membuat seluruh halaman gagal dirender, jadi 403-nya ditangkap.
+    $akses = null;
+    if ($ssoUser && ! ($ssoUser['is_admin'] ?? false)) {
+        try {
+            $akses = \App\Support\SaptoUserContext::fromRequest(request())->keterangan();
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException) {
+            $akses = null;
+        }
+    }
+
+    $avatarUrl = $avatarIsLogo
+        ? asset('images/logo-unsri.webp')
+        : 'https://api.dicebear.com/9.x/avataaars/svg?seed='.urlencode($avatarSeed);
 
     // Profil dirender langsung dari session `sso_user` (userinfo mentah dari
     // Keycloak) — tidak perlu endpoint baru, dan tidak ada risiko satu akun
@@ -241,14 +259,16 @@
     @if ($ssoUser)
         <div class="sidebar-footer px-3 py-3" style="border-top:1px solid var(--side-border)">
             @if ($ssoUser['is_admin'] ?? false)
-                <a href="{{ route('admin.login-as') }}"
+                {{-- Pintu masuk area admin. "Login sebagai" tetap bisa dicapai
+                     lewat tab di dalam halaman admin. --}}
+                <a href="{{ route('admin.peran') }}"
                    class="mb-2.5 flex items-center gap-2 rounded-lg px-2.5 py-2 text-[12px] font-semibold"
                    style="color:var(--side-text);background:var(--color-accent-soft)"
-                   title="Login sebagai (uji role)">
+                   title="Kelola role">
                     <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 11l-3 3-2-2"/>
+                        <path d="M12 21s7-3.6 7-9V6l-7-3-7 3v6c0 5.4 7 9 7 9Z"/><path d="m9 12 2 2 4-4"/>
                     </svg>
-                    <span class="sidebar-admin-link-text">Login sebagai (uji role)</span>
+                    <span class="sidebar-admin-link-text">Kelola role</span>
                 </a>
             @endif
             <div class="sidebar-identity-row flex items-center gap-2.5">
@@ -264,10 +284,10 @@
                     title="Lihat profil dari SSO"
                 >
                     <img
-                        src="{{ ($ssoUser['is_admin'] ?? false) ? 'https://media4.giphy.com/media/v1.Y2lkPTc5MGI3NjExbm9tYnYycGxkemswYWFkam42cGVxdmx5bDd5bjMxeXRmMHVrZmo4cyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/JLYQnbND9gkYU/giphy.gif' : $avatarUrl }}"
+                        src="{{ $avatarUrl }}"
                         alt="{{ $userName }}"
                         class="h-8 w-8 shrink-0 rounded-full object-cover"
-                        style="background:var(--color-accent-soft)"
+                        style="background:var(--color-accent-soft){{ $avatarIsLogo ? ';object-fit:contain;padding:3px' : '' }}"
                     >
                     <span class="sidebar-identity-text min-w-0 flex-1 text-left leading-tight">
                         <span class="block truncate text-[12px] font-semibold" style="color:var(--side-text)">
@@ -276,8 +296,10 @@
                         <span class="block truncate text-[11px]" style="color:var(--side-faint)">
                             @if ($ssoUser['is_admin'] ?? false)
                                 Developer SAPTO
+                            @elseif ($akses)
+                                {{ $akses['peran'] }} — {{ $akses['lingkup'] }}
                             @else
-                                Pengelola Program Studi{{ isset($ssoUser['unit_kerja']) ? ' — '.$ssoUser['unit_kerja'] : '' }}
+                                Belum punya akses SAPTO
                             @endif
                         </span>
                     </span>
@@ -539,10 +561,10 @@
         <header class="flex items-start justify-between gap-3 px-5 py-4" style="border-bottom:1px solid var(--color-line)">
             <div class="flex min-w-0 items-center gap-3">
                 <img
-                    src="{{ ($ssoUser['is_admin'] ?? false) ? 'https://media4.giphy.com/media/v1.Y2lkPTc5MGI3NjExbm9tYnYycGxkemswYWFkam42cGVxdmx5bDd5bjMxeXRmMHVrZmo4cyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/JLYQnbND9gkYU/giphy.gif' : $avatarUrl }}"
+                    src="{{ $avatarUrl }}"
                     alt=""
                     class="h-12 w-12 shrink-0 rounded-full object-cover"
-                    style="background:var(--color-accent-soft)"
+                    style="background:var(--color-accent-soft){{ $avatarIsLogo ? ';object-fit:contain;padding:3px' : '' }}"
                     aria-hidden="true"
                 >
                 <div class="min-w-0">
@@ -589,8 +611,10 @@
                     <dd class="profile-value">
                         @if ($ssoUser['is_admin'] ?? false)
                             Admin — semua fakultas &amp; program studi
+                        @elseif ($akses)
+                            {{ $akses['peran'] }} — {{ $akses['cakupan'] }}
                         @else
-                            Koordinator program studi — hanya prodi sendiri
+                            Belum terdaftar — hubungi admin SAPTO
                         @endif
                     </dd>
                 </div>

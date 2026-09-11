@@ -335,8 +335,9 @@
         return payload;
     }
 
-    // Fakultas: cuma admin (is_admin=true) yang can_select_fakultas=true dari
-    // API — korprodi biasa tak pernah lihat field ini (lihat filter-bar.blade.php).
+    // Fakultas: hanya admin dan rektor yang can_select_fakultas=true dari API.
+    // Dekan dan korprodi tidak melihat field ini -- fakultas mereka dikunci di
+    // server (SaptoUserContext), bukan cuma disembunyikan di sini.
     async function loadFakultas() {
         const payload = await fetchJson('/api/sapto/fakultas');
         state.canSelectFakultas = Boolean(payload.can_select_fakultas);
@@ -349,9 +350,9 @@
         }
     }
 
-    // Program studi: satu-satunya untuk korprodi biasa (kosong kalau data
-    // referensinya tidak ditemukan, lihat SaptoUserContext::fromRequest), atau
-    // daftar penuh + pilihan bebas untuk admin (can_select_program_studi=true).
+    // Program studi: korprodi cuma dapat prodinya sendiri tanpa pilihan; dekan
+    // dapat daftar prodi di fakultasnya dan boleh memilih; admin/rektor dapat
+    // daftar penuh (can_select_program_studi=true untuk dekan, rektor, admin).
     async function loadProgramStudi() {
         const params = new URLSearchParams();
 
@@ -419,6 +420,17 @@
 
             if (fakultas) {
                 return fakultas.nama;
+            }
+        }
+
+        // Dekan (bisa pilih prodi, tidak bisa pilih fakultas) yang belum
+        // memilih prodi: unitnya fakultasnya sendiri, bukan universitas.
+        // Semua prodi yang dikirim server untuk dekan berada di fakultas itu.
+        if (!state.canSelectFakultas) {
+            const fakultas = (state.programStudi[0] || {}).fakultas || (state.fakultas[0] || {}).nama;
+
+            if (fakultas) {
+                return fakultas;
             }
         }
 
@@ -979,6 +991,9 @@
     // Admin melihat semua prodi yang punya mahasiswa asing (server tidak
     // discope), lalu disaring di klien lewat dropdown ma-*. Korprodi biasa:
     // server hanya mengembalikan satu prodi mereka, dropdown disembunyikan.
+    // Dropdown prodi: dekan, rektor, admin. Dropdown fakultas: hanya rektor
+    // dan admin -- dekan dikunci ke fakultasnya, jadi dropdown fakultas yang
+    // cuma berisi satu pilihan tidak ditampilkan.
     const maCanSelect = () => state.canSelectFakultas || state.canSelectProgramStudi;
 
     async function loadMahasiswaAsing() {
@@ -1011,7 +1026,7 @@
     // yang benar-benar punya mahasiswa asing (bukan katalog penuh) — supaya
     // admin tidak dibingungkan opsi prodi tanpa data.
     function renderMaFilters() {
-        els.maFakultasWrap.classList.toggle('hidden', !maCanSelect());
+        els.maFakultasWrap.classList.toggle('hidden', !state.canSelectFakultas);
         els.maProgramStudiWrap.classList.toggle('hidden', !maCanSelect());
 
         if (!maCanSelect()) {
@@ -1085,6 +1100,16 @@
             const row = (maSummary.data || []).find((r) => r.fakultas_id === maFilter.fakultasId);
             els.maActiveUnit.textContent = row ? row.fakultas : 'Universitas Sriwijaya';
             return;
+        }
+
+        if (!state.canSelectFakultas) {
+            const row = (maSummary.data || [])[0];
+            const fakultas = (row && row.fakultas) || (state.fakultas[0] || {}).nama;
+
+            if (fakultas) {
+                els.maActiveUnit.textContent = fakultas;
+                return;
+            }
         }
 
         els.maActiveUnit.textContent = 'Universitas Sriwijaya';

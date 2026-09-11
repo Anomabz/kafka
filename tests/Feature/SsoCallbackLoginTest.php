@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Models\Korprodi;
+use App\Models\Penugasan;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -32,7 +32,7 @@ class SsoCallbackLoginTest extends TestCase
 
     public function test_korprodi_gets_a_session_and_lands_on_home(): void
     {
-        Korprodi::create(['nip' => '199999999999999001', 'nama' => 'Budi', 'kode_program_studi' => '55201']);
+        Penugasan::create(['peran' => 'korprodi', 'nip' => '199999999999999001', 'nama' => 'Budi', 'lingkup' => '55201']);
 
         $response = $this->ssoCallback(['sub' => '1', 'name' => 'Budi', 'email' => 'budi@example.test', 'nomor_identitas' => '199999999999999001']);
 
@@ -125,7 +125,7 @@ class SsoCallbackLoginTest extends TestCase
         // Kalau realm suatu saat mengirim klaim bernama is_admin, klaim itu
         // tidak boleh menaikkan hak akses: statusnya selalu ditimpa hasil
         // pengecekan tabel users lokal (SsoController::ssoSessionUser()).
-        Korprodi::create(['nip' => '199999999999999001', 'nama' => 'Budi', 'kode_program_studi' => '55201']);
+        Penugasan::create(['peran' => 'korprodi', 'nip' => '199999999999999001', 'nama' => 'Budi', 'lingkup' => '55201']);
 
         $this->ssoCallback(['sub' => '1', 'name' => 'Budi', 'email' => 'budi@example.test', 'nomor_identitas' => '199999999999999001', 'is_admin' => true])
             ->assertRedirect('/');

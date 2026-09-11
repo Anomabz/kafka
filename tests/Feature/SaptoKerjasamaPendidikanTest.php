@@ -39,10 +39,11 @@ class SaptoKerjasamaPendidikanTest extends TestCase
         // Kerjasama bersifat institusi (lihat docblock repository), jadi prodi
         // di sini hanya perlu ada untuk melewati resolusi korprodi — tidak
         // menyaring baris hasil.
-        \App\Models\Korprodi::create([
+        \App\Models\Penugasan::create([
+            'peran' => 'korprodi',
             'nip' => '199999999999999001',
             'nama' => 'Test Korprodi',
-            'kode_program_studi' => '55201',
+            'lingkup' => '55201',
         ]);
     }
 

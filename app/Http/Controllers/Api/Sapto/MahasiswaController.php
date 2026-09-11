@@ -43,6 +43,7 @@ class MahasiswaController extends SaptoTableController
     {
         $context = SaptoUserContext::fromRequest($request);
         $idProdi = $context->resolveProgramStudiId($request);
+        $fakultasId = $context->resolveFakultasId($request);
         $tahun   = $request->query('tahun');
 
         $query = "
@@ -69,6 +70,21 @@ class MahasiswaController extends SaptoTableController
         if ($idProdi !== null) {
             $query .= " AND lrpm.id_prodi = ? ";
             $params[] = $idProdi;
+        } elseif ($fakultasId !== null) {
+            // Dekan tanpa prodi terpilih: semua prodi di fakultasnya saja.
+            // Tanpa cabang ini $idProdi null berarti TANPA saringan -- dekan
+            // mendapat daftar mahasiswa asing se-universitas.
+            $prodiFakultas = app(\App\Services\SaptoProgramStudiRepository::class)->programStudis()
+                ->where('fakultas_id', $fakultasId)
+                ->pluck('id')
+                ->all();
+
+            if ($prodiFakultas === []) {
+                return response()->json(['success' => true, 'total_mahasiswa' => 0, 'data' => []]);
+            }
+
+            $query .= ' AND lrpm.id_prodi IN ('.implode(',', array_fill(0, count($prodiFakultas), '?')).') ';
+            array_push($params, ...$prodiFakultas);
         }
 
         // Spesifik per tahun TS / TS-1 / TS-2 yang diklik. "Aktif pada tahun X"

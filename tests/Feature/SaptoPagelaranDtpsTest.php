@@ -33,10 +33,11 @@ class SaptoPagelaranDtpsTest extends TestCase
             ['id_prodi' => 'P1', 'kode_program_studi' => '55201', 'nama_program_studi' => 'Teknologi Informasi', 'status' => 'AKTIF', 'id_jenjang_pendidikan' => 1, 'nama_jenjang_pendidikan' => 'D3'],
         ]);
 
-        \App\Models\Korprodi::create([
+        \App\Models\Penugasan::create([
+            'peran' => 'korprodi',
             'nip' => '199999999999999001',
             'nama' => 'Test Korprodi',
-            'kode_program_studi' => '55201',
+            'lingkup' => '55201',
         ]);
 
         DB::table('sister_list_penugasan')->insert([
@@ -130,10 +131,11 @@ class SaptoPagelaranDtpsTest extends TestCase
         DB::table('program_studi')->insert([
             ['id_prodi' => 'P2', 'kode_program_studi' => '55202', 'nama_program_studi' => 'Sistem Informasi', 'status' => 'AKTIF', 'id_jenjang_pendidikan' => 1, 'nama_jenjang_pendidikan' => 'S1'],
         ]);
-        \App\Models\Korprodi::create([
+        \App\Models\Penugasan::create([
+            'peran' => 'korprodi',
             'nip' => '199999999999999002',
             'nama' => 'Test Korprodi Akademik',
-            'kode_program_studi' => '55202',
+            'lingkup' => '55202',
         ]);
         DB::table('sister_list_penugasan')->insert([
             ['id' => 'PG3', 'id_sdm' => 'D4', 'jenjang_pendidikan' => 'S1', 'unit_kerja' => 'Sistem Informasi', 'tanggal_mulai' => '2020-01-01', 'tanggal_keluar' => null, 'apakah_penugasan_homebase' => '1', 'perguruan_tinggi' => 'Universitas Sriwijaya'],

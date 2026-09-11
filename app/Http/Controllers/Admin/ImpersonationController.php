@@ -3,17 +3,23 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\Korprodi;
+use App\Models\Penugasan;
 use App\Services\SaptoProgramStudiRepository;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 /**
  * "Login sebagai" untuk akun admin — menggantikan URL /dev/login-as. Admin
- * bisa menyamar (impersonate) sebagai korprodi manapun untuk menguji apa yang
- * mereka lihat. Karena admin sudah punya akses penuh (universitas), menyamar
- * jadi korprodi justru akses LEBIH SEMPIT — tidak ada eskalasi hak, dan hanya
- * admin (is_admin=true) yang bisa membukanya. Identitas admin disimpan di
- * session ('impersonator_sso_user') supaya bisa dikembalikan.
+ * bisa menyamar (impersonate) sebagai siapa pun yang terdaftar di
+ * `penugasan` (korprodi, dekan, rektor) untuk menguji apa yang mereka lihat.
+ * Karena admin sudah punya akses penuh (universitas), menyamar justru akses
+ * yang sama atau LEBIH SEMPIT — tidak ada eskalasi hak, dan hanya admin
+ * (is_admin=true) yang bisa membukanya. Identitas admin disimpan di session
+ * ('impersonator_sso_user') supaya bisa dikembalikan.
+ *
+ * Setiap penyamaran dicatat ke log: admin bisa membuka data prodi mana pun
+ * atas nama orang lain, dan untuk sistem akreditasi itu pertanyaan pertama
+ * yang akan diajukan auditor.
  */
 class ImpersonationController extends Controller
 {
@@ -21,53 +27,77 @@ class ImpersonationController extends Controller
     {
         $this->ensureAdmin($request);
 
-        $prodiIndex = app(SaptoProgramStudiRepository::class)->programStudis()->keyBy('kode');
+        $repo = app(SaptoProgramStudiRepository::class);
+        $prodiByKode = $repo->programStudis()->keyBy('kode');
+        $fakultasById = $repo->faculties()->keyBy('id');
 
-        $korprodis = Korprodi::query()
+        $orang = Penugasan::query()
             ->orderBy('nama')
             ->get()
-            ->groupBy('nip')
-            ->map(function ($rows) use ($prodiIndex): array {
+            ->groupBy(fn (Penugasan $p): string => $p->nip ?: 'email:'.$p->email)
+            ->map(function ($rows) use ($prodiByKode, $fakultasById): array {
                 $first = $rows->first();
-                $prodiLabels = $rows
-                    ->map(fn ($r): string => $prodiIndex->get($r->kode_program_studi)['label'] ?? $r->kode_program_studi)
-                    ->all();
+                $lingkup = $rows->map(fn (Penugasan $p): array => $p->lingkupInfo($prodiByKode, $fakultasById));
+                $peran = Penugasan::peranTerluas($rows);
 
                 return [
-                    'nip' => (string) $first->nip,
-                    'nama' => (string) $first->nama,
-                    'prodi' => implode(' · ', $prodiLabels),
-                    'search' => strtolower($first->nama.' '.$first->nip.' '.implode(' ', $prodiLabels)),
+                    'penugasan_id' => $first->id,
+                    'nama' => $first->nama ?: ($first->nip ?: (string) $first->email),
+                    'inisial' => Penugasan::inisial($first->nama, $first->email ?: $first->nip),
+                    'peran' => $peran,
+                    'lingkup' => $lingkup->pluck('nama')->implode(' · '),
+                    'bermasalah' => $lingkup->contains('ada', false),
+                    'identitas' => collect([$first->nip ? 'NIP '.$first->nip : null, $first->email])->filter()->implode(' · '),
+                    'tags' => $rows->pluck('peran')->unique()->implode(' ').($lingkup->contains('ada', false) ? ' bermasalah' : ''),
+                    'urut' => array_search($peran, Penugasan::PERAN, true),
+                    'search' => mb_strtolower(implode(' ', [$first->nama, $first->nip, $first->email, $lingkup->pluck('nama')->implode(' '), $lingkup->pluck('sub')->implode(' ')])),
                 ];
             })
+            ->sortBy([['urut', 'asc'], ['nama', 'asc']])
             ->values();
 
-        return view('admin.login-as', ['korprodis' => $korprodis]);
+        return view('admin.login-as', [
+            'orang' => $orang,
+            'jumlah' => $orang->countBy('peran')->put('bermasalah', $orang->where('bermasalah', true)->count()),
+        ]);
     }
 
     public function store(Request $request)
     {
         $this->ensureAdmin($request);
 
-        $nip = trim((string) $request->input('nip'));
-        $korprodi = Korprodi::query()->where('nip', $nip)->first();
-
-        // 'any=1' -> uji jalur "akses ditolak" dengan NIP yang bukan korprodi.
-        if (! $korprodi && ! $request->boolean('any')) {
-            abort(404, 'NIP tidak terdaftar sebagai korprodi.');
+        if ($request->boolean('any')) {
+            // Uji jalur "akses ditolak" dengan NIP yang tidak terdaftar.
+            $target = ['nip' => trim((string) $request->input('nip')), 'email' => null, 'nama' => 'Uji Tanpa Akses'];
+        } else {
+            $penugasan = Penugasan::query()->findOrFail((int) $request->input('penugasan_id'));
+            $target = ['nip' => $penugasan->nip, 'email' => $penugasan->email, 'nama' => $penugasan->nama];
         }
+
+        $admin = $request->session()->get('impersonator_sso_user') ?? $request->session()->get('sso_user');
 
         // Simpan identitas admin agar bisa dikembalikan; jangan tumpuk kalau
         // sudah menyamar (biar tidak kehilangan admin asli).
         if (! $request->session()->has('impersonator_sso_user')) {
-            $request->session()->put('impersonator_sso_user', $request->session()->get('sso_user'));
+            $request->session()->put('impersonator_sso_user', $admin);
         }
 
+        // NIP dan email ASLI orangnya, bukan alamat palsu: SaptoUserContext
+        // mencocokkan penugasan lewat keduanya, jadi yang terlihat benar-benar
+        // sama dengan yang dilihat orang itu saat login sendiri.
         $request->session()->put('sso_user', [
-            'sub' => 'impersonate-'.$nip,
-            'name' => $korprodi->nama ?? 'Uji Tanpa Akses',
-            'email' => 'impersonate@sapto.local',
-            'nomor_identitas' => $nip,
+            'sub' => 'impersonate-'.($target['nip'] ?: $target['email']),
+            'name' => $target['nama'] ?: 'Uji Tanpa Akses',
+            'email' => $target['email'],
+            'nomor_identitas' => $target['nip'],
+        ]);
+
+        Log::info('Admin SAPTO menyamar sebagai pengguna lain.', [
+            'admin_email' => $admin['email'] ?? null,
+            'admin_nip' => $admin['nomor_identitas'] ?? null,
+            'target_nip' => $target['nip'],
+            'target_email' => $target['email'],
+            'target_nama' => $target['nama'],
         ]);
 
         return redirect('/');
@@ -78,6 +108,12 @@ class ImpersonationController extends Controller
         $admin = $request->session()->pull('impersonator_sso_user');
 
         if ($admin) {
+            Log::info('Admin SAPTO berhenti menyamar.', [
+                'admin_email' => $admin['email'] ?? null,
+                'admin_nip' => $admin['nomor_identitas'] ?? null,
+                'terakhir_sebagai' => $request->session()->get('sso_user.name'),
+            ]);
+
             $request->session()->put('sso_user', $admin);
         }
 

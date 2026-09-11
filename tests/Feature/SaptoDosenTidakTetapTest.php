@@ -47,10 +47,11 @@ class SaptoDosenTidakTetapTest extends TestCase
 
         // Auto-scopes this session to P1 (kode 55201) via the korprodi
         // mapping — X-SAPTO-* headers are no longer trusted for scope.
-        \App\Models\Korprodi::create([
+        \App\Models\Penugasan::create([
+            'peran' => 'korprodi',
             'nip' => '199999999999999001',
             'nama' => 'Test Korprodi',
-            'kode_program_studi' => '55201',
+            'lingkup' => '55201',
         ]);
     }
 

@@ -33,10 +33,11 @@ class SaptoDosenTetapTest extends TestCase
             'nama_jenjang_pendidikan' => 'S1',
         ]);
 
-        \App\Models\Korprodi::create([
+        \App\Models\Penugasan::create([
+            'peran' => 'korprodi',
             'nip' => '199999999999999001',
             'nama' => 'Test Korprodi',
-            'kode_program_studi' => '55201',
+            'lingkup' => '55201',
         ]);
     }
 

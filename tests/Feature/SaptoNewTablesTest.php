@@ -32,10 +32,11 @@ class SaptoNewTablesTest extends TestCase
 
         // Auto-scopes this session to P1 (kode 55201) via the korprodi
         // mapping — X-SAPTO-* headers are no longer trusted for scope.
-        \App\Models\Korprodi::create([
+        \App\Models\Penugasan::create([
+            'peran' => 'korprodi',
             'nip' => '199999999999999001',
             'nama' => 'Test Korprodi',
-            'kode_program_studi' => '55201',
+            'lingkup' => '55201',
         ]);
     }
 
@@ -178,10 +179,11 @@ class SaptoNewTablesTest extends TestCase
             'sub' => 'test-p2', 'name' => 'Test P2', 'email' => 'test-p2@example.test',
             'nomor_identitas' => '199999999999999002',
         ]]);
-        \App\Models\Korprodi::create([
+        \App\Models\Penugasan::create([
+            'peran' => 'korprodi',
             'nip' => '199999999999999002',
             'nama' => 'Test Korprodi P2',
-            'kode_program_studi' => '61101',
+            'lingkup' => '61101',
         ]);
 
         $rows = collect($this->getJson('/api/sapto/tables/dosen-tetap-pt/summary?ts=2024')

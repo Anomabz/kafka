@@ -26,10 +26,11 @@ class SaptoApiTest extends TestCase
         // Auto-scopes this session to P1 (kode 55201, Teknik Informatika) via
         // the korprodi mapping SaptoUserContext now derives scope from —
         // X-SAPTO-* headers are no longer trusted for role/scope.
-        \App\Models\Korprodi::create([
+        \App\Models\Penugasan::create([
+            'peran' => 'korprodi',
             'nip' => '199999999999999001',
             'nama' => 'Test Korprodi',
-            'kode_program_studi' => '55201',
+            'lingkup' => '55201',
         ]);
     }
 

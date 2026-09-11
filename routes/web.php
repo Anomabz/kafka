@@ -3,6 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\ImpersonationController;
+use App\Http\Controllers\Admin\PenugasanController;
 use App\Http\Controllers\Api\Sapto\MahasiswaController; // <-- 1. Import Controllernya di sini
 use App\Http\Controllers\Auth\SsoController;
 use App\Support\TelegramNotifier;
@@ -56,6 +57,12 @@ Route::middleware('sso.auth')->group(function () {
 Route::get('/admin/login-as', [ImpersonationController::class, 'index'])->name('admin.login-as');
 Route::post('/admin/login-as', [ImpersonationController::class, 'store'])->name('admin.login-as.store');
 Route::post('/admin/stop-impersonating', [ImpersonationController::class, 'stop'])->name('admin.stop-impersonating');
+
+// Kelola siapa boleh masuk SAPTO dan sebagai apa (korprodi/dekan/rektor) —
+// lihat PenugasanController. Khusus admin.
+Route::get('/admin/peran', [PenugasanController::class, 'index'])->name('admin.peran');
+Route::post('/admin/peran', [PenugasanController::class, 'store'])->name('admin.peran.store');
+Route::delete('/admin/peran/{penugasan}', [PenugasanController::class, 'destroy'])->name('admin.peran.destroy');
 
 Route::get('/', function () {
     return view('sapto', [

@@ -38,10 +38,11 @@ class SaptoMahasiswaAsingRepositoryTest extends TestCase
         // Auto-scopes this session to P1 (kode 61101, Manajemen) via the
         // korprodi mapping — MahasiswaController::data_mahasiswa_asing is now
         // gated by SaptoUserContext like every other table endpoint.
-        \App\Models\Korprodi::create([
+        \App\Models\Penugasan::create([
+            'peran' => 'korprodi',
             'nip' => '199999999999999001',
             'nama' => 'Test Korprodi',
-            'kode_program_studi' => '61101',
+            'lingkup' => '61101',
         ]);
     }
 
