@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\Penugasan;
 use App\Models\User;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -28,8 +29,32 @@ class SsoController extends Controller
         return config('services.sso.redirect_uri') ?: route('sso.callback');
     }
 
+    /**
+     * Site key Turnstile bila captcha aktif, null bila tidak. Aktif hanya
+     * kalau KEDUA kunci terisi: site key tanpa secret berarti widget tampil
+     * tapi tidak ada yang bisa lolos verifikasi -- semua orang terkunci.
+     */
+    public static function turnstileSiteKey(): ?string
+    {
+        $c = config('services.turnstile');
+
+        return ($c['site_key'] ?? null) && ($c['secret_key'] ?? null) ? (string) $c['site_key'] : null;
+    }
+
+    /**
+     * Tombol "Masuk" di welcome page (POST). Captcha diverifikasi di sini,
+     * sebelum dialihkan ke Keycloak -- dan karena `sso_state` baru dibuat
+     * setelah itu, /auth/callback tanpa captcha yang lolos otomatis ditolak.
+     *
+     * Catatan: password tetap diketik di halaman Keycloak, jadi captcha ini
+     * menahan bot yang membanjiri alur login SAPTO, bukan penebak password.
+     */
     public function login(Request $request)
     {
+        if (self::turnstileSiteKey() !== null && ! $this->captchaLolos((string) $request->input('cf-turnstile-response'))) {
+            return redirect('/')->with('captcha_gagal', 'Verifikasi keamanan belum berhasil. Tunggu tanda centang muncul, lalu tekan Masuk lagi.');
+        }
+
         $state = Str::random(40);
         $request->session()->put('sso_state', $state);
 
@@ -42,6 +67,40 @@ class SsoController extends Controller
         ];
 
         return redirect()->away(self::base().'/auth?'.http_build_query($params));
+    }
+
+    /**
+     * Verifikasi token Turnstile ke Cloudflare.
+     *
+     * Cloudflare yang tidak bisa dihubungi sengaja dianggap LOLOS (dicatat
+     * ke log): captcha di sini bukan pertahanan password -- Keycloak tetap
+     * mengautentikasi -- jadi gangguan jaringan tidak boleh mengunci semua
+     * orang keluar dari SAPTO. Jawaban "gagal" dari Cloudflare tetap ditolak.
+     */
+    private function captchaLolos(string $token): bool
+    {
+        if ($token === '') {
+            return false;
+        }
+
+        try {
+            $res = Http::asForm()->timeout(8)->post('https://challenges.cloudflare.com/turnstile/v0/siteverify', [
+                'secret' => config('services.turnstile.secret_key'),
+                'response' => $token,
+            ]);
+        } catch (ConnectionException $e) {
+            Log::warning('Turnstile tidak bisa dihubungi; captcha dilewati.', ['error' => $e->getMessage()]);
+
+            return true;
+        }
+
+        if (! $res->json('success')) {
+            Log::info('Captcha Turnstile ditolak.', ['error_codes' => $res->json('error-codes')]);
+
+            return false;
+        }
+
+        return true;
     }
 
     public function callback(Request $request)

@@ -124,6 +124,36 @@ juga tidak punya service account, jadi Admin API Keycloak tidak tersedia —
 nama pengguna tidak bisa dicari dari SSO, hanya dari data Feeder
 (`list_mahasiswa`, `biodata_dosen`).
 
+### Captcha (Cloudflare Turnstile)
+
+```dotenv
+TURNSTILE_SITE_KEY=
+TURNSTILE_SECRET_KEY=
+```
+
+Opsional — kosongkan **keduanya** untuk mematikan captcha (tombol Masuk
+langsung aktif, tanpa widget). Aktif hanya bila kedua kunci terisi; satu kunci
+saja sengaja dianggap mati (`SsoController::turnstileSiteKey()`), supaya site
+key tanpa secret tidak mengunci semua orang keluar.
+
+Widget dipasang di tombol **Masuk** welcome page, di **bawah** tombolnya —
+bukan pengganti password, karena password tetap diketik di halaman Keycloak
+(lihat [Autentikasi dan hak akses](#autentikasi-dan-hak-akses)). Fungsinya
+menahan bot yang membanjiri `POST /auth/login`, bukan pertahanan kredensial.
+`GET /auth/login` sengaja dialihkan ke `/` supaya URL itu tidak bisa dipakai
+melompati captcha.
+
+Site key Cloudflare **terikat ke hostname** yang didaftarkan (`Turnstile → Add
+widget → Hostname`). Kunci yang didaftarkan untuk `sapto.unsri.ac.id` akan
+gagal (kartu galat bawaan Cloudflare "Tidak dapat terhubung ke situs web")
+kalau diuji lewat `localhost` atau IP host — tambahkan hostname uji terpisah
+di dashboard Turnstile kalau butuh, atau uji dengan header `Host:
+sapto.unsri.ac.id` yang dipetakan ke IP host ini.
+
+Cloudflare yang tidak bisa dihubungi dari server (gangguan jaringan, bukan
+captcha gagal) sengaja dianggap **lolos** — dicatat ke log sebagai peringatan
+— supaya satu gangguan tidak mengunci semua orang keluar dari SAPTO.
+
 ### API Pangkalan Data
 
 ```dotenv

@@ -46,6 +46,13 @@ return [
         'redirect_uri' => env('SSO_REDIRECT_URI'),
     ],
 
+    // Captcha di tombol "Masuk" (Cloudflare Turnstile). Aktif hanya bila
+    // KEDUA kunci terisi -- lihat SsoController::turnstileSiteKey().
+    'turnstile' => [
+        'site_key' => env('TURNSTILE_SITE_KEY'),
+        'secret_key' => env('TURNSTILE_SECRET_KEY'),
+    ],
+
     'ses' => [
         'key' => env('AWS_ACCESS_KEY_ID'),
         'secret' => env('AWS_SECRET_ACCESS_KEY'),

@@ -10,6 +10,13 @@
     <title>SAPTO Unsri — Sistem Akreditasi Perguruan Tinggi Online</title>
     <link rel="icon" href="{{ asset('images/logo-unsri.webp') }}" type="image/webp">
     @include('components.seo-meta')
+    @if ($turnstileSiteKey ?? null)
+        {{-- Mode implisit: begitu termuat, Turnstile otomatis merender
+             semua elemen .cf-turnstile yang ada di halaman -- lihat
+             div#captcha-masuk di kartu "Masuk". Tanpa tag ini widget
+             tidak pernah dirender dan tombol Masuk terkunci selamanya. --}}
+        <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+    @endif
     <script>
         (function () {
             try {
@@ -433,11 +440,14 @@
             width: 100%;
             margin-top: 1.4rem;
             padding: 0.95rem 1.25rem;
+            border: 0;
             border-radius: 0.9rem;
+            font-family: inherit;
             font-size: 14px;
             font-weight: 800;
             color: #ffffff;
             text-decoration: none;
+            cursor: pointer;
             background: linear-gradient(135deg, #4338ca 0%, #6366f1 55%, #312e81 100%);
             box-shadow: 0 12px 26px -10px rgba(67, 56, 202, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.18);
             transition: transform 140ms ease, box-shadow 140ms ease, filter 140ms ease;
@@ -448,6 +458,35 @@
             filter: brightness(1.06);
             box-shadow: 0 16px 32px -10px rgba(67, 56, 202, 0.95), inset 0 1px 0 rgba(255, 255, 255, 0.22);
         }
+
+        /* Terkunci sampai captcha lolos -- biasanya 1-2 detik di mode Managed. */
+        .auth-cta:disabled,
+        .auth-cta:disabled:hover {
+            cursor: wait;
+            opacity: 0.55;
+            transform: none;
+            filter: saturate(0.6);
+            box-shadow: none;
+        }
+
+        .auth-captcha {
+            min-height: 65px;
+            margin-top: 1.3rem;
+        }
+
+        .auth-captcha-error {
+            margin: 1rem 0 0;
+            padding: 0.6rem 0.8rem;
+            border-radius: 0.75rem;
+            font-size: 12.5px;
+            font-weight: 600;
+            line-height: 1.45;
+            color: var(--color-warn);
+            background: var(--color-warn-soft);
+            box-shadow: inset 0 0 0 1px var(--color-warn-line);
+        }
+
+        .auth-captcha-error[hidden] { display: none; }
 
         .auth-cta svg {
             width: 16px;
@@ -764,12 +803,51 @@
                 <h1 class="auth-heading font-extrabold tracking-tight text-ink">Selamat datang di <span class="auth-accent-word">SAPTO</span></h1>
                 <p class="mt-1 text-[13px] text-muted">Portal pelaporan akreditasi Tridharma untuk koordinator program studi Universitas Sriwijaya.</p>
 
-                <a href="{{ route('sso.login') }}" id="login-submit" class="auth-cta">
-                    <span id="login-submit-label">Masuk</span>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <path d="M5 12h13m-5-6 6 6-6 6"/>
-                    </svg>
-                </a>
+                {{-- POST, bukan link: token captcha ikut terkirim dan
+                     diverifikasi server sebelum dialihkan ke Keycloak. --}}
+                <form method="POST" action="{{ route('sso.login') }}" id="form-masuk">
+                    @csrf
+                    @if ($captchaGagal ?? null)
+                        <p class="auth-captcha-error" role="alert">{{ $captchaGagal }}</p>
+                    @endif
+                    <button type="submit" id="login-submit" class="auth-cta" @if ($turnstileSiteKey ?? null) disabled @endif>
+                        <span id="login-submit-label">Masuk</span>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M5 12h13m-5-6 6 6-6 6"/>
+                        </svg>
+                    </button>
+                    @if ($turnstileSiteKey ?? null)
+                        {{-- Di BAWAH tombol (bukan di atas): permintaan eksplisit
+                             pengguna. Mode implisit: api.js di <head> merender
+                             elemen .cf-turnstile ini dan menaruh token di input
+                             tersembunyi `cf-turnstile-response` di dalam form. --}}
+                        <div class="cf-turnstile auth-captcha" id="captcha-masuk"
+                             data-sitekey="{{ $turnstileSiteKey }}"
+                             data-callback="saptoCaptchaLolos"
+                             data-expired-callback="saptoCaptchaKedaluwarsa"
+                             data-error-callback="saptoCaptchaGalat"
+                             data-size="flexible"
+                             data-language="id"></div>
+                        <p class="auth-captcha-error" id="captcha-error" role="alert" hidden>Verifikasi keamanan gagal dimuat. Muat ulang halaman ini.</p>
+                        <script>
+                            // Didefinisikan di sini (sinkron, sebelum Turnstile
+                            // merender) supaya callback pasti sudah ada. Tema
+                            // mengikuti tema SAPTO, bukan cuma tema OS.
+                            (function () {
+                                var el = document.getElementById('captcha-masuk');
+                                el.setAttribute('data-theme', document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
+                                function tombol(aktif) { document.getElementById('login-submit').disabled = !aktif; }
+                                function galat(tampil) { document.getElementById('captcha-error').hidden = !tampil; }
+                                window.saptoCaptchaLolos = function () { tombol(true); galat(false); };
+                                window.saptoCaptchaKedaluwarsa = function () { tombol(false); };
+                                window.saptoCaptchaGalat = function () { tombol(false); galat(true); };
+                                // Skrip Cloudflare tidak termuat sama sekali (jaringan
+                                // memblokir): beri tahu, jangan biarkan tombol mati diam-diam.
+                                setTimeout(function () { if (!window.turnstile) galat(true); }, 10000);
+                            })();
+                        </script>
+                    @endif
+                </form>
 
                 <div class="auth-divider">Cara masuk</div>
 
@@ -847,8 +925,9 @@
         (function () {
             var loginBtn = document.getElementById('login-submit');
             var loginLabel = document.getElementById('login-submit-label');
-            if (loginBtn && loginLabel) {
-                loginBtn.addEventListener('click', function () {
+            var formMasuk = document.getElementById('form-masuk');
+            if (formMasuk && loginLabel) {
+                formMasuk.addEventListener('submit', function () {
                     loginLabel.textContent = 'Mengalihkan ke SSO…';
                 });
             }

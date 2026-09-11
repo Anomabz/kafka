@@ -21,7 +21,10 @@ Route::redirect('/login', '/')->name('login');
 // Easter egg — sengaja tidak ditautkan dari nav manapun.
 Route::get('/credits', fn () => view('credits'));
 
-Route::get('/auth/login', [SsoController::class, 'login'])->name('sso.login');
+// Masuk = POST dari welcome page (membawa token captcha). GET dialihkan ke
+// root supaya URL ini tidak bisa dipakai untuk melompati captcha.
+Route::get('/auth/login', fn () => redirect('/'));
+Route::post('/auth/login', [SsoController::class, 'login'])->name('sso.login');
 Route::get('/auth/callback', [SsoController::class, 'callback'])->name('sso.callback');
 Route::get('/auth/logout', [SsoController::class, 'logout'])->name('sso.logout');
 
