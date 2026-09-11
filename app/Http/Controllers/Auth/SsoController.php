@@ -177,6 +177,20 @@ class SsoController extends Controller
         );
 
         TelegramNotifier::broadcast($pesan);
+
+        // Akun admin punya akses penuh ke seluruh data SAPTO (scope
+        // 'universitas', lihat SaptoUserContext) -- login-nya lebih sensitif
+        // daripada korprodi/dekan/rektor biasa, jadi ditambah satu alert
+        // terpisah yang lebih mencolok supaya tidak tenggelam di antara
+        // notifikasi login rutin.
+        if ($ssoUser['is_admin']) {
+            TelegramNotifier::broadcast(sprintf(
+                "🚨 <b>ADMIN LOGIN</b>\nAkun berhak penuh atas seluruh data SAPTO baru saja masuk.\n%s (%s)\nIP: <code>%s</code>",
+                e($ssoUser['name'] ?? $ssoUser['preferred_username'] ?? '(tanpa nama)'),
+                e($ssoUser['email'] ?? '-'),
+                $request->ip(),
+            ));
+        }
     }
 
     /**

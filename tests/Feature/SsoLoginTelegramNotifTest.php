@@ -73,6 +73,22 @@ class SsoLoginTelegramNotifTest extends TestCase
             ->assertRedirect('/');
 
         Http::assertSent(fn ($request) => str_contains((string) ($request['text'] ?? ''), 'Admin SAPTO — Admin'));
+
+        // Login admin dapat SATU alert tambahan yang lebih mencolok, di luar
+        // alert login biasa di atas -- akses admin lebih sensitif (scope
+        // 'universitas') daripada korprodi/dekan/rektor.
+        Http::assertSent(fn ($request) => str_contains((string) ($request['text'] ?? ''), 'ADMIN LOGIN')
+            && str_contains((string) $request['text'], 'Admin SAPTO'));
+    }
+
+    public function test_a_non_admin_login_does_not_trigger_the_extra_admin_alert(): void
+    {
+        Penugasan::create(['peran' => 'korprodi', 'nip' => '199999999999999001', 'nama' => 'Budi', 'lingkup' => '55201']);
+
+        $this->ssoCallback(['sub' => '1', 'name' => 'Budi', 'email' => 'budi@example.test', 'nomor_identitas' => '199999999999999001'])
+            ->assertRedirect('/');
+
+        Http::assertNotSent(fn ($request) => str_contains((string) ($request['text'] ?? ''), 'ADMIN LOGIN'));
     }
 
     public function test_a_denied_access_attempt_sends_a_separate_telegram_alert(): void
