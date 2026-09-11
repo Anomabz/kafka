@@ -2065,6 +2065,12 @@
         });
     }
 
+    @if (session('admin_login_alert'))
+        // Flash sekali pakai dari SsoController::callback() -- cuma tampil
+        // tepat setelah login sebagai admin, bukan tiap kali halaman dibuka.
+        showToast('Anda masuk sebagai Admin — akses penuh ke seluruh data SAPTO.', 'success');
+    @endif
+
     initTsOptions();
 
     // Tiga tahap ini dimuat terpisah, bukan sebagai satu rantai .then().

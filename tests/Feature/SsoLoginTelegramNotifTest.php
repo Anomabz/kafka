@@ -69,26 +69,37 @@ class SsoLoginTelegramNotifTest extends TestCase
             'password' => Hash::make(Str::random(64)),
         ]);
 
-        $this->ssoCallback(['sub' => '2', 'name' => 'Admin SAPTO', 'email' => 'admin@unsri.ac.id', 'nomor_identitas' => '9999999'])
-            ->assertRedirect('/');
+        $response = $this->ssoCallback(['sub' => '2', 'name' => 'Admin SAPTO', 'email' => 'admin@unsri.ac.id', 'nomor_identitas' => '9999999']);
 
+        $response->assertRedirect('/');
         Http::assertSent(fn ($request) => str_contains((string) ($request['text'] ?? ''), 'Admin SAPTO — Admin'));
 
-        // Login admin dapat SATU alert tambahan yang lebih mencolok, di luar
-        // alert login biasa di atas -- akses admin lebih sensitif (scope
-        // 'universitas') daripada korprodi/dekan/rektor.
-        Http::assertSent(fn ($request) => str_contains((string) ($request['text'] ?? ''), 'ADMIN LOGIN')
-            && str_contains((string) $request['text'], 'Admin SAPTO'));
+        // Login admin dapat SATU alert tambahan di WEBSITE (toast, lihat
+        // sapto.blade.php), bukan Telegram lagi -- akses admin lebih
+        // sensitif (scope 'universitas') daripada korprodi/dekan/rektor,
+        // jadi orang yang login perlu sadar dia sedang masuk dengan hak
+        // penuh saat itu juga.
+        $this->assertTrue(session('admin_login_alert'));
     }
 
-    public function test_a_non_admin_login_does_not_trigger_the_extra_admin_alert(): void
+    public function test_a_non_admin_login_does_not_flash_the_admin_alert(): void
     {
         Penugasan::create(['peran' => 'korprodi', 'nip' => '199999999999999001', 'nama' => 'Budi', 'lingkup' => '55201']);
 
         $this->ssoCallback(['sub' => '1', 'name' => 'Budi', 'email' => 'budi@example.test', 'nomor_identitas' => '199999999999999001'])
             ->assertRedirect('/');
 
-        Http::assertNotSent(fn ($request) => str_contains((string) ($request['text'] ?? ''), 'ADMIN LOGIN'));
+        $this->assertFalse(session()->has('admin_login_alert'));
+    }
+
+    public function test_the_dashboard_shows_the_admin_toast_when_the_alert_is_flashed(): void
+    {
+        $this->withSession([
+            'sso_user' => ['sub' => 'x', 'name' => 'Admin', 'email' => 'admin@unsri.ac.id', 'is_admin' => true],
+            'admin_login_alert' => true,
+        ]);
+
+        $this->get('/')->assertOk()->assertSee('Anda masuk sebagai Admin', false);
     }
 
     public function test_a_denied_access_attempt_sends_a_separate_telegram_alert(): void
