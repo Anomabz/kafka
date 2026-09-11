@@ -124,33 +124,43 @@ juga tidak punya service account, jadi Admin API Keycloak tidak tersedia —
 nama pengguna tidak bisa dicari dari SSO, hanya dari data Feeder
 (`list_mahasiswa`, `biodata_dosen`).
 
-### Captcha (Cloudflare Turnstile)
+### Captcha (Google reCAPTCHA v2 Invisible)
 
 ```dotenv
-TURNSTILE_SITE_KEY=
-TURNSTILE_SECRET_KEY=
+RECAPTCHA_SITE_KEY=
+RECAPTCHA_SECRET_KEY=
 ```
 
 Opsional — kosongkan **keduanya** untuk mematikan captcha (tombol Masuk
-langsung aktif, tanpa widget). Aktif hanya bila kedua kunci terisi; satu kunci
-saja sengaja dianggap mati (`SsoController::turnstileSiteKey()`), supaya site
-key tanpa secret tidak mengunci semua orang keluar.
+langsung aktif, tanpa bar verifikasi). Aktif hanya bila kedua kunci terisi;
+satu kunci saja sengaja dianggap mati (`SsoController::recaptchaSiteKey()`),
+supaya site key tanpa secret tidak mengunci semua orang keluar.
 
-Widget dipasang di tombol **Masuk** welcome page, di **bawah** tombolnya —
-bukan pengganti password, karena password tetap diketik di halaman Keycloak
-(lihat [Autentikasi dan hak akses](#autentikasi-dan-hak-akses)). Fungsinya
-menahan bot yang membanjiri `POST /auth/login`, bukan pertahanan kredensial.
-`GET /auth/login` sengaja dialihkan ke `/` supaya URL itu tidak bisa dipakai
-melompati captcha.
+Kuncinya **wajib bertipe "Invisible reCAPTCHA badge"** (daftar di
+[google.com/recaptcha/admin](https://www.google.com/recaptcha/admin/create),
+hostname `sapto.unsri.ac.id`). Kunci tipe *"I'm not a robot" Checkbox*
+ditolak Google di mode ini ("kunci situs untuk captcha yang terlihat").
 
-Site key Cloudflare **terikat ke hostname** yang didaftarkan (`Turnstile → Add
-widget → Hostname`). Kunci yang didaftarkan untuk `sapto.unsri.ac.id` akan
-gagal (kartu galat bawaan Cloudflare "Tidak dapat terhubung ke situs web")
-kalau diuji lewat `localhost` atau IP host — tambahkan hostname uji terpisah
-di dashboard Turnstile kalau butuh, atau uji dengan header `Host:
-sapto.unsri.ac.id` yang dipetakan ke IP host ini.
+Widget checkbox asli Google adalah iframe lintas-domain yang tidak bisa
+direstyle, jadi tampilannya dibuat sendiri: bar verifikasi bergaya Cloudflare
+Turnstile di **bawah** tombol Masuk (`.auth-verify` di `auth/login.blade.php`).
+Mencentangnya memanggil `grecaptcha.execute()`; Google meloloskan diam-diam
+atau memunculkan **teka-teki gambar** sendiri kalau curiga bot. Badge melayang
+Google disembunyikan — diizinkan selama tulisan "reCAPTCHA" + tautan
+Privasi/Ketentuan tetap tampil, dan itu ada di sisi kanan bar. Popup
+teka-teki yang ditutup tanpa dijawab dideteksi dan bar kembali ke awal.
 
-Cloudflare yang tidak bisa dihubungi dari server (gangguan jaringan, bukan
+Captcha ini bukan pengganti password — password tetap diketik di halaman
+Keycloak (lihat [Autentikasi dan hak akses](#autentikasi-dan-hak-akses)).
+Fungsinya menahan bot yang membanjiri `POST /auth/login`. `GET /auth/login`
+sengaja dialihkan ke `/` supaya URL itu tidak bisa dipakai melompati captcha.
+
+Site key **terikat ke hostname** yang didaftarkan: dibuka lewat `localhost`
+atau IP host, Google menolak dan bar menampilkan pesan galat. Untuk uji lokal,
+pakai kunci uji resmi Google (`6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI` /
+`6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe`, selalu lolos, menerima localhost).
+
+Google yang tidak bisa dihubungi dari server (gangguan jaringan, bukan
 captcha gagal) sengaja dianggap **lolos** — dicatat ke log sebagai peringatan
 — supaya satu gangguan tidak mengunci semua orang keluar dari SAPTO.
 

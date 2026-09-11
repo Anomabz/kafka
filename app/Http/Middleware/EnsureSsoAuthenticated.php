@@ -38,7 +38,7 @@ class EnsureSsoAuthenticated
             if ($request->is('/')) {
                 return response()->view('auth.login', [
                     'notKorprodiHint' => $request->session()->get('not_korprodi_hint'),
-                    'turnstileSiteKey' => SsoController::turnstileSiteKey(),
+                    'recaptchaSiteKey' => SsoController::recaptchaSiteKey(),
                     'captchaGagal' => $request->session()->get('captcha_gagal'),
                 ]);
             }

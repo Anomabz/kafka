@@ -46,11 +46,12 @@ return [
         'redirect_uri' => env('SSO_REDIRECT_URI'),
     ],
 
-    // Captcha di tombol "Masuk" (Cloudflare Turnstile). Aktif hanya bila
-    // KEDUA kunci terisi -- lihat SsoController::turnstileSiteKey().
-    'turnstile' => [
-        'site_key' => env('TURNSTILE_SITE_KEY'),
-        'secret_key' => env('TURNSTILE_SECRET_KEY'),
+    // Captcha di tombol "Masuk" (Google reCAPTCHA v2 "I'm not a robot", bisa
+    // menampilkan teka-teki gambar). Aktif hanya bila KEDUA kunci terisi --
+    // lihat SsoController::recaptchaSiteKey().
+    'recaptcha' => [
+        'site_key' => env('RECAPTCHA_SITE_KEY'),
+        'secret_key' => env('RECAPTCHA_SECRET_KEY'),
     ],
 
     'ses' => [

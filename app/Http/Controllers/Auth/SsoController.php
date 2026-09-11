@@ -30,13 +30,13 @@ class SsoController extends Controller
     }
 
     /**
-     * Site key Turnstile bila captcha aktif, null bila tidak. Aktif hanya
+     * Site key reCAPTCHA bila captcha aktif, null bila tidak. Aktif hanya
      * kalau KEDUA kunci terisi: site key tanpa secret berarti widget tampil
      * tapi tidak ada yang bisa lolos verifikasi -- semua orang terkunci.
      */
-    public static function turnstileSiteKey(): ?string
+    public static function recaptchaSiteKey(): ?string
     {
-        $c = config('services.turnstile');
+        $c = config('services.recaptcha');
 
         return ($c['site_key'] ?? null) && ($c['secret_key'] ?? null) ? (string) $c['site_key'] : null;
     }
@@ -51,8 +51,8 @@ class SsoController extends Controller
      */
     public function login(Request $request)
     {
-        if (self::turnstileSiteKey() !== null && ! $this->captchaLolos((string) $request->input('cf-turnstile-response'))) {
-            return redirect('/')->with('captcha_gagal', 'Verifikasi keamanan belum berhasil. Tunggu tanda centang muncul, lalu tekan Masuk lagi.');
+        if (self::recaptchaSiteKey() !== null && ! $this->captchaLolos((string) $request->input('g-recaptcha-response'))) {
+            return redirect('/')->with('captcha_gagal', 'Verifikasi keamanan belum berhasil. Selesaikan captcha, lalu tekan Masuk lagi.');
         }
 
         $state = Str::random(40);
@@ -70,12 +70,12 @@ class SsoController extends Controller
     }
 
     /**
-     * Verifikasi token Turnstile ke Cloudflare.
+     * Verifikasi token reCAPTCHA ke Google.
      *
-     * Cloudflare yang tidak bisa dihubungi sengaja dianggap LOLOS (dicatat
-     * ke log): captcha di sini bukan pertahanan password -- Keycloak tetap
+     * Google yang tidak bisa dihubungi sengaja dianggap LOLOS (dicatat ke
+     * log): captcha di sini bukan pertahanan password -- Keycloak tetap
      * mengautentikasi -- jadi gangguan jaringan tidak boleh mengunci semua
-     * orang keluar dari SAPTO. Jawaban "gagal" dari Cloudflare tetap ditolak.
+     * orang keluar dari SAPTO. Jawaban "gagal" dari Google tetap ditolak.
      */
     private function captchaLolos(string $token): bool
     {
@@ -84,18 +84,18 @@ class SsoController extends Controller
         }
 
         try {
-            $res = Http::asForm()->timeout(8)->post('https://challenges.cloudflare.com/turnstile/v0/siteverify', [
-                'secret' => config('services.turnstile.secret_key'),
+            $res = Http::asForm()->timeout(8)->post('https://www.google.com/recaptcha/api/siteverify', [
+                'secret' => config('services.recaptcha.secret_key'),
                 'response' => $token,
             ]);
         } catch (ConnectionException $e) {
-            Log::warning('Turnstile tidak bisa dihubungi; captcha dilewati.', ['error' => $e->getMessage()]);
+            Log::warning('reCAPTCHA tidak bisa dihubungi; captcha dilewati.', ['error' => $e->getMessage()]);
 
             return true;
         }
 
         if (! $res->json('success')) {
-            Log::info('Captcha Turnstile ditolak.', ['error_codes' => $res->json('error-codes')]);
+            Log::info('Captcha reCAPTCHA ditolak.', ['error_codes' => $res->json('error-codes')]);
 
             return false;
         }

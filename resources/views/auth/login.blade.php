@@ -10,13 +10,6 @@
     <title>SAPTO Unsri — Sistem Akreditasi Perguruan Tinggi Online</title>
     <link rel="icon" href="{{ asset('images/logo-unsri.webp') }}" type="image/webp">
     @include('components.seo-meta')
-    @if ($turnstileSiteKey ?? null)
-        {{-- Mode implisit: begitu termuat, Turnstile otomatis merender
-             semua elemen .cf-turnstile yang ada di halaman -- lihat
-             div#captcha-masuk di kartu "Masuk". Tanpa tag ini widget
-             tidak pernah dirender dan tombol Masuk terkunci selamanya. --}}
-        <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
-    @endif
     <script>
         (function () {
             try {
@@ -459,7 +452,7 @@
             box-shadow: 0 16px 32px -10px rgba(67, 56, 202, 0.95), inset 0 1px 0 rgba(255, 255, 255, 0.22);
         }
 
-        /* Terkunci sampai captcha lolos -- biasanya 1-2 detik di mode Managed. */
+        /* Terkunci sampai captcha lolos. */
         .auth-cta:disabled,
         .auth-cta:disabled:hover {
             cursor: wait;
@@ -469,9 +462,177 @@
             box-shadow: none;
         }
 
-        .auth-captcha {
-            min-height: 65px;
-            margin-top: 1.3rem;
+        /*
+         * Bar verifikasi buatan sendiri (gaya Cloudflare Turnstile). Widget
+         * checkbox asli Google adalah iframe lintas-domain yang tidak bisa
+         * direstyle sama sekali, jadi dipakai reCAPTCHA mode INVISIBLE:
+         * widget Google tidak tampil, checkbox di bawah ini yang memicu
+         * grecaptcha.execute(), dan Google tetap memunculkan teka-teki
+         * gambar sendiri kalau curiga bot. Semua warna dari token app.css,
+         * jadi ikut tema terang/gelap.
+         */
+        .auth-verify {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            min-height: 64px;
+            margin-top: 1rem;
+            padding: 0.55rem 0.9rem 0.55rem 0.8rem;
+            border: 1px solid var(--input-border);
+            border-radius: 0.9rem;
+            background: var(--input-bg);
+            transition: border-color 160ms ease;
+        }
+
+        .auth-verify[data-state="ok"] {
+            border-color: rgba(22, 163, 74, 0.45);
+        }
+
+        .auth-verify-check {
+            display: flex;
+            align-items: center;
+            gap: 0.7rem;
+            min-width: 0;
+            padding: 0.25rem;
+            margin: -0.25rem;
+            border: 0;
+            border-radius: 0.6rem;
+            font: inherit;
+            text-align: left;
+            color: var(--color-ink);
+            background: none;
+            cursor: pointer;
+        }
+
+        .auth-verify-check:disabled {
+            cursor: default;
+        }
+
+        .auth-verify-check:focus-visible {
+            outline: 2px solid var(--color-accent);
+            outline-offset: 2px;
+        }
+
+        .auth-verify-box {
+            position: relative;
+            display: grid;
+            flex-shrink: 0;
+            place-items: center;
+            width: 26px;
+            height: 26px;
+            border: 2px solid var(--color-muted);
+            border-radius: 0.45rem;
+            background: var(--color-surface);
+            transition: border-color 160ms ease, background 160ms ease;
+        }
+
+        .auth-verify-check:not(:disabled):hover .auth-verify-box {
+            border-color: var(--color-accent);
+        }
+
+        .auth-verify-tick {
+            width: 16px;
+            height: 16px;
+            fill: none;
+            stroke: #ffffff;
+            stroke-width: 3;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            stroke-dasharray: 24;
+            stroke-dashoffset: 24;
+            transition: stroke-dashoffset 280ms ease 60ms;
+        }
+
+        .auth-verify-spin {
+            position: absolute;
+            inset: -2px;
+            border: 2.5px solid var(--color-accent-line);
+            border-top-color: var(--color-accent);
+            border-radius: 999px;
+            opacity: 0;
+        }
+
+        .auth-verify[data-state="loading"] .auth-verify-box {
+            border-color: transparent;
+            background: transparent;
+        }
+
+        .auth-verify[data-state="loading"] .auth-verify-spin {
+            opacity: 1;
+            animation: auth-verify-spin 0.8s linear infinite;
+        }
+
+        .auth-verify[data-state="ok"] .auth-verify-box {
+            border-color: #16a34a;
+            background: #16a34a;
+        }
+
+        .auth-verify[data-state="ok"] .auth-verify-tick {
+            stroke-dashoffset: 0;
+        }
+
+        @keyframes auth-verify-spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .auth-verify-label {
+            font-size: 13.5px;
+            font-weight: 600;
+            line-height: 1.3;
+        }
+
+        .auth-verify[data-state="ok"] .auth-verify-label {
+            color: #16a34a;
+        }
+
+        .auth-verify-brand {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            flex-shrink: 0;
+            gap: 0.15rem;
+            text-align: right;
+            color: var(--color-muted);
+        }
+
+        .auth-verify-logo {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.01em;
+        }
+
+        .auth-verify-logo svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        .auth-verify-links {
+            font-size: 10px;
+        }
+
+        .auth-verify-links a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        .auth-verify-links a:hover {
+            text-decoration: underline;
+        }
+
+        /* Badge melayang Google disembunyikan -- diizinkan Google selama
+           tulisan "reCAPTCHA" + tautan Privasi/Ketentuan tetap terlihat di
+           alur pengguna, dan itu ada di sisi kanan bar di atas. */
+        .grecaptcha-badge {
+            visibility: hidden !important;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .auth-verify[data-state="loading"] .auth-verify-spin { animation: none; }
+            .auth-verify-tick { transition: none; }
         }
 
         .auth-captcha-error {
@@ -810,42 +971,129 @@
                     @if ($captchaGagal ?? null)
                         <p class="auth-captcha-error" role="alert">{{ $captchaGagal }}</p>
                     @endif
-                    <button type="submit" id="login-submit" class="auth-cta" @if ($turnstileSiteKey ?? null) disabled @endif>
+                    <button type="submit" id="login-submit" class="auth-cta" @if ($recaptchaSiteKey ?? null) disabled @endif>
                         <span id="login-submit-label">Masuk</span>
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <path d="M5 12h13m-5-6 6 6-6 6"/>
                         </svg>
                     </button>
-                    @if ($turnstileSiteKey ?? null)
-                        {{-- Di BAWAH tombol (bukan di atas): permintaan eksplisit
-                             pengguna. Mode implisit: api.js di <head> merender
-                             elemen .cf-turnstile ini dan menaruh token di input
-                             tersembunyi `cf-turnstile-response` di dalam form. --}}
-                        <div class="cf-turnstile auth-captcha" id="captcha-masuk"
-                             data-sitekey="{{ $turnstileSiteKey }}"
-                             data-callback="saptoCaptchaLolos"
-                             data-expired-callback="saptoCaptchaKedaluwarsa"
-                             data-error-callback="saptoCaptchaGalat"
-                             data-size="flexible"
-                             data-language="id"></div>
+                    @if ($recaptchaSiteKey ?? null)
+                        {{-- Di BAWAH tombol (permintaan eksplisit pengguna).
+                             Tampilan bar ini milik SAPTO sendiri; widget Google
+                             berjalan dalam mode invisible di #captcha-masuk dan
+                             menaruh token di textarea tersembunyi
+                             `g-recaptcha-response` di dalam form ini. --}}
+                        <div class="auth-verify" id="captcha-bar" data-state="idle">
+                            <button type="button" class="auth-verify-check" id="captcha-check" disabled aria-describedby="captcha-error">
+                                <span class="auth-verify-box" aria-hidden="true">
+                                    <svg class="auth-verify-tick" viewBox="0 0 24 24"><path d="M5 12.5l4.2 4.2L19 7.5"/></svg>
+                                    <span class="auth-verify-spin"></span>
+                                </span>
+                                <span class="auth-verify-label" id="captcha-label">Saya bukan robot</span>
+                            </button>
+                            <div class="auth-verify-brand">
+                                <span class="auth-verify-logo">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s7-3.6 7-9V6l-7-3-7 3v6c0 5.4 7 9 7 9Z"/><path d="m9 12 2 2 4-4"/></svg>
+                                    reCAPTCHA
+                                </span>
+                                <span class="auth-verify-links">
+                                    <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Privasi</a>
+                                    &middot;
+                                    <a href="https://policies.google.com/terms" target="_blank" rel="noopener">Ketentuan</a>
+                                </span>
+                            </div>
+                        </div>
+                        {{-- Wadah widget invisible: di LUAR bar (kalau di dalam,
+                             ia jadi item flex ketiga dan space-between menaruh
+                             blok reCAPTCHA di tengah), tapi tetap di dalam form
+                             supaya textarea token ikut terkirim. --}}
+                        <div id="captcha-masuk" data-sitekey="{{ $recaptchaSiteKey }}"></div>
                         <p class="auth-captcha-error" id="captcha-error" role="alert" hidden>Verifikasi keamanan gagal dimuat. Muat ulang halaman ini.</p>
                         <script>
-                            // Didefinisikan di sini (sinkron, sebelum Turnstile
-                            // merender) supaya callback pasti sudah ada. Tema
-                            // mengikuti tema SAPTO, bukan cuma tema OS.
+                            // Didefinisikan SEBELUM api.js dimuat (tag di bawah),
+                            // supaya callback onload pasti sudah ada.
                             (function () {
-                                var el = document.getElementById('captcha-masuk');
-                                el.setAttribute('data-theme', document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
-                                function tombol(aktif) { document.getElementById('login-submit').disabled = !aktif; }
-                                function galat(tampil) { document.getElementById('captcha-error').hidden = !tampil; }
-                                window.saptoCaptchaLolos = function () { tombol(true); galat(false); };
-                                window.saptoCaptchaKedaluwarsa = function () { tombol(false); };
-                                window.saptoCaptchaGalat = function () { tombol(false); galat(true); };
-                                // Skrip Cloudflare tidak termuat sama sekali (jaringan
+                                var bar = document.getElementById('captcha-bar');
+                                var cek = document.getElementById('captcha-check');
+                                var label = document.getElementById('captcha-label');
+                                var masuk = document.getElementById('login-submit');
+                                var pesan = document.getElementById('captcha-error');
+                                var LABEL = { idle: 'Saya bukan robot', loading: 'Memeriksa…', ok: 'Berhasil' };
+                                var widget = null;
+                                var pantau = null;
+
+                                function status(s) {
+                                    bar.setAttribute('data-state', s);
+                                    label.textContent = LABEL[s] || LABEL.idle;
+                                    masuk.disabled = s !== 'ok';
+                                    cek.disabled = s === 'ok' || widget === null;
+                                }
+
+                                function galat(teks) {
+                                    pesan.textContent = teks;
+                                    pesan.hidden = false;
+                                    status('idle');
+                                }
+
+                                // Mode invisible tidak punya callback "teka-teki
+                                // ditutup tanpa diselesaikan". Tanpa pantauan ini
+                                // spinner berputar selamanya kalau pengguna
+                                // menutup popup gambar: iframe tantangan Google
+                                // yang sudah sempat tampil lalu tersembunyi lagi
+                                // = batal, kembalikan ke keadaan awal.
+                                function mulaiPantau() {
+                                    var sempatTampil = false;
+                                    clearInterval(pantau);
+                                    pantau = setInterval(function () {
+                                        if (bar.getAttribute('data-state') !== 'loading') { clearInterval(pantau); return; }
+                                        var f = document.querySelector('iframe[src*="recaptcha/api2/bframe"]');
+                                        var wadah = f && f.parentNode && f.parentNode.parentNode;
+                                        if (!wadah) return;
+                                        var terlihat = getComputedStyle(wadah).visibility === 'visible';
+                                        if (terlihat) {
+                                            sempatTampil = true;
+                                        } else if (sempatTampil) {
+                                            clearInterval(pantau);
+                                            // Google menyembunyikan popup BERSAMAAN dengan
+                                            // mengirim token saat teka-teki terjawab --
+                                            // tunggu sebentar dan cek token dulu, jangan
+                                            // sampai jawaban yang benar ikut direset.
+                                            setTimeout(function () {
+                                                if (bar.getAttribute('data-state') !== 'loading') return;
+                                                if (grecaptcha.getResponse(widget)) { pesan.hidden = true; status('ok'); return; }
+                                                grecaptcha.reset(widget);
+                                                status('idle');
+                                            }, 1500);
+                                        }
+                                    }, 400);
+                                }
+
+                                window.saptoRecaptchaSiap = function () {
+                                    widget = grecaptcha.render('captcha-masuk', {
+                                        sitekey: document.getElementById('captcha-masuk').dataset.sitekey,
+                                        size: 'invisible',
+                                        badge: 'bottomright',
+                                        callback: function () { pesan.hidden = true; status('ok'); },
+                                        'expired-callback': function () { status('idle'); },
+                                        'error-callback': function () { galat('Verifikasi keamanan gagal dimuat. Muat ulang halaman ini.'); },
+                                    });
+                                    status('idle');
+                                };
+
+                                cek.addEventListener('click', function () {
+                                    if (widget === null || bar.getAttribute('data-state') !== 'idle') return;
+                                    pesan.hidden = true;
+                                    status('loading');
+                                    grecaptcha.execute(widget);
+                                    mulaiPantau();
+                                });
+
+                                // Skrip Google tidak termuat sama sekali (jaringan
                                 // memblokir): beri tahu, jangan biarkan tombol mati diam-diam.
-                                setTimeout(function () { if (!window.turnstile) galat(true); }, 10000);
+                                setTimeout(function () { if (widget === null) galat('Verifikasi keamanan gagal dimuat. Muat ulang halaman ini.'); }, 10000);
                             })();
                         </script>
+                        <script src="https://www.google.com/recaptcha/api.js?onload=saptoRecaptchaSiap&render=explicit&hl=id" async defer></script>
                     @endif
                 </form>
 
