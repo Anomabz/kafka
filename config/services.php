@@ -72,6 +72,11 @@ return [
         // Bagian acak di URL webhook (/telegram/webhook/{secret}) supaya
         // cuma Telegram yang bisa memicu pendaftaran chat id baru.
         'webhook_secret' => env('TELEGRAM_WEBHOOK_SECRET'),
+        // Chat id yang boleh pakai perintah /notif untuk siar notifikasi ke
+        // website. Dipisah koma. Siapa pun bisa nemu @saptostatusbot dan
+        // chat ke situ -- tanpa allowlist ini siapa pun bisa siar pesan ke
+        // semua orang yang sedang buka SAPTO.
+        'notif_admin_ids' => array_filter(array_map('trim', explode(',', (string) env('TELEGRAM_NOTIF_ADMIN_IDS')))),
     ],
 
 ];

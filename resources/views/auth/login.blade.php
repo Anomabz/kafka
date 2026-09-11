@@ -832,6 +832,166 @@
             color: var(--color-muted);
         }
 
+        /*
+         * Overlay transisi keberangkatan: form ini POST lalu langsung
+         * redirect 302 ke Keycloak, jadi tanpa ini layar terasa "meloncat"
+         * dari kartu login ke domain lain dalam sepersekian detik --
+         * mengagetkan buat pengguna awam. Tombol Masuk menahan submit
+         * sebentar, menampilkan overlay ini, baru benar-benar mengirim form.
+         * Gaya visualnya sengaja mirip intro-splash di layouts/sapto.blade
+         * (logo + cincin berdenyut + aurora) supaya "pergi ke SSO" dan
+         * "kembali dari SSO" terasa satu alur yang sama, bukan dua transisi
+         * yang berbeda.
+         */
+        .leave-splash {
+            position: fixed;
+            inset: 0;
+            z-index: 200;
+            display: grid;
+            place-items: center;
+            overflow: hidden;
+            background: #050a12;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transition: opacity 320ms ease, visibility 320ms ease;
+        }
+
+        .leave-splash.is-active {
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+        }
+
+        .leave-aurora {
+            position: absolute;
+            inset: -10%;
+            z-index: 0;
+            filter: blur(70px);
+            opacity: 0.8;
+        }
+
+        .leave-aurora span {
+            position: absolute;
+            border-radius: 50%;
+            mix-blend-mode: screen;
+        }
+
+        .leave-aurora span:nth-child(1) {
+            width: 30rem;
+            height: 30rem;
+            top: -6%;
+            left: -8%;
+            background: radial-gradient(circle, #4338ca, transparent 65%);
+            animation: leave-drift-a 9s ease-in-out infinite;
+        }
+
+        .leave-aurora span:nth-child(2) {
+            width: 26rem;
+            height: 26rem;
+            bottom: -10%;
+            right: -6%;
+            background: radial-gradient(circle, #a5b4fc, transparent 65%);
+            animation: leave-drift-b 11s ease-in-out infinite;
+        }
+
+        @keyframes leave-drift-a {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            50% { transform: translate(6%, 8%) scale(1.2); }
+        }
+
+        @keyframes leave-drift-b {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            50% { transform: translate(-6%, -8%) scale(1.15); }
+        }
+
+        .leave-inner {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1.2rem;
+        }
+
+        .leave-logo-wrap {
+            position: relative;
+            display: grid;
+            place-items: center;
+            width: 6.5rem;
+            height: 6.5rem;
+        }
+
+        .leave-ring {
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            border: 1.5px solid rgba(129, 140, 248, 0.35);
+            opacity: 0;
+            animation: leave-ring-pulse 2.1s 0.15s ease-out infinite;
+        }
+
+        .leave-ring.leave-ring-2 {
+            animation-delay: 0.65s;
+        }
+
+        @keyframes leave-ring-pulse {
+            0% { transform: scale(0.55); opacity: 0; }
+            15% { opacity: 0.85; }
+            100% { transform: scale(1.35); opacity: 0; }
+        }
+
+        .leave-logo {
+            position: relative;
+            z-index: 1;
+            width: 4.2rem;
+            height: 4.2rem;
+            object-fit: contain;
+            filter: drop-shadow(0 8px 26px rgba(0, 0, 0, 0.45));
+        }
+
+        .leave-text {
+            margin: 0;
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0.03em;
+            color: rgba(243, 250, 248, 0.85);
+        }
+
+        /* Bar geser (bukan mengisi 0->100%): durasi transisi ke Keycloak
+           tidak diketahui, jadi indikatornya harus tetap masuk akal walau
+           overlay ini bertahan lebih lama dari perkiraan (jaringan lambat). */
+        .leave-bar {
+            position: relative;
+            width: 8rem;
+            height: 2px;
+            border-radius: 999px;
+            overflow: hidden;
+            background: rgba(255, 255, 255, 0.14);
+        }
+
+        .leave-bar span {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 40%;
+            border-radius: 999px;
+            background: linear-gradient(90deg, #4338ca, #a5b4fc);
+            animation: leave-bar-slide 1.1s ease-in-out infinite;
+        }
+
+        @keyframes leave-bar-slide {
+            0% { left: -40%; }
+            100% { left: 100%; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .leave-splash { transition: opacity 120ms ease; }
+            .leave-ring, .leave-aurora span { animation: none !important; opacity: 0; }
+            .leave-bar span { animation-duration: 1.6s; }
+        }
+
         @media (prefers-reduced-motion: no-preference) {
             .auth-context,
             .auth-card {
@@ -1140,6 +1300,20 @@
         </div>
     </div>
 
+    {{-- Lihat komentar .leave-splash di <style> di atas. --}}
+    <div class="leave-splash" id="leave-splash" aria-hidden="true">
+        <div class="leave-aurora"><span></span><span></span></div>
+        <div class="leave-inner">
+            <div class="leave-logo-wrap">
+                <span class="leave-ring"></span>
+                <span class="leave-ring leave-ring-2"></span>
+                <img src="{{ asset('images/logo-unsri.webp') }}" alt="" class="leave-logo">
+            </div>
+            <p class="leave-text">Mengalihkan ke SSO Unsri…</p>
+            <div class="leave-bar"><span></span></div>
+        </div>
+    </div>
+
     @if ($notKorprodiHint)
         <div class="auth-modal-backdrop" id="not-korprodi-backdrop">
             <div
@@ -1174,9 +1348,30 @@
             var loginBtn = document.getElementById('login-submit');
             var loginLabel = document.getElementById('login-submit-label');
             var formMasuk = document.getElementById('form-masuk');
+            var leaveSplash = document.getElementById('leave-splash');
+
             if (formMasuk && loginLabel) {
-                formMasuk.addEventListener('submit', function () {
+                // form.submit() (bukan requestSubmit()) tidak memicu ulang
+                // event 'submit' -- flag ini cuma jaga-jaga kalau pengguna
+                // memicu submit dua kali (mis. tekan Enter) selagi overlay
+                // sedang tampil.
+                var sudahKirim = false;
+                var kurangiGerak = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+                formMasuk.addEventListener('submit', function (e) {
+                    if (sudahKirim) return;
+
                     loginLabel.textContent = 'Mengalihkan ke SSO…';
+                    if (loginBtn) loginBtn.disabled = true;
+
+                    if (!leaveSplash || kurangiGerak) return; // biarkan submit asli jalan langsung
+
+                    e.preventDefault();
+                    sudahKirim = true;
+                    leaveSplash.classList.add('is-active');
+                    // Jeda sengaja: cukup lama supaya animasinya kebaca,
+                    // cukup singkat supaya tidak terasa menunda-nunda.
+                    setTimeout(function () { formMasuk.submit(); }, 550);
                 });
             }
 
