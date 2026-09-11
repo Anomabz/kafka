@@ -57,28 +57,36 @@ Menjalankan di luar Docker praktis tidak disarankan: `composer.json` menyatakan
 versi lain berisiko `artisan` gagal di pemeriksaan platform atau perilaku beda
 dari yang sebenarnya dipakai di server.
 
-Migrasi **otomatis berjalan saat container start** karena `docker-compose.yml`
-menyetel `RUN_MIGRATIONS: "${RUN_MIGRATIONS:-true}"` (lihat
-`docker/entrypoint.sh`) — beda dari `.env.example` yang defaultnya `false`
-untuk kasus menjalankan `artisan` di luar compose. Set `RUN_MIGRATIONS=false`
-lewat `.env` di root project ini kalau tidak ingin migrasi otomatis (mis. saat
-database sudah dikelola manual).
+Migrasi **tidak** berjalan otomatis kalau `.env` disalin dari `.env.example`.
+`docker-compose.yml` memang menyetel `RUN_MIGRATIONS: "${RUN_MIGRATIONS:-true}"`
+(lihat `docker/entrypoint.sh`), tetapi `.env.example` — dan `.env` di server ini —
+menyetel `RUN_MIGRATIONS=false`, dan nilai itulah yang dibaca compose. Jalankan
+manual:
 
 ```bash
-docker compose exec app php artisan migrate --seed --force   # kalau mau jalan manual
+docker compose exec app php artisan migrate --seed --force
 ```
 
-Seeder mengisi tabel `korprodi` dari `database/data/korprodi.csv` (98 baris).
-`ProgramStudiSeeder` sengaja dinonaktifkan — lihat penjelasannya di
-`database/seeders/DatabaseSeeder.php`.
+Karena kode ter-mount langsung ke container (lihat [Catatan
+operasional](#catatan-operasional)) sedangkan skema baru berubah saat migrasi
+dijalankan, perubahan yang membutuhkan tabel baru harus **dimigrasikan dulu,
+baru kodenya** — migrasi seperti itu dibuat aditif supaya kode lama tetap jalan
+selama jeda tersebut.
+
+`KorprodiSeeder` mengisi tabel `penugasan` dengan roster korprodi awal dari
+`database/data/korprodi.csv` (98 baris) — **hanya bila `penugasan` belum berisi
+korprodi**, supaya seeding ulang tidak menghidupkan lagi akses yang sudah
+dicabut admin. `ProgramStudiSeeder` sengaja dinonaktifkan — lihat penjelasannya
+di `database/seeders/DatabaseSeeder.php`.
 
 Entrypoint juga memanaskan cache tabel di latar belakang tiap kali container
 start (`php artisan sapto:warm` lalu `sapto:warm --prodi`, dua tahap: scope
-universitas dulu ~10 detik, baru ~97 scope korprodi ~7 menit) — supaya
+universitas dulu ~10 detik, baru ~97 scope prodi yang punya korprodi di
+`penugasan` ~7 menit) — supaya
 pengunjung pertama setelah cache habis tidak menanggung query berat (mis.
 `dosen-pembimbing-ta` full scan ~400rb baris).
 
-Aset frontend perlu dibangun sekali, jika tidak `/login` akan error 500
+Aset frontend perlu dibangun sekali, jika tidak halaman depan akan error 500
 (`Vite manifest not found`):
 
 ```bash
@@ -109,8 +117,12 @@ SSO_REDIRECT_URI=http://localhost:8020/auth/callback
 ```
 
 `SSO_REDIRECT_URI` harus sama persis dengan redirect URI yang terdaftar di
-Keycloak untuk client tersebut. Login form sendiri memakai grant
-`password` (Direct Access Grants harus aktif di client).
+Keycloak untuk client tersebut. Login memakai authorization code flow ke
+halaman login bawaan Keycloak; SAPTO tidak punya form kredensial sendiri,
+jadi **Direct Access Grants boleh dimatikan** di client. Client `app-sapto`
+juga tidak punya service account, jadi Admin API Keycloak tidak tersedia —
+nama pengguna tidak bisa dicari dari SSO, hanya dari data Feeder
+(`list_mahasiswa`, `biodata_dosen`).
 
 ### API Pangkalan Data
 
@@ -142,69 +154,125 @@ yang belum ada di sistem (lihat tabel 8.d/8.e di bawah).
 ## Autentikasi dan hak akses
 
 Seluruh halaman dan endpoint API berada di balik middleware `sso.auth`. Tanpa
-sesi SSO yang sah: permintaan web dialihkan ke `/login`, permintaan API dibalas
-**401**.
+sesi yang sah:
+
+- halaman depan (`/`) menampilkan **welcome page di URL itu juga** — tidak ada
+  `/login` di address bar;
+- halaman lain dialihkan ke `/`, dan alamat asalnya dibuka lagi setelah login;
+- permintaan API dibalas **401**.
+
+`/login` tinggal pengalihan ke `/` untuk bookmark lama.
 
 Alurnya:
 
-1. `/login` — form milik SAPTO sendiri. Kredensial divalidasi ke Keycloak
-   server-side (`grant_type=password`).
-2. Bila Keycloak tidak bisa memutuskan (direct grant nonaktif, MFA, required
-   action), pengguna diarahkan ke halaman SSO resmi lewat `/auth/login`.
-3. Akun yang **valid di SSO tetapi bukan korprodi terdaftar ditolak** —
-   NIP (`nomor_identitas`) dicocokkan ke tabel `korprodi`.
+1. Tombol **Masuk** di welcome page → `/auth/login` → halaman login resmi
+   Keycloak. Password tidak pernah diketik di SAPTO.
+2. Keycloak kembali ke `/auth/callback`. Akun yang **valid di SSO tetapi tidak
+   terdaftar** — bukan admin dan tidak punya baris di `penugasan` — ditolak
+   dengan modal "Akses ditolak". Penolakan dicatat ke log beserta NIP dan email
+   yang benar-benar dikirim Keycloak.
+3. Sesi SSO dipakai bersama aplikasi kampus lain: yang sudah login di aplikasi
+   lain langsung masuk tanpa mengetik ulang.
 
-### Cakupan data
+**Single logout.** `EnsureSsoAuthenticated` menanyakan ulang sesi ke Keycloak
+lewat refresh token, paling sering sekali per 60 detik per pengguna. Begitu
+sesi SSO berakhir (logout di aplikasi mana pun), SAPTO ikut keluar dalam ≤60
+detik. Keycloak yang tidak bisa dihubungi sengaja dianggap "masih login",
+supaya satu gangguan jaringan tidak menendang semua pengguna. `/auth/logout`
+mengakhiri sesi Keycloak juga.
 
-Cakupan **selalu diturunkan dari identitas sesi, tidak pernah dipercaya dari
-klien** (lihat `App\Support\SaptoUserContext`). Ada dua level:
+Aplikasi lain yang logout **hanya lokal** (tidak memanggil endpoint logout
+Keycloak) tidak mengakhiri sesi SSO — dalam kasus itu SAPTO memang benar tetap
+login. Perbaikannya ada di aplikasi tersebut.
 
-| Role | Siapa | Cakupan |
-| --- | --- | --- |
-| `prodi` | Korprodi (NIP cocok di tabel `korprodi`) | Hanya prodi yang dipegang |
-| `universitas` | Akun admin (`users.is_admin = true`) | Seluruh fakultas/prodi |
+### Pencocokan identitas
 
-Role `fakultas` belum dipakai. NIP korprodi yang tidak cocok **ditolak
-sepenuhnya**, bukan diturunkan ke akses penuh.
+Keycloak **tidak selalu mengirim `nomor_identitas`**. Karena itu admin dan
+penugasan dicocokkan lewat **NIP/NIM atau email** — cukup salah satu yang
+cocok. Isi keduanya bila tahu. Kalau sesi tidak membawa NIP maupun email, tidak
+ada yang cocok (dijaga eksplisit; tanpa penjaga itu kueri akan cocok ke semua
+baris).
+
+### Peran dan cakupan data
+
+Cakupan **selalu diturunkan dari identitas sesi di server** (lihat
+`App\Support\SaptoUserContext`), tidak pernah dipercaya dari klien.
+
+| Peran | Sumber | Role | Cakupan |
+| --- | --- | --- | --- |
+| Admin | `users.is_admin = true` | `universitas` | Semua data + halaman admin |
+| Rektor | `penugasan`, peran `rektor` | `universitas` | Semua fakultas dan prodi |
+| Dekan | `penugasan`, peran `dekan`, `lingkup` = `fakultas_id` | `fakultas` | Dikunci ke fakultasnya; boleh memilih prodi di dalamnya |
+| Korprodi | `penugasan`, peran `korprodi`, `lingkup` = `kode_program_studi` | `prodi` | Hanya prodinya |
+
+- Orang yang punya beberapa peran mendapat **peran terluas**.
+- Hak akses dihitung ulang tiap request, jadi **mencabut penugasan berlaku
+  seketika**. Status admin disimpan di sesi saat login, jadi pencabutan admin
+  baru berlaku di login berikutnya.
+- `fakultas_id` adalah slug nama fakultas dari `database/data/program_studi.csv`
+  (mis. `fakultas-ilmu-komputer`, `pascasarjana`).
+- Dekan yang meminta `program_studi_id` di luar fakultasnya ditolak **403** di
+  `SaptoUserContext::resolveProgramStudiId()`. Penjaganya sengaja di situ, bukan
+  di repository, karena tidak semua repository melewati `validateScope()`.
+- **Pengecualian: Tabel 1 Kerjasama tidak disaring untuk peran apa pun.**
+  `daftar_mou` tidak punya kolom unit, dan `daftar_pks.unit_pelaksana` kosong
+  di ±92% baris (sumber SIKERMA). Menyaringnya sekarang membuat tabel kosong
+  untuk hampir semua prodi; perbaikannya adalah mengisi unit pelaksana di sumber.
 
 Kemungkinan balasan 403:
 
 | Pesan | Sebab |
 | --- | --- |
-| `Akun SSO tidak memiliki nomor identitas...` | Klaim `nomor_identitas` kosong |
-| `Akun ini belum terdaftar sebagai koordinator program studi di SAPTO.` | NIP tidak ada di tabel `korprodi` |
-| `Program studi akun ini tidak ditemukan pada data referensi SAPTO.` | Prodi tidak ada di mirror Feeder (**biasanya karena database belum disinkron**) |
+| `Akun ini belum terdaftar di SAPTO...` | Bukan admin dan tidak ada di `penugasan` |
+| `Program studi akun ini tidak ditemukan pada data referensi SAPTO.` | Kode prodi korprodi tidak ada di mirror Feeder `program_studi` (**biasanya karena database belum disinkron**; di halaman *Kelola peran* baris seperti ini ditandai *Bermasalah*) |
+| `Fakultas akun ini tidak ditemukan pada data referensi SAPTO.` | `fakultas_id` dekan tidak ada di data referensi |
+| `Program studi ini berada di luar fakultas akun Anda.` | Dekan meminta prodi fakultas lain |
 
-### Akun admin dan impersonation
+### Akun admin
 
-Akun admin/developer SAPTO **tidak ada di Keycloak**. Login lewat form `/login`
-yang sama, tetapi kredensialnya dicek secara lokal: `username` dicocokkan ke
-`users.nomor_identitas` (dengan `is_admin = true`) dan password diverifikasi
-terhadap hash bcrypt di `users.password` — lihat
-`SsoController::attemptLocalAdminLogin()`.
+Admin adalah **akun SSO biasa** yang ditandai `is_admin = true` di tabel `users`
+(dicocokkan lewat `nomor_identitas` atau `email`). Tidak ada login lokal —
+kolom `password` tidak dipakai dan boleh acak. Admin sengaja **tidak** bisa
+dikelola dari UI, supaya satu salah hapus tidak bisa mengunci semua orang
+keluar. Menambah admin:
 
-Untuk menguji tampilan sebagai korprodi tertentu, admin memakai fitur "login
-sebagai":
+```bash
+docker compose exec app php artisan tinker --execute="App\Models\User::updateOrCreate(
+    ['email' => 'nama@unsri.ac.id'],
+    ['name' => 'Nama Lengkap', 'nomor_identitas' => '197801212008121003', 'is_admin' => true,
+     'password' => bcrypt(Illuminate\Support\Str::random(64))]);"
+```
+
+### Halaman admin
+
+Akun admin melihat link **Kelola role** di atas profilnya di sidebar.
 
 | Route | Keterangan |
 | --- | --- |
-| `GET /admin/login-as` | Daftar korprodi yang bisa dipakai |
-| `POST /admin/login-as` | Mulai menyamar sebagai satu NIP |
+| `GET /admin/peran` | Kelola peran: daftar, filter per peran, cari, tambah akses (popup) |
+| `POST /admin/peran` | Tambah penugasan (`peran`, `nip`/`email`, `lingkup_prodi`/`lingkup_fakultas`) |
+| `DELETE /admin/peran/{id}` | Cabut penugasan |
+| `GET /admin/login-as` | Login sebagai: pilih orang yang terdaftar |
+| `POST /admin/login-as` | Mulai menyamar (`penugasan_id`), atau uji NIP tak terdaftar (`any=1`) |
 | `POST /admin/stop-impersonating` | Kembali ke akun admin |
 
-Semuanya berada di balik `sso.auth` dan dikunci `is_admin`; akun non-admin
-dibalas **403**.
+Semuanya dikunci `is_admin` (akun lain dibalas **403**). Setiap pemberian,
+pencabutan, dan penyamaran dicatat ke `storage/logs/laravel.log` beserta admin
+pelakunya.
 
 ## API
 
 Seluruh endpoint bersifat `GET`, **membutuhkan sesi login** (cookie), dan
-menerima parameter `ts` (tahun) serta `program_studi_id`. Tanpa sesi: **401**.
+menerima parameter `ts` (tahun), `fakultas_id` (admin/rektor), dan
+`program_studi_id` (admin/rektor/dekan). Parameter di luar cakupan akun
+diabaikan atau ditolak — lihat [Peran dan cakupan data](#peran-dan-cakupan-data).
+Tanpa sesi: **401**.
 
-Paling mudah diuji lewat browser setelah login. Untuk `curl`, ambil cookie sesi
-dari form `/login` (butuh `_token` CSRF), lalu:
+Paling mudah diuji lewat browser setelah login. Untuk `curl`, login lewat
+browser, salin cookie `sapto-session` dari devtools, lalu:
 
 ```bash
-curl -b cookies.txt "http://localhost:8020/api/sapto/tables/ipk-lulusan/summary?ts=2026"
+curl -b "sapto-session=..." "http://localhost:8020/api/sapto/tables/ipk-lulusan/summary?ts=2026"
 ```
 
 | Endpoint | Keterangan |
@@ -220,8 +288,13 @@ curl -b cookies.txt "http://localhost:8020/api/sapto/tables/ipk-lulusan/summary?
 | `/api/sapto/tables/dosen-pembimbing-ta/detail` | Tabel 3.a.2 (rincian) |
 | `/api/sapto/tables/dosen-tidak-tetap/summary` | Tabel 3.a.4 |
 | `/api/sapto/tables/penelitian-dtps/summary` | Tabel 3.b.2 |
+| `/api/sapto/tables/pkm-dtps/summary` | Tabel 3.b.3 — PkM DTPS |
 | `/api/sapto/tables/publikasi-ilmiah-dtps/summary` | Tabel 3.b.4 — Publikasi Ilmiah DTPS |
 | `/api/sapto/tables/pagelaran-dtps/summary` | Tabel 3.b.4 — Pagelaran/Pameran/Presentasi DTPS |
+| `/api/sapto/tables/hki-paten-dtps/summary` | Tabel 3.b.7 — HKI (Paten, Paten Sederhana) |
+| `/api/sapto/tables/hki-hak-cipta-dtps/summary` | Tabel 3.b.7 — HKI (Hak Cipta, Desain Produk Industri, dll.) |
+| `/api/sapto/tables/teknologi-dtps/summary` | Tabel 3.b.7 — Teknologi Tepat Guna, Produk, Karya Seni, Rekayasa Sosial |
+| `/api/sapto/tables/buku-dtps/summary` | Tabel 3.b.7 — Buku ber-ISBN, Book Chapter |
 | `/api/sapto/tables/ipk-lulusan/summary` | Tabel 8.a |
 | `/api/sapto/tables/prestasi-akademik/summary` | Tabel 8.b.1 |
 | `/api/sapto/tables/prestasi-non-akademik/summary` | Tabel 8.b.2 |
@@ -231,7 +304,7 @@ curl -b cookies.txt "http://localhost:8020/api/sapto/tables/ipk-lulusan/summary?
 | `/api/sapto/tables/tempat-kerja/summary` | Tabel 8.e.1 — Tempat Kerja Lulusan |
 | `/api/sapto/tables/referensi-kepuasan-pengguna/summary` | Tabel Referensi 8.e.2 |
 | `/sapto/mahasiswa-asing` | Tabel 2.b (jalur web, tanpa prefix `api`) |
-| `/sapto/mahasiswa-asing/detail` | Tabel 2.b (rincian) |
+| `/sapto/mahasiswa-asing/detail` | Tabel 2.b (rincian; untuk dekan tanpa prodi terpilih = semua prodi di fakultasnya) |
 
 Sidebar menampilkan seluruh 45 tabel BAN-PT; endpoint di atas adalah yang sudah
 terimplementasi. Sisanya masih placeholder.
@@ -263,7 +336,8 @@ database MySQL. Isolasi ini dijaga di dua tempat:
 Perlu diketahui: `<env>` di `phpunit.xml` hanya menulis `$_ENV`/`putenv()`,
 sedangkan Laravel membaca `$_SERVER` lebih dulu. Karena itu `APP_ENV` memakai
 `<server>` — tanpa itu, Laravel tidak sadar sedang testing, CSRF tetap
-ditegakkan, dan seluruh `POST /login` gagal dengan 419.
+ditegakkan, dan seluruh request `POST` di test (mis. `/admin/peran`) gagal
+dengan 419.
 
 ## Catatan operasional
 
@@ -280,15 +354,23 @@ menjatuhkan seluruh stack ini selama 25 jam (2026-07-26). Aturannya:
   bentrok dengan project lain yang punya nama service sama.
 - Port project ini: **8020** (app), **8086** (phpMyAdmin). Db tanpa port host.
 
+Container `app` me-mount root project ini ke `/var/www/html`, jadi **perubahan
+kode langsung berlaku tanpa rebuild** — dengan jeda sampai 60 detik, karena
+opcache memeriksa ulang file paling cepat tiap 60 detik (`revalidate_freq=60`).
+Aset Vite tetap harus di-build ulang (`npm run build`) agar class Tailwind baru
+ikut ter-compile; sampai itu terjadi, class baru diam-diam tidak berlaku.
+
 `docker/watchdog.sh` (dipasang lewat cron tiap 5 menit) menyalakan ulang stack
 kalau `/up` mati atau ada service compose yang tidak `running`, dan mencatat
 ke `storage/logs/watchdog.log`.
 
 `docker/backup-db.sh` (cron tiap hari jam 03:00) men-dump `sapto_db` ke
 `BACKUPP_SAPTO_PROD/sapto_db_<timestamp>.sql.gz` dan membuang dump yang lebih
-tua dari 14 hari. Ini satu-satunya sumber pemulihan untuk `users` dan
-`korprodi` — tabel-tabel lain adalah mirror Feeder yang bisa disinkron ulang,
-tapi dua tabel itu data asli SAPTO. Log di `storage/logs/backup.log`.
+tua dari 14 hari. Ini satu-satunya sumber pemulihan untuk `users` (daftar
+admin) dan `penugasan` (hak akses korprodi/dekan/rektor) — tabel-tabel lain
+adalah mirror Feeder yang bisa disinkron ulang, tapi dua tabel itu data asli
+SAPTO. Tabel `korprodi` lama masih ada sebagai cadangan pra-2026-09-11 dan tidak
+dibaca kode lagi. Log di `storage/logs/backup.log`.
 
 **Branch.** `main` adalah branch utama; kerja harian lewat `dev-prod`, `DEV`,
 atau branch pribadi (`dev-<nama>`), digabung ke `main` lewat pull request.

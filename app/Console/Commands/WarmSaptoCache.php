@@ -94,7 +94,10 @@ class WarmSaptoCache extends Command
      */
     private function warmProdiScopes(): void
     {
-        $kodes = DB::table('korprodi')->distinct()->pluck('kode_program_studi')
+        // Dari `penugasan` (yang dikelola admin di /admin/peran), bukan tabel
+        // `korprodi` lama: itu cuma cadangan sejak 2026-09-11 dan tidak lagi
+        // mengikuti penambahan/pencabutan akses.
+        $kodes = DB::table('penugasan')->where('peran', 'korprodi')->distinct()->pluck('lingkup')
             ->map(fn (mixed $kode): string => (string) $kode)->all();
 
         $prodis = app(SaptoProgramStudiRepository::class)->programStudis()
