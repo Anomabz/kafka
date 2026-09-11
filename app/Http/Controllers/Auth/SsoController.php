@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\Penugasan;
 use App\Models\User;
+use App\Support\TelegramNotifier;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -135,7 +136,7 @@ class SsoController extends Controller
 
         // Admin SAPTO tidak wajib punya penugasan — hak aksesnya universitas.
         if (! $ssoUser['is_admin'] && ! $this->hasPenugasan($ssoUser)) {
-            $this->logAccessDenied($ssoUser, (string) $userinfo->json('preferred_username'));
+            $this->logAccessDenied($ssoUser, (string) $userinfo->json('preferred_username'), $request);
 
             return redirect('/')->with('not_korprodi_hint', $userinfo->json('name') ?: $userinfo->json('preferred_username'));
         }
@@ -148,7 +149,34 @@ class SsoController extends Controller
         $request->session()->put('sso_refresh_token', $token->json('refresh_token'));
         $request->session()->flash('show_intro', true);
 
+        $this->notifyLogin($ssoUser, $request);
+
         return redirect()->intended('/');
+    }
+
+    /**
+     * Alert Telegram tiap login berhasil: siapa dan dari IP mana. Dikirim ke
+     * chat id yang sama dengan alert error 5xx (TelegramNotifier::chatIds()),
+     * bukan lewat siaran /notif ke website -- arahnya kebalik (dari SAPTO ke
+     * admin, bukan dari admin ke pengguna web).
+     */
+    private function notifyLogin(array $ssoUser, Request $request): void
+    {
+        $peran = $ssoUser['is_admin']
+            ? 'Admin'
+            : (Penugasan::LABEL_PERAN[Penugasan::peranTerluas(
+                Penugasan::query()->untukIdentitas($ssoUser['nomor_identitas'] ?? null, $ssoUser['email'] ?? null)->get()
+            )] ?? '-');
+
+        $pesan = sprintf(
+            "🔓 <b>Login SAPTO</b>\n%s — %s\n%s\nIP: <code>%s</code>",
+            e($ssoUser['name'] ?? $ssoUser['preferred_username'] ?? '(tanpa nama)'),
+            e($peran),
+            e($ssoUser['email'] ?? '-'),
+            $request->ip(),
+        );
+
+        TelegramNotifier::broadcast($pesan);
     }
 
     /**
@@ -175,7 +203,7 @@ class SsoController extends Controller
      *
      * @param  array<string, mixed>  $ssoUser
      */
-    private function logAccessDenied(array $ssoUser, string $username): void
+    private function logAccessDenied(array $ssoUser, string $username, Request $request): void
     {
         Log::warning('Login SSO ditolak: akun tidak terdaftar di penugasan/admin SAPTO.', [
             'username' => $username,
@@ -184,6 +212,15 @@ class SsoController extends Controller
             'panjang_nomor_identitas' => strlen(trim((string) ($ssoUser['nomor_identitas'] ?? ''))),
             'unit_kerja' => $ssoUser['unit_kerja'] ?? null,
         ]);
+
+        $pesan = sprintf(
+            "⛔ <b>Akses SAPTO ditolak</b>\n%s\n%s\nIP: <code>%s</code>",
+            e($ssoUser['name'] ?? $username ?: '(tanpa nama)'),
+            e($ssoUser['email'] ?? '-'),
+            $request->ip(),
+        );
+
+        TelegramNotifier::broadcast($pesan);
     }
 
     /**
