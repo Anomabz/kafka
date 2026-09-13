@@ -1,28 +1,20 @@
 <!DOCTYPE html>
-<html lang="id">
+{{--
+    data-theme="dark" tetap (bukan ikut preferensi tersimpan/OS seperti
+    halaman lain) -- login/intro sengaja selalu gelap terlepas dari mode
+    terang/gelap yang dipilih user di aplikasi.
+--}}
+<html lang="id" data-theme="dark">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="theme-color" id="theme-color-meta" content="#e7ecf5">
+    <meta name="theme-color" content="#0a0a0c">
     {{-- Judul halaman = sinyal on-page terkuat, jadi diawali nama yang
          benar-benar dicari orang ("sapto unsri"), bukan kata "Masuk" atau
          nomor versi. Versi tetap ada di kaki kartu. --}}
     <title>SAPTO Unsri — Sistem Akreditasi Perguruan Tinggi Online</title>
     <link rel="icon" href="{{ asset('images/logo-unsri.webp') }}" type="image/webp">
     @include('components.seo-meta')
-    <script>
-        (function () {
-            try {
-                var t = localStorage.getItem('sapto-theme');
-                if (t !== 'dark' && t !== 'light') {
-                    t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
-                }
-                document.documentElement.setAttribute('data-theme', t);
-                var m = document.getElementById('theme-color-meta');
-                if (m) m.setAttribute('content', t === 'dark' ? '#0a0a0c' : '#e7ecf5');
-            } catch (e) {}
-        })();
-    </script>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <style>
         /*
@@ -47,7 +39,7 @@
                background ini cuma berlaku di halaman login (scoped ke sini),
                tidak menyentuh app.css/halaman lain. */
             background:
-                linear-gradient(165deg, rgba(5, 9, 16, 0.88) 0%, rgba(11, 15, 30, 0.78) 45%, rgba(30, 27, 75, 0.6) 100%),
+                linear-gradient(165deg, rgba(11, 16, 11, 0.88) 0%, rgba(28, 38, 28, 0.78) 45%, rgba(51, 80, 46, 0.6) 100%),
                 url('{{ asset('images/login-bg.jpg') }}') center/cover no-repeat fixed;
         }
 
@@ -165,21 +157,20 @@
             justify-content: space-between;
             gap: 2.5rem;
             color: #f3faf8;
-            background:
-                radial-gradient(38rem 30rem at 108% -12%, rgba(255, 255, 255, 0.16), transparent 60%),
-                radial-gradient(30rem 26rem at -12% 112%, rgba(129, 140, 248, 0.18), transparent 60%),
-                linear-gradient(155deg, #081018 0%, #151a3d 32%, #312e81 78%, #4338ca 100%);
+            background: #1c261c;
         }
 
-        .auth-context::before {
-            content: '';
+        /* Motif batik Palembang -- satu medali bunga besar mengambang di
+           pojok kanan-bawah panel (bukan ubin kecil di-repeat, biar rapi
+           dan tidak ada risiko sambungan tile patah-patah). Markup SVG-nya
+           ada di auth-context, tepat sebelum .auth-context-inner pertama. */
+        .batik-medallion {
             position: absolute;
-            inset: 0;
+            right: -70px;
+            bottom: -70px;
             z-index: -1;
-            background-image: radial-gradient(rgba(255, 255, 255, 0.16) 1px, transparent 1px);
-            background-size: 22px 22px;
-            -webkit-mask-image: radial-gradient(46rem 34rem at 12% 8%, black, transparent 72%);
-            mask-image: radial-gradient(46rem 34rem at 12% 8%, black, transparent 72%);
+            pointer-events: none;
+            opacity: 0.5;
         }
 
         .auth-context .text-ink {
@@ -191,7 +182,7 @@
         }
 
         .auth-context .bg-accent {
-            background-color: #a5b4fc;
+            background-color: #b7dba9;
         }
 
         .auth-context-inner {
@@ -221,7 +212,7 @@
             font-size: 46px;
             font-weight: 800;
             line-height: 1;
-            color: #a5b4fc;
+            color: #b7dba9;
             letter-spacing: -0.02em;
         }
 
@@ -309,7 +300,7 @@
             height: 26px;
             border-radius: 999px;
             background: rgba(255, 255, 255, 0.12);
-            color: #a5b4fc;
+            color: #b7dba9;
         }
 
         .auth-pillar-icon svg {
@@ -399,7 +390,7 @@
             width: 22rem;
             height: 22rem;
             border-radius: 999px;
-            background: radial-gradient(circle, rgba(99, 102, 241, 0.28), transparent 68%);
+            background: radial-gradient(circle, rgba(99, 150, 90, 0.28), transparent 68%);
             pointer-events: none;
         }
 
@@ -410,7 +401,7 @@
             left: 0;
             right: 0;
             height: 3px;
-            background: linear-gradient(90deg, #312e81 0%, #4338ca 40%, #6366f1 70%, #a5b4fc 100%);
+            background: linear-gradient(90deg, #33502e 0%, #4b7a42 40%, #63965a 70%, #b7dba9 100%);
             pointer-events: none;
         }
 
@@ -441,15 +432,15 @@
             color: #ffffff;
             text-decoration: none;
             cursor: pointer;
-            background: linear-gradient(135deg, #4338ca 0%, #6366f1 55%, #312e81 100%);
-            box-shadow: 0 12px 26px -10px rgba(67, 56, 202, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+            background: linear-gradient(135deg, #4b7a42 0%, #63965a 55%, #33502e 100%);
+            box-shadow: 0 12px 26px -10px rgba(75, 122, 66, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.18);
             transition: transform 140ms ease, box-shadow 140ms ease, filter 140ms ease;
         }
 
         .auth-cta:hover {
             transform: translateY(-1px);
             filter: brightness(1.06);
-            box-shadow: 0 16px 32px -10px rgba(67, 56, 202, 0.95), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+            box-shadow: 0 16px 32px -10px rgba(75, 122, 66, 0.95), inset 0 1px 0 rgba(255, 255, 255, 0.22);
         }
 
         /* Terkunci sampai captcha lolos. */
@@ -850,7 +841,7 @@
             display: grid;
             place-items: center;
             overflow: hidden;
-            background: #050a12;
+            background: #0b100b;
             opacity: 0;
             visibility: hidden;
             pointer-events: none;
@@ -861,48 +852,6 @@
             opacity: 1;
             visibility: visible;
             pointer-events: auto;
-        }
-
-        .leave-aurora {
-            position: absolute;
-            inset: -10%;
-            z-index: 0;
-            filter: blur(70px);
-            opacity: 0.8;
-        }
-
-        .leave-aurora span {
-            position: absolute;
-            border-radius: 50%;
-            mix-blend-mode: screen;
-        }
-
-        .leave-aurora span:nth-child(1) {
-            width: 30rem;
-            height: 30rem;
-            top: -6%;
-            left: -8%;
-            background: radial-gradient(circle, #4338ca, transparent 65%);
-            animation: leave-drift-a 9s ease-in-out infinite;
-        }
-
-        .leave-aurora span:nth-child(2) {
-            width: 26rem;
-            height: 26rem;
-            bottom: -10%;
-            right: -6%;
-            background: radial-gradient(circle, #a5b4fc, transparent 65%);
-            animation: leave-drift-b 11s ease-in-out infinite;
-        }
-
-        @keyframes leave-drift-a {
-            0%, 100% { transform: translate(0, 0) scale(1); }
-            50% { transform: translate(6%, 8%) scale(1.2); }
-        }
-
-        @keyframes leave-drift-b {
-            0%, 100% { transform: translate(0, 0) scale(1); }
-            50% { transform: translate(-6%, -8%) scale(1.15); }
         }
 
         .leave-inner {
@@ -926,7 +875,7 @@
             position: absolute;
             inset: 0;
             border-radius: 50%;
-            border: 1.5px solid rgba(129, 140, 248, 0.35);
+            border: 1.5px solid rgba(143, 191, 126, 0.35);
             opacity: 0;
             animation: leave-ring-pulse 2.1s 0.15s ease-out infinite;
         }
@@ -977,7 +926,7 @@
             bottom: 0;
             width: 40%;
             border-radius: 999px;
-            background: linear-gradient(90deg, #4338ca, #a5b4fc);
+            background: linear-gradient(90deg, #4b7a42, #b7dba9);
             animation: leave-bar-slide 1.1s ease-in-out infinite;
         }
 
@@ -988,7 +937,7 @@
 
         @media (prefers-reduced-motion: reduce) {
             .leave-splash { transition: opacity 120ms ease; }
-            .leave-ring, .leave-aurora span { animation: none !important; opacity: 0; }
+            .leave-ring { animation: none !important; opacity: 0; }
             .leave-bar span { animation-duration: 1.6s; }
         }
 
@@ -1047,6 +996,47 @@
 
         <div class="auth-grid">
             <div class="auth-context rounded-2xl">
+                {{-- Lihat komentar .batik-medallion di <style> di atas. --}}
+                <svg class="batik-medallion" width="280" height="280" viewBox="0 0 280 280" aria-hidden="true">
+                    <defs>
+                        <radialGradient id="batikFade" cx="35%" cy="35%" r="70%">
+                            <stop offset="45%" stop-color="#fff" stop-opacity="1"/>
+                            <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
+                        </radialGradient>
+                        <mask id="batikMask">
+                            <rect width="280" height="280" fill="url(#batikFade)"/>
+                        </mask>
+                    </defs>
+                    <g mask="url(#batikMask)" fill="none" stroke="#8fbf7e" stroke-width="1.1">
+                        <circle cx="140" cy="140" r="118"/>
+                        <circle cx="140" cy="140" r="96"/>
+                        <g transform="translate(140,140)">
+                            <g stroke-width="1.3">
+                                <path d="M0 -86 C 14 -70, 14 -50, 0 -40 C -14 -50, -14 -70, 0 -86 Z" transform="rotate(0)"/>
+                                <path d="M0 -86 C 14 -70, 14 -50, 0 -40 C -14 -50, -14 -70, 0 -86 Z" transform="rotate(45)"/>
+                                <path d="M0 -86 C 14 -70, 14 -50, 0 -40 C -14 -50, -14 -70, 0 -86 Z" transform="rotate(90)"/>
+                                <path d="M0 -86 C 14 -70, 14 -50, 0 -40 C -14 -50, -14 -70, 0 -86 Z" transform="rotate(135)"/>
+                                <path d="M0 -86 C 14 -70, 14 -50, 0 -40 C -14 -50, -14 -70, 0 -86 Z" transform="rotate(180)"/>
+                                <path d="M0 -86 C 14 -70, 14 -50, 0 -40 C -14 -50, -14 -70, 0 -86 Z" transform="rotate(225)"/>
+                                <path d="M0 -86 C 14 -70, 14 -50, 0 -40 C -14 -50, -14 -70, 0 -86 Z" transform="rotate(270)"/>
+                                <path d="M0 -86 C 14 -70, 14 -50, 0 -40 C -14 -50, -14 -70, 0 -86 Z" transform="rotate(315)"/>
+                            </g>
+                            <g stroke-width="1">
+                                <path d="M0 -58 C 9 -48, 9 -34, 0 -27 C -9 -34, -9 -48, 0 -58 Z" transform="rotate(22.5)"/>
+                                <path d="M0 -58 C 9 -48, 9 -34, 0 -27 C -9 -34, -9 -48, 0 -58 Z" transform="rotate(67.5)"/>
+                                <path d="M0 -58 C 9 -48, 9 -34, 0 -27 C -9 -34, -9 -48, 0 -58 Z" transform="rotate(112.5)"/>
+                                <path d="M0 -58 C 9 -48, 9 -34, 0 -27 C -9 -34, -9 -48, 0 -58 Z" transform="rotate(157.5)"/>
+                                <path d="M0 -58 C 9 -48, 9 -34, 0 -27 C -9 -34, -9 -48, 0 -58 Z" transform="rotate(202.5)"/>
+                                <path d="M0 -58 C 9 -48, 9 -34, 0 -27 C -9 -34, -9 -48, 0 -58 Z" transform="rotate(247.5)"/>
+                                <path d="M0 -58 C 9 -48, 9 -34, 0 -27 C -9 -34, -9 -48, 0 -58 Z" transform="rotate(292.5)"/>
+                                <path d="M0 -58 C 9 -48, 9 -34, 0 -27 C -9 -34, -9 -48, 0 -58 Z" transform="rotate(337.5)"/>
+                            </g>
+                            <circle r="16"/>
+                            <circle r="8" fill="#8fbf7e" stroke="none"/>
+                        </g>
+                    </g>
+                </svg>
+
                 <div class="auth-context-inner">
                     <div class="flex items-center gap-3">
                         <div class="auth-logo grid shrink-0 place-items-center">
@@ -1302,7 +1292,6 @@
 
     {{-- Lihat komentar .leave-splash di <style> di atas. --}}
     <div class="leave-splash" id="leave-splash" aria-hidden="true">
-        <div class="leave-aurora"><span></span><span></span></div>
         <div class="leave-inner">
             <div class="leave-logo-wrap">
                 <span class="leave-ring"></span>

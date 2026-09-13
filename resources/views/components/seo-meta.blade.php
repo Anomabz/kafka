@@ -9,7 +9,13 @@
 @php
     $seoTitle = 'SAPTO v1.0 - UNSRI — Sistem Akreditasi Perguruan Tinggi Online Universitas Sriwijaya';
     $seoDesc = 'Portal pelaporan data Tridharma (pendidikan, penelitian, dan pengabdian kepada masyarakat) Universitas Sriwijaya untuk kebutuhan akreditasi program studi (BAN-PT/LAM).';
-    $seoImage = asset('images/og-sapto.png');
+    // Query ?v= = mtime file gambarnya -- bukan hiasan, ini yang bikin
+    // WhatsApp/Facebook/Telegram mau ambil ulang gambarnya. Crawler share
+    // nge-cache preview per URL gambar utuh (bisa berhari-hari); ganti isi
+    // file og-sapto.png tanpa ganti URL-nya sama sekali tidak akan kelihatan
+    // di chat manapun sampai cache itu kadaluarsa sendiri. Auto ikut setiap
+    // kali filenya diganti, tidak perlu diingat-ingat buat dinaikkan manual.
+    $seoImage = asset('images/og-sapto.png').'?v='.@filemtime(public_path('images/og-sapto.png'));
     $seoUrl = url('/');
 @endphp
 <meta name="description" content="{{ $seoDesc }}">

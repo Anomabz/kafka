@@ -35,55 +35,16 @@
             display: grid;
             place-items: center;
             overflow: hidden;
-            background: #050a12;
+            background: #0b100b;
             opacity: 1;
             visibility: visible;
-            transition: opacity 0.6s ease, visibility 0.6s ease, filter 0.6s ease;
+            transition: opacity 0.6s ease, visibility 0.6s ease;
         }
 
         .intro-splash.intro-hide {
             opacity: 0;
             visibility: hidden;
-            filter: blur(6px);
             pointer-events: none;
-        }
-
-        .intro-aurora {
-            position: absolute;
-            inset: -10%;
-            z-index: 0;
-            filter: blur(70px);
-            opacity: 0.8;
-        }
-
-        .intro-aurora span {
-            position: absolute;
-            border-radius: 50%;
-            mix-blend-mode: screen;
-        }
-
-        .intro-aurora span:nth-child(1) {
-            width: 30rem; height: 30rem;
-            top: -6%; left: -8%;
-            background: radial-gradient(circle, #4338ca, transparent 65%);
-            animation: intro-drift-a 9s ease-in-out infinite;
-        }
-
-        .intro-aurora span:nth-child(2) {
-            width: 26rem; height: 26rem;
-            bottom: -10%; right: -6%;
-            background: radial-gradient(circle, #a5b4fc, transparent 65%);
-            animation: intro-drift-b 11s ease-in-out infinite;
-        }
-
-        @keyframes intro-drift-a {
-            0%, 100% { transform: translate(0, 0) scale(1); }
-            50% { transform: translate(6%, 8%) scale(1.2); }
-        }
-
-        @keyframes intro-drift-b {
-            0%, 100% { transform: translate(0, 0) scale(1); }
-            50% { transform: translate(-6%, -8%) scale(1.15); }
         }
 
         .intro-inner {
@@ -107,7 +68,7 @@
             position: absolute;
             inset: 0;
             border-radius: 50%;
-            border: 1.5px solid rgba(129, 140, 248, 0.35);
+            border: 1.5px solid rgba(143, 191, 126, 0.35);
             opacity: 0;
             animation: intro-ring-pulse 2.1s 0.5s ease-out infinite;
         }
@@ -198,7 +159,7 @@
             height: 100%;
             width: 0%;
             border-radius: 999px;
-            background: linear-gradient(90deg, #4338ca, #a5b4fc);
+            background: linear-gradient(90deg, #4b7a42, #b7dba9);
             animation: intro-bar-fill 1.2s 1.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
         }
 
@@ -207,7 +168,7 @@
         }
 
         @media (prefers-reduced-motion: reduce) {
-            .intro-logo, .intro-title span, .intro-sub, .intro-bar, .intro-bar span, .intro-ring, .intro-aurora span {
+            .intro-logo, .intro-title span, .intro-sub, .intro-bar, .intro-bar span, .intro-ring {
                 animation: none !important;
                 opacity: 1;
                 transform: none;
@@ -249,11 +210,9 @@
             padding: 0.85rem 0.85rem 0.85rem 0.9rem;
             border-radius: 1rem;
             background: var(--glass-bg-strong, var(--color-surface));
-            -webkit-backdrop-filter: blur(calc(var(--glass-blur, 14px) + 4px)) saturate(120%);
-            backdrop-filter: blur(calc(var(--glass-blur, 14px) + 4px)) saturate(120%);
             border: 1px solid var(--glass-border, var(--color-line));
             border-left: 3px solid var(--color-accent);
-            box-shadow: var(--glass-shadow, 0 12px 34px -14px rgba(15, 27, 45, 0.3));
+            box-shadow: none;
             color: var(--color-ink);
             pointer-events: auto;
             animation: wnotif-in 320ms cubic-bezier(0.16, 1, 0.3, 1);
@@ -355,6 +314,27 @@
             .wnotif-card { animation: none; }
             .wnotif-progress > span { animation-duration: 0.01ms; }
         }
+
+        /* Aksen motif batik Palembang (bunga dalam kisi belah ketupat) --
+           sama seperti versi di halaman login, cuma sangat samar (opacity
+           rendah) dan ditaruh di footer supaya jadi identitas budaya tanpa
+           mengganggu keterbacaan tabel data di atasnya. Dua data URI (bukan
+           satu + currentColor) karena warna di dalam SVG data URI tidak ikut
+           var(--color-*)/currentColor milik halaman -- jadi warnanya
+           di-hardcode per tema dan di-switch lewat [data-theme='dark']. */
+        .app-footer::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            opacity: 0.12;
+            background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%2744%27%20height%3D%2744%27%20viewBox%3D%270%200%2044%2044%27%3E%3Cpath%20d%3D%27M22%200%20L44%2022%20L22%2044%20L0%2022%20Z%27%20fill%3D%27none%27%20stroke%3D%27rgba%2875%2C122%2C66%2C0.5%29%27%20stroke-width%3D%270.9%27/%3E%3Cg%20transform%3D%27translate%2822%2C22%29%27%20fill%3D%27none%27%20stroke%3D%27rgba%2875%2C122%2C66%2C0.6%29%27%20stroke-width%3D%271%27%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%2860%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28120%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28180%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28240%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28300%29%27/%3E%3Ccircle%20r%3D%271.8%27%20fill%3D%27rgba%2875%2C122%2C66%2C0.6%29%27%20stroke%3D%27none%27/%3E%3C/g%3E%3C/svg%3E");
+            background-size: 44px 44px;
+        }
+
+        :root[data-theme='dark'] .app-footer::before {
+            background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%2744%27%20height%3D%2744%27%20viewBox%3D%270%200%2044%2044%27%3E%3Cpath%20d%3D%27M22%200%20L44%2022%20L22%2044%20L0%2022%20Z%27%20fill%3D%27none%27%20stroke%3D%27rgba%28143%2C191%2C126%2C0.5%29%27%20stroke-width%3D%270.9%27/%3E%3Cg%20transform%3D%27translate%2822%2C22%29%27%20fill%3D%27none%27%20stroke%3D%27rgba%28143%2C191%2C126%2C0.6%29%27%20stroke-width%3D%271%27%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%2860%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28120%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28180%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28240%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28300%29%27/%3E%3Ccircle%20r%3D%271.8%27%20fill%3D%27rgba%28143%2C191%2C126%2C0.6%29%27%20stroke%3D%27none%27/%3E%3C/g%3E%3C/svg%3E");
+        }
     </style>
 </head>
 <body class="bg-canvas text-ink font-sans text-[14px] antialiased">
@@ -365,7 +345,6 @@
          login, bukan tiap kali tab/browser baru buka halaman. --}}
     @if (session('show_intro'))
         <div id="intro-splash" class="intro-splash" aria-hidden="true">
-            <div class="intro-aurora"><span></span><span></span></div>
             <div class="intro-inner">
                 <div class="intro-logo-wrap">
                     <span class="intro-ring"></span>
@@ -421,6 +400,12 @@
             <main class="px-3 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-7">
                 @yield('content')
             </main>
+
+            <footer class="app-footer relative overflow-hidden mt-auto border-t border-line px-3 py-4 text-[12px] text-muted sm:px-6 lg:px-8">
+                <div class="relative z-[1] flex flex-wrap items-center justify-between gap-2">
+                    <span>&copy; {{ date('Y') }} SAPTO &mdash; Universitas Sriwijaya</span>
+                </div>
+            </footer>
         </div>
     </div>
 

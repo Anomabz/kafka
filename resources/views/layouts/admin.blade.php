@@ -23,7 +23,7 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <style>
         /*
-         * Kerangka bersama halaman admin (Kelola peran + Login sebagai).
+         * Kerangka bersama halaman admin (Kelola peran + Sinkronisasi PD UNSRI).
          *
          * Semua tata letak di sini CSS biasa berawalan adm-, bukan class
          * Tailwind baru: bundle public/build tidak bisa di-rebuild di server
@@ -66,21 +66,7 @@
             isolation: isolate;
             padding-top: 1.1rem;
             color: #f8fafc;
-            background:
-                radial-gradient(40rem 22rem at 100% -20%, rgba(255, 255, 255, 0.16), transparent 60%),
-                radial-gradient(30rem 20rem at -10% 120%, rgba(129, 140, 248, 0.28), transparent 60%),
-                linear-gradient(135deg, #081018 0%, #151a3d 38%, #312e81 78%, #4338ca 100%);
-        }
-
-        .adm-hero::before {
-            content: '';
-            position: absolute;
-            inset: 0;
-            z-index: -1;
-            background-image: radial-gradient(rgba(255, 255, 255, 0.15) 1px, transparent 1px);
-            background-size: 22px 22px;
-            -webkit-mask-image: radial-gradient(50rem 26rem at 15% 0%, black, transparent 75%);
-            mask-image: radial-gradient(50rem 26rem at 15% 0%, black, transparent 75%);
+            background: #1c261c;
         }
 
         .adm-topbar {
@@ -108,7 +94,6 @@
             box-sizing: border-box;
             border-radius: 999px;
             background: rgba(255, 255, 255, 0.14);
-            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
         }
 
         .adm-brand em {
@@ -119,8 +104,8 @@
             font-weight: 800;
             letter-spacing: 0.14em;
             text-transform: uppercase;
-            color: #c7d2fe;
-            background: rgba(165, 180, 252, 0.2);
+            color: #dcefd3;
+            background: rgba(183, 219, 169, 0.2);
         }
 
         .adm-back {
@@ -134,11 +119,18 @@
             color: rgba(248, 250, 252, 0.9);
             text-decoration: none;
             background: rgba(255, 255, 255, 0.1);
-            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
             transition: background 120ms ease;
         }
 
         .adm-back:hover { background: rgba(255, 255, 255, 0.18); }
+
+        .adm-topbar-end {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 0.5rem;
+        }
 
         .adm-title {
             margin: 1.6rem 0 0;
@@ -351,8 +343,8 @@
             letter-spacing: 0.02em;
         }
 
-        .adm-av-rektor { color: #ffffff; background: linear-gradient(135deg, #1e1b4b, #312e81); }
-        .adm-av-dekan { color: #ffffff; background: linear-gradient(135deg, #4338ca, #6366f1); }
+        .adm-av-rektor { color: #ffffff; background: #33502e; }
+        .adm-av-dekan { color: #ffffff; background: #4b7a42; }
 
         .adm-av-korprodi {
             color: var(--color-accent);
@@ -370,8 +362,8 @@
             text-transform: uppercase;
         }
 
-        .adm-badge-rektor { color: #ffffff; background: #312e81; }
-        .adm-badge-dekan { color: #ffffff; background: #4338ca; }
+        .adm-badge-rektor { color: #ffffff; background: #33502e; }
+        .adm-badge-dekan { color: #ffffff; background: #4b7a42; }
         .adm-badge-korprodi { color: var(--color-accent); background: var(--color-accent-soft); }
         .adm-badge-warn { color: var(--color-warn); background: var(--color-warn-soft); }
 
@@ -407,7 +399,10 @@
                     <img src="{{ asset('images/logo-unsri.webp') }}" alt="">
                     SAPTO <em>Admin</em>
                 </a>
-                <a href="{{ url('/') }}" class="adm-back">← Kembali ke aplikasi</a>
+                <div class="adm-topbar-end">
+                    @include('components.api-status-badge', ['variant' => 'hero'])
+                    <a href="{{ url('/') }}" class="adm-back">← Kembali ke aplikasi</a>
+                </div>
             </div>
 
             <h1 class="adm-title">@yield('title')</h1>
@@ -418,9 +413,9 @@
                    @if (request()->routeIs('admin.peran')) aria-current="page" @endif>
                     Kelola peran
                 </a>
-                <a href="{{ route('admin.login-as') }}" @class(['adm-tab', 'is-active' => request()->routeIs('admin.login-as')])
-                   @if (request()->routeIs('admin.login-as')) aria-current="page" @endif>
-                    Login sebagai
+                <a href="{{ route('admin.sync-pd-unsri') }}" @class(['adm-tab', 'is-active' => request()->routeIs('admin.sync-pd-unsri')])
+                   @if (request()->routeIs('admin.sync-pd-unsri')) aria-current="page" @endif>
+                    Sinkronisasi PD UNSRI
                 </a>
             </nav>
         </div>

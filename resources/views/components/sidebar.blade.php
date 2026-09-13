@@ -67,8 +67,8 @@
     $avatarIsLogo = (bool) ($ssoUser['is_admin'] ?? false);
     // Peran yang tampil di profil diturunkan dari SaptoUserContext -- sumber
     // yang sama yang membatasi data -- bukan ditebak dari klaim SSO. Akun
-    // tanpa penugasan (mis. "Uji akun tanpa akses" di Login sebagai) tidak
-    // boleh membuat seluruh halaman gagal dirender, jadi 403-nya ditangkap.
+    // tanpa penugasan tidak boleh membuat seluruh halaman gagal dirender,
+    // jadi 403-nya ditangkap.
     $akses = null;
     if ($ssoUser && ! ($ssoUser['is_admin'] ?? false)) {
         try {
@@ -77,6 +77,17 @@
             $akses = null;
         }
     }
+
+    // Kunci peran buat <x-role-badge> -- diturunkan dari label yang sama
+    // dengan teks di bawahnya (SaptoUserContext::keterangan()), bukan
+    // ditebak ulang, supaya badge dan teks cakupan tidak pernah beda sumber.
+    $roleKey = match (true) {
+        $ssoUser['is_admin'] ?? false => 'admin',
+        ($akses['peran'] ?? null) === 'Rektor' => 'rektor',
+        ($akses['peran'] ?? null) === 'Dekan' => 'dekan',
+        ($akses['peran'] ?? null) === 'Koordinator Program Studi' => 'korprodi',
+        default => null,
+    };
 
     $avatarUrl = $avatarIsLogo
         ? asset('images/logo-unsri.webp')
@@ -123,7 +134,7 @@
 @endphp
 
 <aside id="sidebar" class="sidebar side-glass flex flex-col">
-    <div class="sidebar-header flex min-h-[73px] items-center gap-3 px-5" style="border-bottom:1px solid var(--side-border)">
+    <div class="sidebar-header relative isolate overflow-hidden flex min-h-[73px] items-center gap-3 px-5" style="border-bottom:1px solid var(--side-border)">
         <div class="grid h-11 w-11 shrink-0 place-items-center">
             <img
                 src="{{ asset('images/logo-unsri.webp') }}"
@@ -163,7 +174,7 @@
                 placeholder="Cari tabel..."
                 aria-label="Cari tabel"
                 class="peer w-full rounded-xl py-2 pl-8 pr-9 text-[13px] transition focus:outline-none focus:ring-2 focus:ring-accent/25"
-                style="background:var(--input-bg);border:1px solid var(--input-border);color:var(--side-text);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)"
+                style="background:var(--input-bg);border:1px solid var(--input-border);color:var(--side-text)"
             >
             <kbd
                 class="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 rounded px-1.5 py-0.5 text-[10px] font-medium peer-focus:hidden"
@@ -259,16 +270,16 @@
     @if ($ssoUser)
         <div class="sidebar-footer px-3 py-3" style="border-top:1px solid var(--side-border)">
             @if ($ssoUser['is_admin'] ?? false)
-                {{-- Pintu masuk area admin. "Login sebagai" tetap bisa dicapai
-                     lewat tab di dalam halaman admin. --}}
+                {{-- Pintu masuk area admin (Kelola peran, Sinkronisasi PD UNSRI).
+                     Menyamar sebagai pengguna lain ada di tiap baris Kelola peran. --}}
                 <a href="{{ route('admin.peran') }}"
-                   class="mb-2.5 flex items-center gap-2 rounded-lg px-2.5 py-2 text-[12px] font-semibold"
+                   class="sidebar-admin-link mb-2.5 flex items-center gap-2 rounded-lg px-2.5 py-2 text-[12px] font-semibold"
                    style="color:var(--side-text);background:var(--color-accent-soft)"
-                   title="Kelola role">
+                   title="Admin Dashboard">
                     <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <path d="M12 21s7-3.6 7-9V6l-7-3-7 3v6c0 5.4 7 9 7 9Z"/><path d="m9 12 2 2 4-4"/>
                     </svg>
-                    <span class="sidebar-admin-link-text">Kelola role</span>
+                    <span class="sidebar-admin-link-text">Admin Dashboard</span>
                 </a>
             @endif
             <div class="sidebar-identity-row flex items-center gap-2.5">
@@ -290,14 +301,17 @@
                         style="background:var(--color-accent-soft){{ $avatarIsLogo ? ';object-fit:contain;padding:3px' : '' }}"
                     >
                     <span class="sidebar-identity-text min-w-0 flex-1 text-left leading-tight">
-                        <span class="block truncate text-[12px] font-semibold" style="color:var(--side-text)">
-                            {{ $userName }}
+                        <span class="flex items-center gap-1.5">
+                            <span class="min-w-0 truncate text-[12px] font-semibold" style="color:var(--side-text)">
+                                {{ $userName }}
+                            </span>
+                            <x-role-badge :role="$roleKey" />
                         </span>
-                        <span class="block truncate text-[11px]" style="color:var(--side-faint)">
+                        <span class="mt-0.5 block truncate text-[11px]" style="color:var(--side-faint)">
                             @if ($ssoUser['is_admin'] ?? false)
                                 Developer SAPTO
                             @elseif ($akses)
-                                {{ $akses['peran'] }} — {{ $akses['lingkup'] }}
+                                {{ $akses['lingkup'] }}
                             @else
                                 Belum punya akses SAPTO
                             @endif
@@ -609,13 +623,18 @@
                 <div class="profile-row">
                     <dt class="profile-label">Peran</dt>
                     <dd class="profile-value">
-                        @if ($ssoUser['is_admin'] ?? false)
-                            Admin — semua fakultas &amp; program studi
-                        @elseif ($akses)
-                            {{ $akses['peran'] }} — {{ $akses['cakupan'] }}
-                        @else
-                            Belum terdaftar — hubungi admin SAPTO
-                        @endif
+                        <span class="flex flex-wrap items-center gap-1.5">
+                            <x-role-badge :role="$roleKey" />
+                            <span>
+                                @if ($ssoUser['is_admin'] ?? false)
+                                    semua fakultas &amp; program studi
+                                @elseif ($akses)
+                                    {{ $akses['cakupan'] }}
+                                @else
+                                    Belum terdaftar — hubungi admin SAPTO
+                                @endif
+                            </span>
+                        </span>
                     </dd>
                 </div>
                 @if (session('impersonator_sso_user'))
@@ -879,8 +898,6 @@
 
     .profile-backdrop {
         background: rgba(3, 7, 18, 0.55);
-        -webkit-backdrop-filter: blur(2px);
-        backdrop-filter: blur(2px);
     }
 
     .profile-modal {
@@ -996,7 +1013,7 @@
             justify-content: center;
         }
 
-        #app-shell.sidebar-closed #sidebar .sidebar-footer a[href*="login-as"] {
+        #app-shell.sidebar-closed #sidebar .sidebar-footer .sidebar-admin-link {
             justify-content: center;
         }
 
@@ -1023,9 +1040,6 @@
         border-radius: 0.9rem;
         background: var(--side-bg);
         border: 1px solid var(--side-border);
-        box-shadow: var(--glass-shadow);
-        -webkit-backdrop-filter: blur(var(--glass-blur));
-        backdrop-filter: blur(var(--glass-blur));
     }
 
     .menu-group-panel.menu-group-flyout .menu-group-panel-inner,
@@ -1040,5 +1054,24 @@
         margin: 0;
         padding: 0;
         border-left: 0;
+    }
+
+    /* Aksen motif batik Palembang di kepala sidebar (belakang logo/nama
+       SAPTO) -- sama seperti footer, dua data URI (warna di-hardcode per
+       tema, bukan var(--color-*)/currentColor karena SVG data URI tidak
+       ikut token warna halaman) dan sangat samar supaya logo & teks tetap
+       terbaca jelas di atasnya. */
+    .sidebar-header::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        z-index: -1;
+        opacity: 0.12;
+        background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%2744%27%20height%3D%2744%27%20viewBox%3D%270%200%2044%2044%27%3E%3Cpath%20d%3D%27M22%200%20L44%2022%20L22%2044%20L0%2022%20Z%27%20fill%3D%27none%27%20stroke%3D%27rgba%2875%2C122%2C66%2C0.5%29%27%20stroke-width%3D%270.9%27/%3E%3Cg%20transform%3D%27translate%2822%2C22%29%27%20fill%3D%27none%27%20stroke%3D%27rgba%2875%2C122%2C66%2C0.6%29%27%20stroke-width%3D%271%27%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%2860%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28120%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28180%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28240%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28300%29%27/%3E%3Ccircle%20r%3D%271.8%27%20fill%3D%27rgba%2875%2C122%2C66%2C0.6%29%27%20stroke%3D%27none%27/%3E%3C/g%3E%3C/svg%3E");
+        background-size: 40px 40px;
+    }
+
+    :root[data-theme='dark'] .sidebar-header::before {
+        background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%2744%27%20height%3D%2744%27%20viewBox%3D%270%200%2044%2044%27%3E%3Cpath%20d%3D%27M22%200%20L44%2022%20L22%2044%20L0%2022%20Z%27%20fill%3D%27none%27%20stroke%3D%27rgba%28143%2C191%2C126%2C0.5%29%27%20stroke-width%3D%270.9%27/%3E%3Cg%20transform%3D%27translate%2822%2C22%29%27%20fill%3D%27none%27%20stroke%3D%27rgba%28143%2C191%2C126%2C0.6%29%27%20stroke-width%3D%271%27%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%2860%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28120%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28180%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28240%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28300%29%27/%3E%3Ccircle%20r%3D%271.8%27%20fill%3D%27rgba%28143%2C191%2C126%2C0.6%29%27%20stroke%3D%27none%27/%3E%3C/g%3E%3C/svg%3E");
     }
 </style>

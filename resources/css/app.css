@@ -4,10 +4,12 @@
 @source '../../storage/framework/views/*.php';
 
 /*
- * SAPTO — Liquid Glass design system.
+ * SAPTO — Flat design system.
  *
- * A minimalist frosted-glass UI over a soft aurora background, with a full
- * light/dark theme. Everything is driven by CSS custom properties so a single
+ * Solid surfaces, 1px borders, no blur/gradient/shadow-as-depth — deliberately
+ * plain so it stays legible for users who aren't chasing "modern" chrome
+ * (many SAPTO users are older faculty/staff, not power users). A full
+ * light/dark theme, everything driven by CSS custom properties so a single
  * `data-theme` swap on <html> re-skins the whole console. Semantic colour
  * tokens keep their names (ink/muted/canvas/surface/line/accent...) so the
  * existing Tailwind utilities (`text-ink`, `border-line`, `bg-accent/10` ...)
@@ -15,33 +17,35 @@
  * resolve to `var(--color-*)` which we override per theme below.
  *
  * Hex is kept for accent/focus/info/warn so `/opacity` modifiers still work
- * via color-mix; translucent glass fills live in the non-utility vars.
+ * via color-mix; flat surface fills live in the non-utility vars below (the
+ * `--glass-*` names stuck around from the previous look but now just mean
+ * "surface fill/border", no translucency or blur attached to them anymore).
  */
 @theme {
     --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
 
     /* Light theme defaults — overridden under [data-theme="dark"] below. */
-    --color-ink: #0f1b2d;
-    --color-muted: #55637a;
-    --color-canvas: #e7ecf5;
+    --color-ink: #171a20;
+    --color-muted: #5b6472;
+    --color-canvas: #eef0f3;
     --color-surface: #ffffff;
-    --color-line: rgba(15, 27, 45, 0.10);
+    --color-line: rgba(15, 23, 32, 0.10);
 
-    --color-accent: #4338ca;
-    --color-accent-dark: #3730a3;
-    --color-accent-soft: rgba(67, 56, 202, 0.12);
-    --color-accent-line: rgba(67, 56, 202, 0.30);
+    --color-accent: #4b7a42;
+    --color-accent-dark: #375c30;
+    --color-accent-soft: rgba(75, 122, 66, 0.13);
+    --color-accent-line: rgba(75, 122, 66, 0.30);
 
-    --color-focus: #2f6fed;
+    --color-focus: #4b7a42;
 
-    --color-info: #2f6fed;
-    --color-info-soft: rgba(47, 111, 237, 0.12);
+    --color-info: #55677a;
+    --color-info-soft: rgba(85, 103, 122, 0.12);
 
-    --color-warn: #b45309;
-    --color-warn-soft: rgba(180, 83, 9, 0.12);
-    --color-warn-line: rgba(180, 83, 9, 0.32);
+    --color-warn: #b3261e;
+    --color-warn-soft: rgba(179, 38, 30, 0.12);
+    --color-warn-line: rgba(179, 38, 30, 0.30);
 
-    --color-slate-soft: rgba(15, 27, 45, 0.06);
+    --color-slate-soft: rgba(15, 23, 32, 0.06);
 }
 
 /*
@@ -52,90 +56,77 @@
 :root {
     color-scheme: light;
 
-    --glass-bg: rgba(255, 255, 255, 0.55);
-    --glass-bg-strong: rgba(255, 255, 255, 0.72);
-    --glass-2: rgba(255, 255, 255, 0.42);
-    --glass-border: rgba(255, 255, 255, 0.60);
-    --glass-hi: rgba(255, 255, 255, 0.75);
-    --glass-shadow: 0 12px 34px -14px rgba(15, 27, 45, 0.30);
-    /* backdrop-filter blur cost scales with radius -- 20px+ stacked across a
-       dozen concurrent glass panels (sidebar, sticky topbar, cards, inputs)
-       is the main cause of scroll frame drops on weaker/mobile GPUs. 14px
-       reads almost identically but is materially cheaper to composite. */
-    --glass-blur: 14px;
+    /* Flat, opaque surfaces — no translucency, no blur. */
+    --glass-bg: var(--color-surface);
+    --glass-bg-strong: var(--color-surface);
+    --glass-2: rgba(15, 23, 32, 0.035);
+    --glass-border: var(--color-line);
+    --glass-shadow: none;
+    --glass-blur: 0px;
 
-    --row-hover: rgba(15, 27, 45, 0.04);
-    --skeleton: rgba(15, 27, 45, 0.10);
-    --input-bg: rgba(255, 255, 255, 0.60);
-    --input-border: rgba(15, 27, 45, 0.14);
+    --row-hover: rgba(15, 23, 32, 0.04);
+    --skeleton: rgba(15, 23, 32, 0.10);
+    --input-bg: var(--color-surface);
+    --input-border: rgba(15, 23, 32, 0.18);
 
-    --scrim: rgba(15, 27, 45, 0.28);
+    --scrim: rgba(15, 23, 32, 0.35);
 
-    /* Sidebar (frosted, adapts per theme). */
-    --side-bg: rgba(255, 255, 255, 0.55);
-    --side-text: #0f1b2d;
-    --side-dim: #5b6b82;
-    --side-faint: #94a3b8;
-    --side-hover: rgba(15, 27, 45, 0.05);
-    --side-active: rgba(67, 56, 202, 0.14);
-    --side-border: rgba(15, 27, 45, 0.08);
-
-    /* Backdrop wash — very subtle, near-neutral so panels read clean. */
-    --aura-1: rgba(67, 56, 202, 0.08);
-    --aura-2: rgba(100, 116, 139, 0.07);
+    /* Sidebar — flat solid panel. */
+    --side-bg: var(--color-surface);
+    --side-text: #171a20;
+    --side-dim: #5b6472;
+    --side-faint: #96a1ac;
+    --side-hover: rgba(15, 23, 32, 0.05);
+    --side-border: rgba(15, 23, 32, 0.12);
 }
 
 /* Dark theme — a single attribute flip re-skins everything. */
 :root[data-theme='dark'] {
     color-scheme: dark;
 
-    --color-ink: #ececee;
-    --color-muted: #9b9ba3;
-    --color-canvas: #0a0a0c;
-    --color-surface: #151517;
+    --color-ink: #e7e9ec;
+    --color-muted: #98a1ac;
+    --color-canvas: #0c0e11;
+    --color-surface: #16181b;
     --color-line: rgba(255, 255, 255, 0.09);
 
-    --color-accent: #818cf8;
-    --color-accent-dark: #c7d2fe;
-    --color-accent-soft: rgba(129, 140, 248, 0.16);
-    --color-accent-line: rgba(129, 140, 248, 0.30);
+    --color-accent: #8fbf7e;
+    --color-accent-dark: #b7dba9;
+    --color-accent-soft: rgba(143, 191, 126, 0.16);
+    --color-accent-line: rgba(143, 191, 126, 0.30);
 
-    --color-focus: #7c93d6;
+    --color-focus: #8fbf7e;
 
-    --color-info: #7c93d6;
-    --color-info-soft: rgba(124, 147, 214, 0.16);
+    --color-info: #9aa7b3;
+    --color-info-soft: rgba(154, 167, 179, 0.16);
 
-    --color-warn: #cf9f4a;
-    --color-warn-soft: rgba(207, 159, 74, 0.14);
-    --color-warn-line: rgba(207, 159, 74, 0.30);
+    --color-warn: #e0665c;
+    --color-warn-soft: rgba(224, 102, 92, 0.14);
+    --color-warn-line: rgba(224, 102, 92, 0.30);
 
     --color-slate-soft: rgba(255, 255, 255, 0.07);
 
-    --glass-bg: rgba(20, 20, 22, 0.55);
-    --glass-bg-strong: rgba(18, 18, 20, 0.74);
-    --glass-2: rgba(255, 255, 255, 0.04);
-    --glass-border: rgba(255, 255, 255, 0.10);
-    --glass-hi: rgba(255, 255, 255, 0.12);
-    --glass-shadow: 0 22px 46px -18px rgba(0, 0, 0, 0.60);
-    --glass-blur: 14px;
+    /* Flat, opaque surfaces — no translucency, no blur. */
+    --glass-bg: var(--color-surface);
+    --glass-bg-strong: var(--color-surface);
+    --glass-2: rgba(255, 255, 255, 0.035);
+    --glass-border: var(--color-line);
+    --glass-shadow: none;
+    --glass-blur: 0px;
 
     --row-hover: rgba(255, 255, 255, 0.045);
     --skeleton: rgba(255, 255, 255, 0.10);
-    --input-bg: rgba(255, 255, 255, 0.05);
-    --input-border: rgba(255, 255, 255, 0.14);
+    --input-bg: var(--color-surface);
+    --input-border: rgba(255, 255, 255, 0.16);
 
-    --scrim: rgba(4, 4, 5, 0.6);
+    --scrim: rgba(4, 4, 5, 0.65);
 
-    --side-bg: rgba(14, 14, 16, 0.65);
-    --side-text: #ececee;
-    --side-dim: #9b9ba3;
-    --side-faint: #6c6c72;
+    --side-bg: var(--color-surface);
+    --side-text: #e7e9ec;
+    --side-dim: #98a1ac;
+    --side-faint: #626a72;
     --side-hover: rgba(255, 255, 255, 0.06);
-    --side-active: rgba(129, 140, 248, 0.14);
-    --side-border: rgba(255, 255, 255, 0.08);
-
-    --aura-1: rgba(129, 140, 248, 0.045);
-    --aura-2: rgba(100, 116, 139, 0.06);
+    --side-border: rgba(255, 255, 255, 0.10);
 }
 
 /* Follow the OS when the user hasn't picked a theme yet (no data-theme set). */
@@ -143,77 +134,43 @@
     :root:not([data-theme]) {
         color-scheme: dark;
 
-        --color-ink: #ececee;
-        --color-muted: #9b9ba3;
-        --color-canvas: #0a0a0c;
-        --color-surface: #151517;
+        --color-ink: #e7e9ec;
+        --color-muted: #98a1ac;
+        --color-canvas: #0c0e11;
+        --color-surface: #16181b;
         --color-line: rgba(255, 255, 255, 0.09);
-        --color-accent: #818cf8;
-        --color-accent-dark: #c7d2fe;
-        --color-accent-soft: rgba(129, 140, 248, 0.16);
-        --color-accent-line: rgba(129, 140, 248, 0.30);
-        --color-focus: #7c93d6;
-        --color-info: #7c93d6;
-        --color-info-soft: rgba(124, 147, 214, 0.16);
-        --color-warn: #cf9f4a;
-        --color-warn-soft: rgba(207, 159, 74, 0.14);
-        --color-warn-line: rgba(207, 159, 74, 0.30);
+        --color-accent: #8fbf7e;
+        --color-accent-dark: #b7dba9;
+        --color-accent-soft: rgba(143, 191, 126, 0.16);
+        --color-accent-line: rgba(143, 191, 126, 0.30);
+        --color-focus: #8fbf7e;
+        --color-info: #9aa7b3;
+        --color-info-soft: rgba(154, 167, 179, 0.16);
+        --color-warn: #e0665c;
+        --color-warn-soft: rgba(224, 102, 92, 0.14);
+        --color-warn-line: rgba(224, 102, 92, 0.30);
         --color-slate-soft: rgba(255, 255, 255, 0.07);
 
-        --glass-bg: rgba(20, 20, 22, 0.55);
-        --glass-bg-strong: rgba(18, 18, 20, 0.74);
-        --glass-2: rgba(255, 255, 255, 0.04);
-        --glass-border: rgba(255, 255, 255, 0.10);
-        --glass-hi: rgba(255, 255, 255, 0.12);
-        --glass-shadow: 0 22px 46px -18px rgba(0, 0, 0, 0.60);
-        --glass-blur: 22px;
-        --row-hover: rgba(255, 255, 255, 0.045);
-        --skeleton: rgba(255, 255, 255, 0.10);
-        --input-bg: rgba(255, 255, 255, 0.05);
-        --input-border: rgba(255, 255, 255, 0.14);
-        --scrim: rgba(4, 4, 5, 0.6);
-        --side-bg: rgba(14, 14, 16, 0.65);
-        --side-text: #ececee;
-        --side-dim: #9b9ba3;
-        --side-faint: #6c6c72;
-        --side-hover: rgba(255, 255, 255, 0.06);
-        --side-active: rgba(129, 140, 248, 0.14);
-        --side-border: rgba(255, 255, 255, 0.08);
-        --aura-1: rgba(129, 140, 248, 0.045);
-        --aura-2: rgba(100, 116, 139, 0.06);
-    }
-}
-
-/* Phones are both where "spek kurang" lives and where a large blur radius is
-   least visible on a small screen -- cut it further there. Repeats every
-   selector that sets --glass-blur (light default / explicit dark / OS-dark)
-   at matching specificity so this wins in all three regardless of source
-   order; a plain `:root { }` here would lose to `:root[data-theme]`. */
-@media (max-width: 768px) {
-    :root,
-    :root[data-theme='dark'],
-    :root:not([data-theme]) {
-        --glass-blur: 8px;
-    }
-}
-
-/* Respect the OS-level "reduce transparency" setting (Windows/macOS/iOS) --
-   it exists for exactly this: weaker GPUs and motion/vestibular sensitivity.
-   Panels fall back to a solid-ish surface instead of blurring. */
-@media (prefers-reduced-transparency: reduce) {
-    :root {
-        --glass-blur: 0px;
         --glass-bg: var(--color-surface);
         --glass-bg-strong: var(--color-surface);
+        --glass-2: rgba(255, 255, 255, 0.035);
+        --glass-border: var(--color-line);
+        --glass-shadow: none;
+        --glass-blur: 0px;
+        --row-hover: rgba(255, 255, 255, 0.045);
+        --skeleton: rgba(255, 255, 255, 0.10);
+        --input-bg: var(--color-surface);
+        --input-border: rgba(255, 255, 255, 0.16);
+        --scrim: rgba(4, 4, 5, 0.65);
         --side-bg: var(--color-surface);
+        --side-text: #e7e9ec;
+        --side-dim: #98a1ac;
+        --side-faint: #626a72;
+        --side-hover: rgba(255, 255, 255, 0.06);
+        --side-border: rgba(255, 255, 255, 0.10);
     }
 }
 
-/*
- * Aurora backdrop. A fixed layer of soft colour blobs sits behind everything
- * so the frosted panels have something luminous to refract. Kept on a pseudo
- * element (not body background) so it never scrolls and never repaints panels.
- */
 /* Mobile-first base: stop iOS from inflating text, and honour safe areas. */
 html {
     -webkit-text-size-adjust: 100%;
@@ -231,22 +188,14 @@ html::-webkit-scrollbar {
 }
 
 html::-webkit-scrollbar-track {
-    /* Rel-nya juga dikasih fill kaca tipis (token yang sama dipakai buat
-       glass fill lain) supaya bukan cuma thumb-nya doang yang "kaca". */
     background: var(--glass-2);
 }
 
 html::-webkit-scrollbar-thumb {
-    /* backdrop-filter TIDAK bisa dipasang di scrollbar (tidak didukung
-       browser mana pun -- ini elemen UI native, bukan box biasa), jadi efek
-       kaca di sini ditiru lewat translucency + inset highlight yang sama
-       persis dipakai .glass (lihat --glass-hi/--glass-border di atas),
-       bukan blur beneran. */
-    background-color: var(--glass-bg-strong);
+    background-color: var(--color-line);
     background-clip: padding-box;
     border: 2px solid transparent;
     border-radius: 9999px;
-    box-shadow: inset 0 1px 0 0 var(--glass-hi), inset 0 0 0 1px var(--glass-border);
 }
 
 html::-webkit-scrollbar-thumb:hover {
@@ -259,17 +208,6 @@ body {
     background-color: var(--color-canvas);
 }
 
-body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    z-index: -1;
-    pointer-events: none;
-    background:
-        radial-gradient(50rem 50rem at 6% -8%, var(--aura-1), transparent 62%),
-        radial-gradient(52rem 52rem at 100% 108%, var(--aura-2), transparent 62%);
-}
-
 @media (prefers-reduced-motion: no-preference) {
     html {
         scroll-behavior: smooth;
@@ -278,33 +216,25 @@ body::before {
 
 @layer components {
     /*
-     * Core frosted-glass surface. Panels, cards, the topbar, the drawer and
-     * the sidebar all build on this. The inset top highlight is what reads as
-     * a lit glass rim; the outer shadow lifts it off the aurora.
+     * Core flat surface. Panels, cards, the topbar, the drawer and the
+     * sidebar all build on this — solid fill + 1px border, nothing else.
      */
     .glass {
         background: var(--glass-bg);
-        -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(118%);
-        backdrop-filter: blur(var(--glass-blur)) saturate(118%);
         border: 1px solid var(--glass-border);
-        box-shadow: var(--glass-shadow), inset 0 1px 0 0 var(--glass-hi);
     }
 
     .glass-strong {
         background: var(--glass-bg-strong);
-        -webkit-backdrop-filter: blur(calc(var(--glass-blur) + 4px)) saturate(120%);
-        backdrop-filter: blur(calc(var(--glass-blur) + 4px)) saturate(120%);
         border: 1px solid var(--glass-border);
-        box-shadow: var(--glass-shadow), inset 0 1px 0 0 var(--glass-hi);
     }
 
-    /* Subtle interactive lift for cards — no glow, just a small raise + border. */
+    /* Interactive hover cue for cards — colour change only, no motion/lift. */
     .glass-hover {
-        transition: transform 180ms ease, border-color 180ms ease;
+        transition: border-color 180ms ease;
     }
 
     .glass-hover:hover {
-        transform: translateY(-2px);
         border-color: var(--color-accent-line);
     }
 
@@ -415,8 +345,6 @@ body::before {
         background: var(--input-bg);
         border: 1px solid var(--input-border);
         color: var(--color-ink);
-        -webkit-backdrop-filter: blur(8px);
-        backdrop-filter: blur(8px);
         @apply inline-flex min-w-[34px] items-center justify-center rounded-lg px-2.5 py-1 text-[12px]
                font-medium tabular-nums cursor-pointer transition;
     }
@@ -457,11 +385,6 @@ body::before {
     /* ---- Sidebar ---- */
     .side-glass {
         background: var(--side-bg);
-        /* Was a hardcoded 26px, the single heaviest blur in the app and
-           always on-screen -- now shares --glass-blur so it drops with the
-           rest of the panels (and the mobile override below). */
-        -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(120%);
-        backdrop-filter: blur(var(--glass-blur)) saturate(120%);
         border-right: 1px solid var(--side-border);
         color: var(--side-text);
     }
@@ -480,18 +403,18 @@ body::before {
 
     .menu-item.is-active {
         color: var(--side-text);
-        background: linear-gradient(90deg, var(--side-active), transparent);
-        box-shadow: inset 0 0 0 1px var(--color-accent-line);
+        font-weight: 700;
+        background: color-mix(in srgb, var(--color-accent) 8%, transparent);
     }
 
-    .menu-item.is-active::before {
+    .menu-item.is-active::after {
         content: '';
-        position: absolute;
-        inset-block: 6px;
-        left: 0;
-        width: 3px;
+        width: 6px;
+        height: 6px;
+        margin-left: auto;
         border-radius: 9999px;
         background: var(--color-accent);
+        flex-shrink: 0;
     }
 
     .menu {
@@ -513,8 +436,6 @@ body::before {
         background: var(--input-bg);
         border: 1px solid var(--input-border);
         color: var(--color-ink);
-        -webkit-backdrop-filter: blur(8px);
-        backdrop-filter: blur(8px);
         @apply min-h-[38px] w-full rounded-xl px-3 text-[13px] transition;
     }
 
@@ -552,8 +473,6 @@ body::before {
         background: var(--input-bg);
         border: 1px solid var(--input-border);
         color: var(--color-ink);
-        -webkit-backdrop-filter: blur(8px);
-        backdrop-filter: blur(8px);
         @apply grid h-9 w-9 shrink-0 place-items-center rounded-xl transition cursor-pointer;
     }
 
@@ -574,7 +493,7 @@ body::before {
         display: none;
     }
 
-    /* ---- App shell / sidebar layout (unchanged behaviour, glassy skin) ---- */
+    /* ---- App shell / sidebar layout (unchanged behaviour, flat skin) ---- */
     #app-shell {
         @apply min-h-screen;
     }
@@ -613,8 +532,6 @@ body::before {
         z-index: 30;
         display: none;
         background: var(--scrim);
-        -webkit-backdrop-filter: blur(2px);
-        backdrop-filter: blur(2px);
     }
 
     .sidebar-backdrop.is-open {
@@ -694,10 +611,7 @@ body::before {
 
     .toast {
         background: var(--glass-bg-strong);
-        -webkit-backdrop-filter: blur(calc(var(--glass-blur) + 4px)) saturate(120%);
-        backdrop-filter: blur(calc(var(--glass-blur) + 4px)) saturate(120%);
         border: 1px solid var(--glass-border);
-        box-shadow: var(--glass-shadow), inset 0 1px 0 0 var(--glass-hi);
         color: var(--color-ink);
         pointer-events: auto;
         animation: toast-in 220ms ease;
@@ -743,8 +657,6 @@ body::before {
         height: 100dvh;
         display: none;
         background: var(--scrim);
-        -webkit-backdrop-filter: blur(3px);
-        backdrop-filter: blur(3px);
     }
 
     .drawer-backdrop.is-open {
@@ -803,7 +715,7 @@ body::before {
      * lihat genericCell()/renderTable()/renderMaTable() di sapto.blade.php
      * untuk kelas mana yang dapat ini (cuma kolom pertama).
      *
-     * .sp-th/.sp-td sengaja transparan (supaya glass card & .sp-row:hover
+     * .sp-th/.sp-td sengaja transparan (supaya warna card & .sp-row:hover
      * tembus), tapi sel sticky WAJIB background solid -- kalau tidak,
      * kolom-kolom lain yang lewat di baliknya pas discroll akan kelihatan
      * transparan menembus kolom yang dipin.

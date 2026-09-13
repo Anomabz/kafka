@@ -26,13 +26,13 @@
         font-weight: 800;
         white-space: nowrap;
         color: #ffffff;
-        background: linear-gradient(135deg, #4338ca 0%, #6366f1 60%, #312e81 100%);
-        box-shadow: 0 10px 22px -12px rgba(67, 56, 202, 0.9);
+        background: #4b7a42;
+        box-shadow: none;
         cursor: pointer;
         transition: transform 120ms ease, filter 120ms ease;
     }
 
-    .adm-add:hover { transform: translateY(-1px); filter: brightness(1.06); }
+    .adm-add:hover { filter: brightness(1.06); }
     .adm-add svg { width: 16px; height: 16px; }
 
     /* --- Baris daftar ------------------------------------------------- */
@@ -117,7 +117,7 @@
         overflow: hidden;
         color: var(--color-ink);
         background: var(--color-surface);
-        box-shadow: 0 40px 90px -30px rgba(8, 12, 28, 0.65), 0 0 0 1px var(--color-line);
+        box-shadow: 0 0 0 1px var(--color-line);
     }
 
     .adm-dialog[open] {
@@ -128,8 +128,6 @@
 
     .adm-dialog::backdrop {
         background: rgba(8, 12, 28, 0.55);
-        -webkit-backdrop-filter: blur(4px);
-        backdrop-filter: blur(4px);
     }
 
     @keyframes adm-pop {
@@ -180,7 +178,7 @@
         left: 0;
         right: 0;
         height: 3px;
-        background: linear-gradient(90deg, #312e81 0%, #4338ca 40%, #6366f1 70%, #a5b4fc 100%);
+        background: #4b7a42;
     }
 
     .adm-dialog-head h2 { margin: 0; font-size: 18px; font-weight: 800; letter-spacing: -0.01em; }
@@ -230,11 +228,11 @@
     .adm-btn-primary {
         border: 0;
         color: #ffffff;
-        background: linear-gradient(135deg, #4338ca 0%, #6366f1 60%, #312e81 100%);
-        box-shadow: 0 12px 24px -12px rgba(67, 56, 202, 0.9);
+        background: #4b7a42;
+        box-shadow: none;
     }
 
-    .adm-btn-primary:hover { transform: translateY(-1px); filter: brightness(1.06); }
+    .adm-btn-primary:hover { filter: brightness(1.06); }
 
     @media (max-width: 640px) {
         .adm-dialog-foot .adm-btn { flex: 1; }

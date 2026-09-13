@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\ImpersonationController;
+use App\Http\Controllers\Admin\PdUnsriSyncController;
 use App\Http\Controllers\Admin\PenugasanController;
 use App\Http\Controllers\Api\Sapto\MahasiswaController; // <-- 1. Import Controllernya di sini
 use App\Http\Controllers\Auth\SsoController;
@@ -22,6 +23,17 @@ Route::redirect('/login', '/')->name('login');
 
 // Easter egg — sengaja tidak ditautkan dari nav manapun.
 Route::get('/credits', fn () => view('credits'));
+
+// Dipakai JS di resources/js/app.js + errors/503.blade.php buat polling
+// status maintenance mode. SENGAJA bukan "/up" bawaan Laravel -- "/up"
+// dikecualikan dari PreventRequestsDuringMaintenance (lihat
+// ApplicationBuilder::except($health)) supaya load balancer/monitoring
+// tetap bisa cek proses PHP-nya hidup walau lagi "php artisan down", jadi
+// nilainya selalu 200 terlepas dari status maintenance -- percuma dipakai
+// buat mendeteksi maintenance mode itu sendiri. Route biasa ini TIDAK
+// dikecualikan, jadi otomatis ikut kena 503 saat "php artisan down" dan
+// balik 200 lagi saat "php artisan up", persis sinyal yang dibutuhkan.
+Route::get('/ping', fn () => response('ok'));
 
 // Masuk = POST dari welcome page (membawa token captcha). GET dialihkan ke
 // root supaya URL ini tidak bisa dipakai untuk melompati captcha.
@@ -77,8 +89,8 @@ Route::post('/telegram/webhook/{secret}', function (Request $request, string $se
 // Catatan: route /dev/login-as lama dihapus. Dulu di-gate app()->environment
 // ('local'), tapi container ini berjalan sebagai APP_ENV=local sehingga
 // gate-nya tak pernah aktif — artinya siapa pun bisa menyamar jadi korprodi
-// tanpa password. Diganti dengan /admin/login-as yang dikunci akun admin
-// (lihat ImpersonationController).
+// tanpa password. Diganti tombol "Lihat SAPTO sebagai …" di Kelola peran yang
+// dikunci akun admin (lihat ImpersonationController).
 
 Route::middleware('sso.auth')->group(function () {
 
@@ -86,9 +98,9 @@ Route::middleware('sso.auth')->group(function () {
     // sso.auth supaya cuma orang yang sudah login yang bisa membacanya.
     Route::get('/notifications/latest', [WebNotificationController::class, 'latest'])->name('notifications.latest');
 
-    // "Login sebagai" khusus admin (pengganti /dev/login-as) — lihat
-    // ImpersonationController (gated is_admin, tanpa eskalasi hak).
-    Route::get('/admin/login-as', [ImpersonationController::class, 'index'])->name('admin.login-as');
+    // Menyamar sebagai pengguna lain, khusus admin — dipicu dari tombol di tiap
+    // baris Kelola peran (halaman "Login sebagai" tersendiri sudah dihapus).
+    // Lihat ImpersonationController (gated is_admin, tanpa eskalasi hak).
     Route::post('/admin/login-as', [ImpersonationController::class, 'store'])->name('admin.login-as.store');
     Route::post('/admin/stop-impersonating', [ImpersonationController::class, 'stop'])->name('admin.stop-impersonating');
 
@@ -97,6 +109,13 @@ Route::middleware('sso.auth')->group(function () {
     Route::get('/admin/peran', [PenugasanController::class, 'index'])->name('admin.peran');
     Route::post('/admin/peran', [PenugasanController::class, 'store'])->name('admin.peran.store');
     Route::delete('/admin/peran/{penugasan}', [PenugasanController::class, 'destroy'])->name('admin.peran.destroy');
+
+    // Status + tombol manual sinkronisasi mingguan data akademik PD UNSRI —
+    // lihat PdUnsriSyncController, PdUnsriSyncDispatcher, SyncPdUnsriTableJob.
+    Route::get('/admin/sync-pd-unsri', [PdUnsriSyncController::class, 'index'])->name('admin.sync-pd-unsri');
+    Route::post('/admin/sync-pd-unsri', [PdUnsriSyncController::class, 'store'])->name('admin.sync-pd-unsri.store');
+    Route::get('/admin/sync-pd-unsri/status', [PdUnsriSyncController::class, 'status'])->name('admin.sync-pd-unsri.status');
+    Route::post('/admin/sync-pd-unsri/cancel', [PdUnsriSyncController::class, 'cancel'])->name('admin.sync-pd-unsri.cancel');
 
     Route::get('/', function () {
         return view('sapto', [
