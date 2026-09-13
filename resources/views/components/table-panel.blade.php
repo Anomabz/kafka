@@ -34,6 +34,11 @@
         </button>
     </div>
 
+    {{-- Catatan sumber data (mis. versi kurikulum yang dipakai, kolom yang
+         sengaja dikosongkan). Tampil DI ATAS tabel, bukan menggantikannya --
+         dulu payload ber-notice membuat seluruh barisnya tidak dirender. --}}
+    <p id="table-notice" class="px-4 py-3 text-[12px] leading-relaxed text-muted" style="border-top:1px solid var(--color-line)" hidden></p>
+
     <div class="table-scroll">
         <table class="w-full min-w-[1120px] border-collapse">
             <thead id="table-head"></thead>

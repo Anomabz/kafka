@@ -28,6 +28,8 @@
         </p>
     </div>
 
+    @include('components.api-status-badge', ['variant' => 'topbar'])
+
     <button
         type="button"
         id="fullscreen-toggle"

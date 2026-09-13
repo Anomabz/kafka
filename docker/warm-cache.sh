@@ -9,7 +9,7 @@
 # Dipasang bersama docker/watchdog.sh — lihat CLAUDE.md.
 set -euo pipefail
 
-cd /home/sapto/sapto-prod
+cd "$(dirname "$0")/.."
 
 LOG=storage/logs/warm-cache.log
 

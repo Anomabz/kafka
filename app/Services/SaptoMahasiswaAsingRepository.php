@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Services\Concerns\ResolvesSaptoTs;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
@@ -20,6 +21,8 @@ use Illuminate\Support\Facades\DB;
  */
 class SaptoMahasiswaAsingRepository
 {
+    use ResolvesSaptoTs;
+
     public function __construct(private readonly SaptoProgramStudiRepository $client) {}
 
     /**
@@ -74,13 +77,14 @@ class SaptoMahasiswaAsingRepository
         });
     }
 
+    /**
+     * Dipakai juga untuk menyusun available_years di sini (tabel ini tidak
+     * punya "tahun data" sendiri). Nilainya mengikuti TS bersama supaya tidak
+     * lebih maju daripada tabel lain -- dulu dikunci manual ke 2025.
+     */
     private function latestYear(): int
     {
-        // ponytail: sinkronisasi tabel lain (dosen, mahasiswa) belum sampai
-        // tahun ajaran 2026 — batasi ke 2025 dulu supaya gak "lebih maju"
-        // dari tabel lain (lihat SaptoKerjasamaRepository::latestYear() untuk
-        // pola yang sama). Naikkan angka ini begitu data 2026 benar-benar ada.
-        return min((int) now()->year, 2025);
+        return $this->ts();
     }
 
     /**

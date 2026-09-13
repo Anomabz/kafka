@@ -12,7 +12,10 @@ use App\Services\SaptoKerjasamaPenelitianRepository;
 use App\Services\SaptoKerjasamaPkmRepository;
 use App\Services\SaptoPagelaranDtpsRepository;
 use App\Services\SaptoPenelitianDtpsRepository;
+use App\Services\SaptoDosenIndustriRepository;
+use App\Services\SaptoKurikulumRepository;
 use App\Services\SaptoPrestasiAkademikRepository;
+use App\Services\SaptoRekognisiDtpsRepository;
 use App\Services\SaptoPrestasiNonAkademikRepository;
 use App\Services\SaptoProgramStudiRepository;
 use App\Services\SaptoPublikasiIlmiahDtpsRepository;
@@ -44,14 +47,18 @@ class WarmSaptoCache extends Command
 
     /**
      * Dashboard didahulukan: dia memanggil banyak tabel sekaligus, jadi
-     * sub-cache-nya menguntungkan sisa daftar di bawahnya.
+     * sub-cache-nya menguntungkan sisa daftar di bawahnya. Publik karena
+     * dipakai juga oleh "Segarkan laporan" (SaptoReportRefresher).
      */
-    private const REPOSITORIES = [
+    public const REPOSITORIES = [
         'dashboard' => SaptoDashboardRepository::class,
         'dosen-pembimbing-ta' => SaptoDosenPembimbingTaRepository::class,
         'dosen-tetap-pt' => SaptoDosenTetapRepository::class,
         'dosen-tidak-tetap' => SaptoDosenTidakTetapRepository::class,
         'ipk-lulusan' => SaptoIpkLulusanRepository::class,
+        'rekognisi-dtps' => SaptoRekognisiDtpsRepository::class,
+        'dosen-industri' => SaptoDosenIndustriRepository::class,
+        'kurikulum' => SaptoKurikulumRepository::class,
         'kerjasama-pendidikan' => SaptoKerjasamaPendidikanRepository::class,
         'kerjasama-penelitian' => SaptoKerjasamaPenelitianRepository::class,
         'kerjasama-pkm' => SaptoKerjasamaPkmRepository::class,

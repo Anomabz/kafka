@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Services\Concerns\ResolvesPublikasiDtpsRoster;
 use App\Services\Concerns\ResolvesSaptoScope;
+use App\Services\Concerns\ResolvesSaptoTs;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
@@ -34,6 +35,7 @@ class SaptoBukuDtpsRepository
 {
     use ResolvesPublikasiDtpsRoster;
     use ResolvesSaptoScope;
+    use ResolvesSaptoTs;
 
     /**
      * Kode id_jenis_publikasi yang termasuk Bagian IV (Buku ber-ISBN, Book
@@ -61,7 +63,7 @@ class SaptoBukuDtpsRepository
         [$programStudi, $fakultas] = $this->validateScope($programStudis, $fakultasId, $programStudiId);
         $scopeProdiIds = $this->scopeProdiIds($programStudis, $fakultasId, $programStudiId);
 
-        $ts ??= $this->latestYear();
+        $ts ??= $this->ts();
 
         if ($programStudi === null) {
             return $this->noticeEnvelope($ts, $fakultas, $programStudi,
@@ -313,11 +315,6 @@ class SaptoBukuDtpsRepository
                 fn (int $year): bool => $year >= 2000 && $year <= 2100
             ));
         });
-    }
-
-    private function latestYear(): int
-    {
-        return $this->availableYears()[0] ?? (int) now()->year;
     }
 
     private function sourcePayload(): array

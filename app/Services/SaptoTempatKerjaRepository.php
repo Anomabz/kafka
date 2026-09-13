@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Services\Concerns\ComputesGraduationYear;
 use App\Services\Concerns\CountsLulusanPerProdi;
 use App\Services\Concerns\ResolvesSaptoScope;
+use App\Services\Concerns\ResolvesSaptoTs;
 
 /**
  * Tabel 8.e.1) Tempat Kerja Lulusan. Per program studi (BAN-PT: "Diisi oleh
@@ -25,6 +26,7 @@ class SaptoTempatKerjaRepository
     use ComputesGraduationYear;
     use CountsLulusanPerProdi;
     use ResolvesSaptoScope;
+    use ResolvesSaptoTs;
 
     private const CACHE_NAMESPACE = 'tempat-kerja';
 
@@ -52,7 +54,7 @@ class SaptoTempatKerjaRepository
         $programStudis = $this->client->programStudis();
         [$programStudi, $fakultas] = $this->validateScope($programStudis, $fakultasId, $programStudiId);
 
-        $ts ??= $this->latestYear();
+        $ts ??= $this->ts();
 
         if ($programStudi === null) {
             return $this->noticeEnvelope($ts, $fakultas, $programStudi,
@@ -135,11 +137,6 @@ class SaptoTempatKerjaRepository
     public function availableYears(): array
     {
         return $this->lulusanAvailableYears(self::CACHE_NAMESPACE);
-    }
-
-    private function latestYear(): int
-    {
-        return $this->availableYears()[0] ?? (int) now()->year;
     }
 
     private function sourcePayload(): array

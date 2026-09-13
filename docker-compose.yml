@@ -1,3 +1,10 @@
+# Nama project dikunci supaya tidak ikut nama folder. Tanpa ini, repo yang
+# dipindah dari /home/sapto/sapto-prod ke /home/sapto/SAPTO (2026-09-11) jadi
+# project baru "sapto" dengan volume db terpisah yang basi, sementara data
+# asli tetap di volume sapto-prod_mysql_data. Semua script docker/*.sh dan
+# cron ikut nama ini.
+name: sapto-prod
+
 services:
   app:
     build:
@@ -25,7 +32,10 @@ services:
       DB_PASSWORD: rootpassword
       DB_TIMEOUT: "${DB_TIMEOUT:-5}"
       SESSION_DRIVER: "${SESSION_DRIVER:-file}"
-      QUEUE_CONNECTION: "${QUEUE_CONNECTION:-sync}"
+      # 'database': sinkronisasi PD UNSRI (SyncPdUnsriTableJob) jalan lama dan
+      # harus di latar belakang lewat queue:work (lihat docker/entrypoint.sh),
+      # bukan blocking di request HTTP seperti 'sync'.
+      QUEUE_CONNECTION: "${QUEUE_CONNECTION:-database}"
       CACHE_STORE: "${CACHE_STORE:-file}"
       PANGKALAN_DATA_BASE_URL: "${PANGKALAN_DATA_BASE_URL:-https://pangkalan-data.unsri.ac.id}"
       PANGKALAN_DATA_EMAIL: "${PANGKALAN_DATA_EMAIL:-}"
@@ -42,6 +52,9 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    networks:
+      - default
+      - frontend
 
   db:
     image: mysql:8.0
@@ -78,3 +91,8 @@ services:
 
 volumes:
   mysql_data:
+
+networks:
+  default: {}
+  frontend:
+    external: true

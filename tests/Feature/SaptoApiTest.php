@@ -61,15 +61,32 @@ class SaptoApiTest extends TestCase
         $this->markTestSkipped('Fakultas-wide scope is pending entitlement data — see SaptoUserContext::fromRequest().');
     }
 
-    public function test_summary_defaults_ts_to_latest_academic_year_in_database(): void
+    /**
+     * Kontrak TS berubah 2026-09-12: TS tidak lagi diturunkan tiap tabel dari
+     * tabelnya sendiri (dulu 3.b.x dapat 2025 sementara 8.x dapat 2026 dalam
+     * satu dokumen), melainkan dari satu sumber bersama SaptoTsResolver yang
+     * bisa dikunci saat prodi mengajukan akreditasi tahun tertentu.
+     */
+    public function test_summary_uses_shared_ts_which_can_be_locked(): void
     {
-        // Tanpa parameter ts, TS harus mengikuti tahun akademik terbaru yang
-        // benar-benar ada di database (di seeder: 2026), bukan tahun kalender.
+        config(['sapto.ts' => 2026]);
+
         $this->getJson('/api/sapto/tables/dosen-pembimbing-ta/summary')
             ->assertOk()
             ->assertJsonPath('ts', 2026)
             ->assertJsonPath('year_columns.ts', 2026)
             ->assertJsonPath('available_years', [2026]);
+    }
+
+    public function test_shared_ts_is_the_same_across_tables(): void
+    {
+        config(['sapto.ts' => 2026]);
+
+        $ts = $this->getJson('/api/sapto/tables/dosen-pembimbing-ta/summary')->assertOk()->json('ts');
+
+        $this->getJson('/api/sapto/tables/ipk-lulusan/summary')
+            ->assertOk()
+            ->assertJsonPath('ts', $ts);
     }
 
     public function test_university_scope_splits_by_dominant_prodi(): void

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Services\Concerns\ResolvesSaptoScope;
+use App\Services\Concerns\ResolvesSaptoTs;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -33,6 +34,7 @@ use Illuminate\Support\Str;
 abstract class SaptoKerjasamaRepository
 {
     use ResolvesSaptoScope;
+    use ResolvesSaptoTs;
 
     private const LOCAL_MARKERS = ['dinas', 'kabupaten', 'kota ', 'pemkot', 'pemkab', 'pemda', 'provinsi', 'kecamatan', 'desa '];
 
@@ -334,17 +336,14 @@ abstract class SaptoKerjasamaRepository
         });
     }
 
+    /**
+     * Dipakai juga untuk menyusun available_years di sini (tabel ini tidak
+     * punya "tahun data" sendiri). Nilainya mengikuti TS bersama supaya tidak
+     * lebih maju daripada tabel lain -- dulu dikunci manual ke 2025.
+     */
     private function latestYear(): int
     {
-        // Kerjasama tak "lulus per tahun ajaran" seperti tabel lain; default
-        // yang paling relevan adalah tahun berjalan (kerjasama yang masih
-        // aktif sekarang).
-        // ponytail: data sinkronisasi tabel-tabel lain (dosen, mahasiswa)
-        // belum sampai tahun ajaran 2026 — kalau ini dibiarkan now()->year
-        // apa adanya, TS-nya "lebih maju" dari tabel lain dan keliatan
-        // nyeleneh. Batasi ke 2025 dulu; naikkan angka ini (atau ganti jadi
-        // deteksi otomatis dari tabel lain) begitu data 2026 benar-benar ada.
-        return min((int) now()->year, 2025);
+        return $this->ts();
     }
 
     private function sourcePayload(): array

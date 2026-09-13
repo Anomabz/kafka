@@ -1,6 +1,12 @@
 <?php
 
 return [
+
+    // Kunci nilai TS (tahun akademik penuh terakhir) saat prodi mengajukan
+    // akreditasi untuk tahun tertentu; kosong = dihitung otomatis. Lihat
+    // App\Services\SaptoTsResolver.
+    'ts' => env('SAPTO_TS'),
+
     'institution_keyword' => env('SAPTO_PERGURUAN_TINGGI_KEYWORD', 'Universitas Sriwijaya'),
 
     'api' => [

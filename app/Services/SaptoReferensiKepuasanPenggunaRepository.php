@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Services\Concerns\ComputesGraduationYear;
 use App\Services\Concerns\CountsLulusanPerProdi;
 use App\Services\Concerns\ResolvesSaptoScope;
+use App\Services\Concerns\ResolvesSaptoTs;
 
 /**
  * Tabel Referensi 8.e.2) -- denominator untuk Tabel 8.e.2 Kepuasan Pengguna
@@ -25,6 +26,7 @@ class SaptoReferensiKepuasanPenggunaRepository
     use ComputesGraduationYear;
     use CountsLulusanPerProdi;
     use ResolvesSaptoScope;
+    use ResolvesSaptoTs;
 
     private const CACHE_NAMESPACE = 'referensi-kepuasan-pengguna';
 
@@ -47,7 +49,7 @@ class SaptoReferensiKepuasanPenggunaRepository
         $programStudis = $this->client->programStudis();
         [$programStudi, $fakultas] = $this->validateScope($programStudis, $fakultasId, $programStudiId);
 
-        $ts ??= $this->latestYear();
+        $ts ??= $this->ts();
 
         if ($programStudi === null) {
             return $this->noticeEnvelope($ts, $fakultas, $programStudi,
@@ -130,11 +132,6 @@ class SaptoReferensiKepuasanPenggunaRepository
     public function availableYears(): array
     {
         return $this->lulusanAvailableYears(self::CACHE_NAMESPACE);
-    }
-
-    private function latestYear(): int
-    {
-        return $this->availableYears()[0] ?? (int) now()->year;
     }
 
     private function sourcePayload(): array

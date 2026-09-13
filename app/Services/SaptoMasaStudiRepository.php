@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Services\Concerns\ResolvesSaptoScope;
+use App\Services\Concerns\ResolvesSaptoTs;
 use DateTimeImmutable;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -43,6 +44,7 @@ use Illuminate\Support\Facades\DB;
 class SaptoMasaStudiRepository
 {
     use ResolvesSaptoScope;
+    use ResolvesSaptoTs;
 
     public function __construct(
         private readonly SaptoProgramStudiRepository $client,
@@ -53,7 +55,7 @@ class SaptoMasaStudiRepository
         $programStudis = $this->client->programStudis();
         [$programStudi, $fakultas] = $this->validateScope($programStudis, $fakultasId, $programStudiId);
 
-        $ts ??= $this->latestYear();
+        $ts ??= $this->ts();
 
         // Tabel 8.c bersifat per-program-studi (mengikuti pola jenjang). Bila
         // belum ada prodi terpilih, minta pengguna memilih satu prodi.
@@ -324,11 +326,6 @@ class SaptoMasaStudiRepository
                 fn (int $year): bool => $year >= 2000 && $year <= 2100
             ));
         });
-    }
-
-    private function latestYear(): int
-    {
-        return $this->availableYears()[0] ?? (int) now()->year;
     }
 
     private function sourcePayload(): array

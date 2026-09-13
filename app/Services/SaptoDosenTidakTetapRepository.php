@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Services\Concerns\ResolvesSaptoScope;
+use App\Services\Concerns\ResolvesSaptoTs;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
@@ -27,6 +28,7 @@ use Illuminate\Support\Facades\DB;
 class SaptoDosenTidakTetapRepository
 {
     use ResolvesSaptoScope;
+    use ResolvesSaptoTs;
 
     public function __construct(
         private readonly SaptoProgramStudiRepository $client,
@@ -38,7 +40,7 @@ class SaptoDosenTidakTetapRepository
         [$programStudi, $fakultas] = $this->validateScope($programStudis, $fakultasId, $programStudiId);
         $scopeProdiIds = $this->scopeProdiIds($programStudis, $fakultasId, $programStudiId);
 
-        $ts ??= $this->latestYear();
+        $ts ??= $this->ts();
         $programIndex = $programStudis->keyBy('id');
 
         $roster = $scopeProdiIds === [] ? [] : $this->roster($ts, $scopeProdiIds);
@@ -184,11 +186,6 @@ class SaptoDosenTidakTetapRepository
                 fn (int $year): bool => $year >= 2000 && $year <= 2100
             ));
         });
-    }
-
-    private function latestYear(): int
-    {
-        return $this->availableYears()[0] ?? (int) now()->year;
     }
 
     private function sourcePayload(): array

@@ -8,6 +8,14 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // Sama seperti sister_detail_pengabdian: tabel ini sudah dibuat oleh
+        // proses sinkronisasi eksternal di database produksi/staging. Guard
+        // supaya migrate tidak gagal di sana; di database baru (sqlite
+        // testing) migration ini yang membuat skemanya.
+        if (Schema::hasTable('sister_list_publikasi')) {
+            return;
+        }
+
         Schema::create('sister_list_publikasi', function (Blueprint $table) {
             $table->string('id_sdm', 255)->nullable()->index();
             $table->string('id_kategori_kegiatan', 255)->nullable();

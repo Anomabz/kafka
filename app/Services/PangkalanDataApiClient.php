@@ -163,6 +163,50 @@ class PangkalanDataApiClient
         return $response->json() ?? [];
     }
 
+    /**
+     * Sama seperti get(), tapi mengembalikan Response mentah tanpa melempar
+     * exception di status gagal. Dipakai sinkronisasi massal PdUnsriSyncJob:
+     * 404/403 per tabel di sana adalah sinyal "lewati tabel ini", bukan error
+     * yang harus menghentikan seluruh sinkronisasi.
+     */
+    public function getRaw(string $path, array $query = []): Response
+    {
+        $response = $this->sendGet($path, $query);
+
+        if ($response->unauthorized()) {
+            Cache::forget($this->tokenCacheKey());
+            $response = $this->sendGet($path, $query);
+        }
+
+        return $response;
+    }
+
+    /**
+     * Cek cepat jalur data lewat Gravitee untuk badge status (PdUnsriHealthCheck).
+     * Timeout pendek supaya API yang mati tidak menggantung request, dan
+     * ConnectionException sengaja TIDAK dibungkus seperti di sendGet():
+     * pemanggil perlu membedakan "gateway tidak terjangkau/timeout" dari
+     * "sumber membalas error". Kegagalan ambil token tetap HttpException.
+     */
+    public function probe(string $path, array $query = [], int $timeout = 5, int $connectTimeout = 3): Response
+    {
+        $send = fn (): Response => Http::baseUrl($this->baseUrl())
+            ->withToken($this->token())
+            ->acceptJson()
+            ->timeout($timeout)
+            ->connectTimeout($connectTimeout)
+            ->get($path, $query);
+
+        $response = $send();
+
+        if ($response->unauthorized()) {
+            Cache::forget($this->tokenCacheKey());
+            $response = $send();
+        }
+
+        return $response;
+    }
+
     public function paginated(string $path, int $maxPages, array $query = []): Collection
     {
         $items = collect();
@@ -205,7 +249,9 @@ class PangkalanDataApiClient
 
         return Cache::remember($this->tokenCacheKey(), $this->tokenCacheTtl(), function () use ($email, $password): string {
             try {
-                $response = Http::baseUrl($this->baseUrl())
+                // MODIFIKASI 1: Memanggil authBaseUrl() agar request token mengarah ke server asli
+                // MODIFIKASI 4: Endpoint auth kampus adalah api/get-token, bukan api/login
+                $response = Http::baseUrl($this->authBaseUrl())
                     ->acceptJson()
                     ->timeout($this->timeout())
                     ->connectTimeout($this->connectTimeout())
@@ -213,7 +259,7 @@ class PangkalanDataApiClient
                         'email' => $email,
                         'password' => $password,
                     ])
-                    ->post('api/login');
+                    ->post('api/get-token');
             } catch (ConnectionException $exception) {
                 throw new HttpException(503, 'API Pangkalan Data UNSRI tidak dapat dihubungi.', $exception);
             }
@@ -222,7 +268,8 @@ class PangkalanDataApiClient
                 throw new HttpException(503, 'Login API Pangkalan Data UNSRI gagal. Periksa email dan password API.');
             }
 
-            $token = data_get($response->json(), 'data.token');
+            // MODIFIKASI 5: Respons api/get-token menaruh token di root, bukan di data.token
+            $token = data_get($response->json(), 'token');
 
             if (! is_string($token) || $token === '') {
                 throw new HttpException(503, 'Token API Pangkalan Data UNSRI tidak ditemukan di respons login.');
@@ -397,9 +444,16 @@ class PangkalanDataApiClient
         return 'Fakultas '.Str::title(Str::lower($faculty));
     }
 
-    private function baseUrl(): string
+    // MODIFIKASI 2: Menambahkan fungsi authBaseUrl() baru
+    private function authBaseUrl(): string
     {
         return rtrim((string) config('services.pangkalan_data.base_url'), '/');
+    }
+
+    // MODIFIKASI 3: Mengubah baseUrl() untuk membelokkan rute data ke Gravitee Gateway
+    private function baseUrl(): string
+    {
+        return rtrim(env('SAPTO_GATEWAY_URL', 'http://localhost:8077/sapto-api'), '/');
     }
 
     private function timeout(): int

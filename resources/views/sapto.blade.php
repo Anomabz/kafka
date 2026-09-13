@@ -112,6 +112,7 @@
         breadcrumbGroup: document.getElementById('breadcrumb-group'),
         toastStack: document.getElementById('toast-stack'),
         tableStatus: document.getElementById('table-status'),
+        tableNotice: document.getElementById('table-notice'),
         tableSearch: document.getElementById('table-search'),
         tableExport: document.getElementById('table-export'),
         tableHead: document.getElementById('table-head'),
@@ -498,6 +499,10 @@
     function setLoading() {
         metricEls.forEach((el) => el.classList.add('is-loading'));
         els.tableStatus.textContent = 'Memuat data...';
+        if (els.tableNotice) {
+            els.tableNotice.hidden = true;
+            els.tableNotice.textContent = '';
+        }
         els.tableHead.innerHTML = '';
         els.tableBody.innerHTML = skeletonRows(6);
         els.tableFoot.innerHTML = '';
@@ -596,11 +601,11 @@
         els.tableCardTitle.textContent = summary.table_name || 'Data Tabel';
         setMetricCards(summary.metrics || []);
         const unit = GENERIC_TABLES[currentTableId]?.unit || 'baris';
-        els.tableStatus.textContent = summary.notice
-            ? 'Pilih program studi'
-            : (summary.rows.length
-                ? `${summary.rows.length} ${unit}${summary.source?.partial ? ' - sebagian kolom belum tersedia' : ''}`
-                : 'Belum ada data');
+        // notice + baris = keterangan sumber data; notice tanpa baris = tabel
+        // ini memang belum bisa ditampilkan (mis. harus pilih prodi dulu).
+        els.tableStatus.textContent = summary.rows.length
+            ? `${summary.rows.length} ${unit}${summary.source?.partial ? ' - sebagian kolom belum tersedia' : ''}`
+            : (summary.notice ? 'Pilih program studi' : 'Belum ada data');
         renderGenericTable(summary);
     }
 
@@ -640,9 +645,17 @@
     // Render tabel generik dari definisi kolom + baris envelope backend.
     function renderGenericTable(summary) {
         const cols = summary.columns || [];
+        const adaBaris = (summary.rows || []).length > 0;
+
+        // Catatan sumber data ditampilkan di atas tabel selama masih ada
+        // barisnya; kalau tidak, catatan itu yang menggantikan tabel.
+        if (els.tableNotice) {
+            els.tableNotice.textContent = summary.notice && adaBaris ? summary.notice : '';
+            els.tableNotice.hidden = !(summary.notice && adaBaris);
+        }
 
         // Pesan pengarah (mis. Tabel 8.c minta pilih prodi dulu).
-        if (summary.notice) {
+        if (summary.notice && !adaBaris) {
             els.tableHead.innerHTML = '';
             els.tableBody.innerHTML = `<tr><td class="sp-empty-row">${escapeHtml(summary.notice)}</td></tr>`;
             els.tableFoot.innerHTML = '';
@@ -1331,6 +1344,24 @@
     // Tabel generik: memakai kembali #table-page (filter, kartu metrik, panel,
     // pagination) tapi render dari envelope {columns, rows, metrics} backend.
     const GENERIC_TABLES = {
+        'rekognisi-dosen': {
+            endpoint: 'rekognisi-dtps',
+            unit: 'rekognisi',
+            description: 'Pengakuan/rekognisi DTPS (pembicara, orasi ilmiah, penghargaan, anggota organisasi profesi, visiting scientist) pada program studi terpilih (Tabel 3.b.1). Kolom tingkat hanya terisi untuk kegiatan yang sumbernya mencantumkan tingkat.',
+            icons: ['users', 'cap', 'chart', 'calendar'],
+        },
+        'dosen-industri': {
+            endpoint: 'dosen-industri',
+            unit: 'dosen',
+            description: 'Dosen industri/praktisi yang mengajar pada program studi (Tabel 3.a.5, diisi program Diploma Tiga/Sarjana Terapan). Data PD UNSRI belum memuat penanda dosen industri, jadi tabel ini masih kosong.',
+            icons: ['users', 'cap', 'swap', 'calendar'],
+        },
+        'kurikulum': {
+            endpoint: 'kurikulum',
+            unit: 'mata kuliah',
+            description: 'Kurikulum yang berlaku pada TS beserta bobot sks dan ketersediaan RPS per mata kuliah (Tabel 5.a). Kolom konversi kredit ke jam dan capaian pembelajaran belum tersedia di sumber data.',
+            icons: ['cap', 'chart', 'calendar', 'users'],
+        },
         'ipk-lulusan': {
             endpoint: 'ipk-lulusan',
             unit: 'tahun lulus',
@@ -2098,5 +2129,14 @@
             renderError(error.message);
         }
     })();
+
+    // Tombol "Segarkan laporan" di badge API (components/api-status-badge)
+    // menghitung ulang cache lingkup pengguna di proses terpisah; begitu
+    // selesai, tabel yang sedang dibuka dimuat ulang supaya angkanya ikut baru.
+    window.addEventListener('sapto:reports-refreshed', function () {
+        loadActivePage().catch(function (error) {
+            console.error('Gagal memuat ulang setelah segarkan laporan:', error);
+        });
+    });
 </script>
 @endsection

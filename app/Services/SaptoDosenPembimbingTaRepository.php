@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Services;
+use App\Services\Concerns\ResolvesSaptoTs;
 
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
@@ -29,13 +30,15 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
  */
 class SaptoDosenPembimbingTaRepository
 {
+    use ResolvesSaptoTs;
+
     public function __construct(
         private readonly SaptoProgramStudiRepository $client,
     ) {}
 
     public function summary(?int $ts, ?string $fakultasId, ?string $programStudiId): array
     {
-        $ts ??= $this->latestYear();
+        $ts ??= $this->ts();
         $years = $this->years($ts);
         $programStudis = $this->client->programStudis();
         $programStudi = $programStudiId === null ? null : $this->programStudiById($programStudiId, $programStudis);
@@ -127,7 +130,7 @@ class SaptoDosenPembimbingTaRepository
 
     public function detail(?int $ts, ?string $fakultasId, ?string $programStudiId, string $dosenId, string $scope, string $yearKey): array
     {
-        $ts ??= $this->latestYear();
+        $ts ??= $this->ts();
         $years = $this->years($ts);
         $programStudis = $this->client->programStudis();
         $programStudi = $programStudiId === null ? null : $this->programStudiById($programStudiId, $programStudis);
@@ -532,11 +535,6 @@ class SaptoDosenPembimbingTaRepository
                 fn (int $year): bool => $year >= 2000 && $year <= 2100
             ));
         });
-    }
-
-    private function latestYear(): int
-    {
-        return $this->availableYears()[0] ?? (int) now()->year;
     }
 
     /**

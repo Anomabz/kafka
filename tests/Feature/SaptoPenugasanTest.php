@@ -358,16 +358,22 @@ class SaptoPenugasanTest extends TestCase
         ));
     }
 
-    public function test_impersonation_list_shows_every_role(): void
+    /**
+     * Halaman "Login sebagai" tersendiri dihapus 2026-09-12; menyamar kini
+     * dipicu dari tombol di tiap baris Kelola peran, jadi yang dijaga di sini
+     * adalah semua peran tetap muncul di sana beserta tombolnya.
+     */
+    public function test_kelola_peran_lists_every_role_for_impersonation(): void
     {
         $this->penugasan('rektor', null, ['nip' => '1000001', 'nama' => 'Pak Rektor']);
         $this->penugasan('dekan', 'fakultas-ekonomi', ['nip' => '1000002', 'nama' => 'Bu Dekan']);
         $this->penugasan('korprodi', '56201', ['nip' => '1000003', 'nama' => 'Kaprodi SK']);
 
-        $this->sebagai(self::ADMIN)->get('/admin/login-as')
+        $this->sebagai(self::ADMIN)->get('/admin/peran')
             ->assertOk()
             ->assertSee('Pak Rektor')
             ->assertSee('Bu Dekan')
-            ->assertSee('Kaprodi SK');
+            ->assertSee('Kaprodi SK')
+            ->assertSee(route('admin.login-as.store'));
     }
 }

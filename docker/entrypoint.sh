@@ -38,4 +38,28 @@ php artisan view:cache || true
 # cepat berguna selesai lebih dulu.
 (php artisan sapto:warm && php artisan sapto:warm --prodi) >/dev/null 2>&1 &
 
+# Worker queue database, di latar belakang selama container hidup. Dipakai
+# sinkronisasi PD UNSRI (SyncPdUnsriTableJob, lihat PdUnsriSyncDispatcher):
+# satu tabel bisa jutaan baris dan menembak API kampus lewat Gravitee
+# berkali-kali, jauh terlalu lama untuk request HTTP biasa (php artisan serve
+# akan timeout/nge-block). --tries=1: 404/403 per tabel sudah ditangani di
+# job sebagai skip, bukan retry; error jaringan lain dibiarkan gagal apa
+# adanya di failed_jobs daripada diam-diam diulang berkali-kali menembak API
+# kampus.
+#
+# Dibungkus loop karena queue:work sengaja keluar sendiri: setelah job
+# selesai dan memorinya lewat --memory (bawaan 128 MB -- 2026-09-11 worker
+# berhenti diam-diam setelah tabel biodata_mahasiswa dan batch sinkronisasi
+# macet 30 menit tanpa ada yang menjalankan ulang). Loop ini juga yang membuat
+# `php artisan queue:restart` bisa dipakai untuk memuat kode job baru tanpa
+# restart container: worker keluar setelah job yang sedang jalan, lalu naik
+# lagi dengan kode terbaru.
+(
+    while true; do
+        php artisan queue:work --queue=default --tries=1 --timeout=3600 --memory=1024
+        echo "$(date -Is) queue:work keluar (kode $?), dinyalakan ulang dalam 5 detik"
+        sleep 5
+    done
+) >>storage/logs/queue-worker.log 2>&1 &
+
 php artisan serve --host=0.0.0.0 --port=8000

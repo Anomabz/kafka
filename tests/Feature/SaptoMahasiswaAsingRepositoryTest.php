@@ -28,6 +28,12 @@ class SaptoMahasiswaAsingRepositoryTest extends TestCase
         // TS=2025/TS-1=2024/TS-2=2023, jadi bekukan waktunya di sini.
         Carbon::setTestNow('2025-06-01');
 
+        // TS sekarang satu nilai bersama (App\Services\SaptoTsResolver), bukan
+        // lagi tahun berjalan milik repository ini. Fixture di bawah ditulis
+        // untuk TS=2025, jadi kunci nilainya supaya tes tidak ikut berubah
+        // saat data acuan di tabel lain bergeser.
+        config(['sapto.ts' => 2025]);
+
         $this->withSession(['sso_user' => [
             'sub' => 'test', 'name' => 'Test', 'email' => 'test@example.test',
             'nomor_identitas' => '199999999999999001',

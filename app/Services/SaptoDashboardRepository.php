@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Services\Concerns\ResolvesSaptoTs;
 use Throwable;
 
 /**
@@ -17,6 +18,8 @@ use Throwable;
  */
 class SaptoDashboardRepository
 {
+    use ResolvesSaptoTs;
+
     public function __construct(
         private readonly SaptoDosenTetapRepository $dosenTetap,
         private readonly SaptoDosenPembimbingTaRepository $dosenPembimbingTa,
@@ -37,7 +40,7 @@ class SaptoDashboardRepository
             $availableYears = [];
         }
 
-        $ts ??= $availableYears[0] ?? (int) now()->year;
+        $ts ??= $this->ts();
 
         return [
             'ts' => $ts,

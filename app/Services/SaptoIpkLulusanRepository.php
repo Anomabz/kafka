@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Services\Concerns\ComputesGraduationYear;
 use App\Services\Concerns\ResolvesSaptoScope;
+use App\Services\Concerns\ResolvesSaptoTs;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
@@ -18,6 +19,7 @@ class SaptoIpkLulusanRepository
 {
     use ComputesGraduationYear;
     use ResolvesSaptoScope;
+    use ResolvesSaptoTs;
 
     public function __construct(
         private readonly SaptoProgramStudiRepository $client,
@@ -29,7 +31,7 @@ class SaptoIpkLulusanRepository
         [$programStudi, $fakultas] = $this->validateScope($programStudis, $fakultasId, $programStudiId);
         $scopeProdiIds = $this->scopeProdiIds($programStudis, $fakultasId, $programStudiId);
 
-        $ts ??= $this->latestYear();
+        $ts ??= $this->ts();
         $years = [$ts - 2, $ts - 1, $ts];
         $labels = ['TS-2', 'TS-1', 'TS'];
 
@@ -158,11 +160,6 @@ class SaptoIpkLulusanRepository
                 fn (int $year): bool => $year >= 2000 && $year <= 2100
             ));
         });
-    }
-
-    private function latestYear(): int
-    {
-        return $this->availableYears()[0] ?? (int) now()->year;
     }
 
     private function sourcePayload(): array

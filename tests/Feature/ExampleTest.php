@@ -36,9 +36,9 @@ class ExampleTest extends TestCase
      */
     public function test_a_deep_link_without_a_session_bounces_to_root_and_is_remembered(): void
     {
-        $response = $this->get('/admin/login-as');
+        $response = $this->get('/admin/peran');
 
         $response->assertRedirect('/');
-        $this->assertSame(url('/admin/login-as'), session('url.intended'));
+        $this->assertSame(url('/admin/peran'), session('url.intended'));
     }
 }
