@@ -9,6 +9,12 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
     <style>
+        /* Salinan token "Warna merek" dari resources/css/app.css (halaman ini
+           tidak memuat app.css): desktop Biru Sriwijaya, HP Merah Marun. */
+        :root { --brand: #2b4f8e; --brand-rgb: 43, 79, 142; --brand-ink: #12203a; --brand-ink-rgb: 18, 32, 58; --brand-muted: #4f6fa6; --brand-light: #cddcf6; --brand-soft: #9dbbef; --brand-soft-rgb: 157, 187, 239; }
+        @media (max-width: 639.98px) {
+            :root { --brand: #8a2a3a; --brand-rgb: 138, 42, 58; --brand-ink: #2a0b11; --brand-ink-rgb: 42, 11, 17; --brand-muted: #a8495a; --brand-light: #f1c9cf; --brand-soft: #eba3ae; --brand-soft-rgb: 235, 163, 174; }
+        }
         /*
          * Halaman 503 (dipakai saat maintenance mode / container restart
          * oleh watchdog -- lihat CLAUDE.md, cron 5 menit). Sengaja
@@ -41,8 +47,8 @@
             padding: 3rem 1.5rem;
             text-align: center;
             background:
-                radial-gradient(46rem 34rem at 50% 8%, rgba(143, 191, 126, 0.16), transparent 62%),
-                radial-gradient(38rem 30rem at 100% 100%, rgba(143, 191, 126, 0.08), transparent 60%),
+                radial-gradient(46rem 34rem at 50% 8%, rgba(var(--brand-soft-rgb), 0.16), transparent 62%),
+                radial-gradient(38rem 30rem at 100% 100%, rgba(var(--brand-soft-rgb), 0.08), transparent 60%),
                 #0c0e11;
         }
 
@@ -91,7 +97,7 @@
             position: absolute;
             inset: 0;
             border-radius: 999px;
-            border: 1.5px solid rgba(143, 191, 126, 0.4);
+            border: 1.5px solid rgba(var(--brand-soft-rgb), 0.4);
             opacity: 0;
             animation: ringPulse 2.6s 0.2s ease-out infinite;
         }
@@ -112,8 +118,8 @@
             width: 72px;
             height: 72px;
             border-radius: 1.1rem;
-            background: linear-gradient(160deg, rgba(143, 191, 126, 0.22), rgba(143, 191, 126, 0.08));
-            border: 1px solid rgba(143, 191, 126, 0.35);
+            background: linear-gradient(160deg, rgba(var(--brand-soft-rgb), 0.22), rgba(var(--brand-soft-rgb), 0.08));
+            border: 1px solid rgba(var(--brand-soft-rgb), 0.35);
             display: grid;
             place-items: center;
         }
@@ -121,7 +127,7 @@
         .icon svg {
             width: 32px;
             height: 32px;
-            stroke: #8fbf7e;
+            stroke: var(--brand-soft);
             stroke-width: 1.6;
             fill: none;
             stroke-linecap: round;
@@ -158,7 +164,7 @@
             width: 6px;
             height: 6px;
             border-radius: 999px;
-            background: #8fbf7e;
+            background: var(--brand-soft);
             animation: dotPulse 1.4s ease-in-out infinite;
         }
 
@@ -174,7 +180,7 @@
             padding: 0.8rem 1.5rem;
             border-radius: 0.7rem;
             border: 0;
-            background: #8fbf7e;
+            background: var(--brand-soft);
             color: #0c0e11;
             font: inherit;
             font-size: 14px;
@@ -183,7 +189,7 @@
             transition: transform 140ms ease, background 140ms ease;
         }
 
-        .retry-btn:hover { background: #a2cd93; }
+        .retry-btn:hover { background: var(--brand-light); }
         .retry-btn:active { transform: scale(0.98); }
 
         .retry-btn svg {
@@ -222,7 +228,7 @@
                 </radialGradient>
                 <mask id="maskBr"><rect width="280" height="280" fill="url(#fadeBr)"/></mask>
             </defs>
-            <g mask="url(#maskBr)" fill="none" stroke="#8fbf7e" stroke-width="1.1">
+            <g mask="url(#maskBr)" fill="none" style="stroke:var(--brand-soft)" stroke-width="1.1">
                 <circle cx="140" cy="140" r="118"/>
                 <circle cx="140" cy="140" r="96"/>
                 <g transform="translate(140,140)">
@@ -237,7 +243,7 @@
                         <path d="M0 -86 C 14 -70, 14 -50, 0 -40 C -14 -50, -14 -70, 0 -86 Z" transform="rotate(315)"/>
                     </g>
                     <circle r="16"/>
-                    <circle r="8" fill="#8fbf7e" stroke="none"/>
+                    <circle r="8" style="fill:var(--brand-soft)" stroke="none"/>
                 </g>
             </g>
         </svg>
@@ -250,7 +256,7 @@
                 </radialGradient>
                 <mask id="maskTl"><rect width="280" height="280" fill="url(#fadeTl)"/></mask>
             </defs>
-            <g mask="url(#maskTl)" fill="none" stroke="#8fbf7e" stroke-width="1.1">
+            <g mask="url(#maskTl)" fill="none" style="stroke:var(--brand-soft)" stroke-width="1.1">
                 <circle cx="140" cy="140" r="118"/>
                 <circle cx="140" cy="140" r="96"/>
                 <g transform="translate(140,140)">
@@ -265,7 +271,7 @@
                         <path d="M0 -86 C 14 -70, 14 -50, 0 -40 C -14 -50, -14 -70, 0 -86 Z" transform="rotate(315)"/>
                     </g>
                     <circle r="16"/>
-                    <circle r="8" fill="#8fbf7e" stroke="none"/>
+                    <circle r="8" style="fill:var(--brand-soft)" stroke="none"/>
                 </g>
             </g>
         </svg>

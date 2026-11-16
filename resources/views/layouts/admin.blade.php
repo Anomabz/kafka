@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="theme-color" id="theme-color-meta" content="#e7ecf5">
+    <meta name="theme-color" id="theme-color-meta" content="#eef0f3">
     <meta name="robots" content="noindex, nofollow">
     <title>@yield('title') — SAPTO Admin</title>
     <link rel="icon" href="{{ asset('images/logo-unsri.webp') }}" type="image/webp">
@@ -16,7 +16,7 @@
                 }
                 document.documentElement.setAttribute('data-theme', t);
                 var m = document.getElementById('theme-color-meta');
-                if (m) m.setAttribute('content', t === 'dark' ? '#0a0a0c' : '#e7ecf5');
+                if (m) m.setAttribute('content', t === 'dark' ? '#0a0a0c' : '#eef0f3');
             } catch (e) {}
         })();
     </script>
@@ -66,7 +66,7 @@
             isolation: isolate;
             padding-top: 1.1rem;
             color: #f8fafc;
-            background: #1c261c;
+            background: linear-gradient(165deg, var(--brand-ink) 0%, color-mix(in srgb, var(--brand-ink) 62%, #05070b) 100%);
         }
 
         .adm-topbar {
@@ -104,8 +104,8 @@
             font-weight: 800;
             letter-spacing: 0.14em;
             text-transform: uppercase;
-            color: #dcefd3;
-            background: rgba(183, 219, 169, 0.2);
+            color: var(--brand-light);
+            background: rgba(var(--brand-soft-rgb), 0.2);
         }
 
         .adm-back {
@@ -176,6 +176,13 @@
         }
 
         .adm-tab:hover { color: #ffffff; background: rgba(255, 255, 255, 0.08); }
+
+        /* Label dipendekkan di HP (lihat @sm di markup) dan jarak dirapatkan
+           supaya ketiga tab muat tanpa digeser -- tab yang tersembunyi di
+           luar layar tidak ada petunjuknya bagi pengguna. */
+        @media (max-width: 639.98px) {
+            .adm-tab { padding-inline: 0.75rem; font-size: 13px; }
+        }
 
         .adm-tab.is-active {
             color: var(--color-ink);
@@ -343,8 +350,8 @@
             letter-spacing: 0.02em;
         }
 
-        .adm-av-rektor { color: #ffffff; background: #33502e; }
-        .adm-av-dekan { color: #ffffff; background: #4b7a42; }
+        .adm-av-rektor { color: #ffffff; background: var(--brand-ink); }
+        .adm-av-dekan { color: #ffffff; background: var(--brand); }
 
         .adm-av-korprodi {
             color: var(--color-accent);
@@ -362,8 +369,8 @@
             text-transform: uppercase;
         }
 
-        .adm-badge-rektor { color: #ffffff; background: #33502e; }
-        .adm-badge-dekan { color: #ffffff; background: #4b7a42; }
+        .adm-badge-rektor { color: #ffffff; background: var(--brand-ink); }
+        .adm-badge-dekan { color: #ffffff; background: var(--brand); }
         .adm-badge-korprodi { color: var(--color-accent); background: var(--color-accent-soft); }
         .adm-badge-warn { color: var(--color-warn); background: var(--color-warn-soft); }
 
@@ -415,7 +422,11 @@
                 </a>
                 <a href="{{ route('admin.sync-pd-unsri') }}" @class(['adm-tab', 'is-active' => request()->routeIs('admin.sync-pd-unsri')])
                    @if (request()->routeIs('admin.sync-pd-unsri')) aria-current="page" @endif>
-                    Sinkronisasi PD UNSRI
+                    Sinkronisasi<span class="hidden sm:inline">&nbsp;PD UNSRI</span>
+                </a>
+                <a href="{{ route('admin.kafka') }}" @class(['adm-tab', 'is-active' => request()->routeIs('admin.kafka')])
+                   @if (request()->routeIs('admin.kafka')) aria-current="page" @endif>
+                    Event Stream<span class="hidden sm:inline">&nbsp;(Kafka)</span>
                 </a>
             </nav>
         </div>

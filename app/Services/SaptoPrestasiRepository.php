@@ -9,52 +9,73 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Basis dua varian Tabel 8.b BAN-PT yang menghitung prestasi mahasiswa
- * dengan cara persis sama tapi jenis prestasi berbeda:
+ * Basis dua varian Tabel 8.b BAN-PT:
  *
- * - {@see SaptoPrestasiAkademikRepository} "8.b.1) Prestasi Akademik
- *   Mahasiswa" -- jenis_prestasi = "Sains" (lomba esai/riset/debat ilmiah).
- * - {@see SaptoPrestasiNonAkademikRepository} "8.b.2) Prestasi Non-akademik
- *   Mahasiswa" -- jenis_prestasi = "Olahraga", "Seni", dan "Lain-lain"
- *   (kategori residual: sample manual menunjukkan isinya campur -- ada
- *   Karya Tulis Ilmiah berdampingan dengan Finalis Bujang Gadis -- tapi
- *   klaim akademik harus eksplisit "Sains", jadi selain itu dianggap
- *   non-akademik).
+ * - {@see SaptoPrestasiAkademikRepository} "8.b.1) Prestasi Akademik Mahasiswa"
+ * - {@see SaptoPrestasiNonAkademikRepository} "8.b.2) Prestasi Non-akademik Mahasiswa"
  *
- * Daftar baris (bukan pivot per tahun) untuk TS-2/TS-1/TS, mengikuti format
- * BAN-PT: Nama Kegiatan, Waktu Perolehan, Tingkat (Lokal/Wilayah | Nasional
- * | Internasional -- tiga kolom centang, sama seperti Tabel 1 Kerjasama),
- * Prestasi yang Dicapai.
+ * Sumber: list_prestasi_mahasiswa. KLASIFIKASI akademik/non-akademik TIDAK
+ * mengikuti nama_jenis_prestasi mentah -- terverifikasi banyak salah pilih
+ * (PORPROV/PON/marching band berlabel "Sains", lomba karya tulis ilmiah
+ * berlabel "Lain-lain"). Aturan (lihat classifyKategori()), berurutan:
+ *  1. Kata kunci "bukan lomba" (mobility, exchange, magang, service learning,
+ *     bootcamp) -> keikutsertaan program, bukan prestasi; tidak tampil di
+ *     8.b.1 maupun 8.b.2.
+ *  2. Kata kunci non-akademik (olahraga, seni, e-sport, MTQ, pramuka, duta,
+ *     wirausaha/kewirausahaan -- mis. P2MW, sesuai keputusan pengguna --
+ *     dst.) -> non-akademik, apa pun labelnya.
+ *  3. Kata kunci akademik (ilmiah, esai, debat, olimpiade, PKM, inovasi,
+ *     business plan, MUN, dst.) -> akademik, apa pun labelnya. Business plan
+ *     tetap akademik karena dikenali lewat "business"/"bussines", diperiksa
+ *     setelah aturan non-akademik tapi tidak memuat kata "wirausaha".
+ *  4. Tanpa kata kunci: label "Sains" -> akademik; selain itu (Seni,
+ *     Olahraga, Lain-lain, tak dikenal) -> non-akademik, supaya tetap tampil
+ *     dan bisa dipindah manual saat finalisasi.
+ * Kata pendek memakai \b (batas kata) agar "band" tidak cocok "Bandung",
+ * "kti" tidak cocok "praktikum", "pon" tidak cocok "respon". "bridge"
+ * sengaja tidak dipakai (bisa lomba desain jembatan); "Cabor Bridge"
+ * tertangkap lewat "cabor".
  *
- * Sumber: list_prestasi_mahasiswa (hasil sinkronisasi, 1.805 baris). Tabel
- * ini TIDAK punya id_prodi sendiri -- prodi tiap mahasiswa dicari lewat
- * id_mahasiswa ke list_mahasiswa, dan diambil baris ber-id_periode PALING
- * BARU sebagai prodi kanonik (bukan sembarang baris): ~8% mahasiswa
- * berprestasi punya lebih dari satu id_prodi berbeda di riwayatnya (pindah
- * prodi), jadi join naif bisa menghitung prestasi yang sama di dua prodi
- * atau salah prodi. Dilakukan di PHP (bukan SQL JOIN tunggal) karena
- * volumenya kecil (~2rb baris) dan aturan "menang" (periode terbaru) lebih
- * jelas ditulis sebagai perbandingan daripada subquery korelatif.
+ * DEDUPLIKASI: prestasi tim tercatat satu baris per anggota. Di tabel LKPS
+ * dihitung per KEGIATAN: (nama kegiatan ternormalisasi, tahun, tingkat,
+ * prestasi) -- dilakukan SETELAH filter scope, jadi tim lintas prodi tetap
+ * tampil di tabel tiap prodi anggotanya. Variasi ejaan nama lomba ("Esai" vs
+ * "Essay") tidak digabung otomatis; rapikan manual.
  *
- * Pemetaan `nama_tingkat_prestasi` (taksonomi sumber) ke 3 kolom Tingkat:
- * "Nasional" -> Nasional, "Internasional" -> Internasional. Semua nilai lain
- * (Sekolah, Propinsi, Kecamatan, Kab/kota, "Lainnya", atau nilai tak
- * dikenal) -> Lokal/Wilayah, dipakai sebagai kategori terendah/catch-all
- * -- perlu diverifikasi manual untuk baris "Lainnya".
+ * PRODI: list_prestasi_mahasiswa tidak punya id_prodi. Prodi dicari lewat
+ * id_mahasiswa ke list_mahasiswa; dipilih registrasi TERAKHIR yang periode
+ * masuknya <= tahun prestasi (mahasiswa S1 -> S2 di UNSRI: prestasi semasa
+ * S1 tetap milik S1). Bila tidak ada yang memenuhi, dipakai registrasi
+ * terbaru.
  *
- * Kolom "Prestasi yang Dicapai" dibentuk dari `peringkat` (angka mentah,
- * tanpa teks di sumber) sebagai "Juara {n}"; peringkat kosong/0/tak valid
- * ditampilkan "-" (perlu diisi manual).
+ * Tingkat: "Nasional" -> Nasional, "Internasional" -> Internasional, selain
+ * itu (Sekolah, Propinsi, Kab/kota, "Lainnya", tak dikenal) -> Lokal/Wilayah.
+ * "Prestasi yang Dicapai" dari `peringkat` sebagai "Juara {n}"; kosong/0
+ * ditampilkan "-".
  *
- * Cache data mentah (per tahun) sengaja memakai kunci per-KELAS (bukan
- * dibagi lintas varian seperti SaptoPublikasiDtpsRepository): jenis
- * prestasi sudah difilter di query sumbernya, jadi isinya memang beda
- * antar varian, tidak ada untungnya berbagi.
+ * Catatan data: prestasi 2024-2025 hampir tidak diinput ke feeder
+ * (2023: ~670 baris, 2024: 24, 2025: 50; semua "sudah sync") -- masalah
+ * hulu, bukan sinkronisasi.
+ *
+ * Cache data mentah dipakai bersama kedua varian (klasifikasi dilakukan
+ * setelah cache).
  */
 abstract class SaptoPrestasiRepository
 {
     use ResolvesSaptoScope;
     use ResolvesSaptoTs;
+
+    public const AKADEMIK = 'akademik';
+
+    public const NON_AKADEMIK = 'non_akademik';
+
+    public const BUKAN_LOMBA = 'bukan_lomba';
+
+    private const RE_BUKAN_LOMBA = '/mobility|exchange|magang|service learning|bootcamp/iu';
+
+    private const RE_NON_AKADEMIK = '/porprov|porseni|\bpon\b|olahraga|olaharaga|rekreasi|kejuaraan|kejurnas|kejurprov|cabor|futsal|sepak ?bola|basket|\bvoli|badminton|bulu tangkis|tenis|silat|karate|taekwondo|judo|muay ?thai|tinju|renang|atletik|catur|e-?sport|mlbb|mobile legend|marching|paduan suara|\btari|\bband\b|musik|nyanyi|vokal|teater|\bfilm|fotogra|photograph|vlog|cerpen|puisi|sastra|\bseni\b|mtq|tilawah|pramuka|menwa|ketangkasan|\bduta\b|putri|bujang gadis|wirausaha/iu';
+
+    private const RE_AKADEMIK = '/ilmiah|scien|writing|esai|essai|esay|essay|\bl?kti\b|paper|poster|debat|debate|speech|pidato|moot|peradilan semu|mediation|law fair|\blex\b|olimpiade|olympiad|onmipa|sains|\bpkm\b|pimnas|kreativitas mahasiswa|mahasiswa berprestasi|pilmapres|inovasi|innovat|inven|invan|creativity|ipitex|research|reseach|riset|robot|programming|hackathon|coding|ui\/ux|business|bussines|enterprise|studi kasus|case competition|karya tulis|engineering competition|education competition|micro macro|nursing|nurse|nutri|ujian nasional|seminar|kongres|\bmun\b|model united nations/iu';
 
     public function __construct(
         private readonly SaptoProgramStudiRepository $client,
@@ -65,13 +86,9 @@ abstract class SaptoPrestasiRepository
     abstract protected function tableName(): string;
 
     /**
-     * Nilai nama_jenis_prestasi yang termasuk varian ini.
-     *
-     * @return array<int, string>
+     * Kategori LKPS varian ini: self::AKADEMIK atau self::NON_AKADEMIK.
      */
-    abstract protected function jenisPrestasi(): array;
-
-    abstract protected function cachePrefix(): string;
+    abstract protected function kategori(): string;
 
     public function summary(?int $ts, ?string $fakultasId, ?string $programStudiId): array
     {
@@ -81,12 +98,16 @@ abstract class SaptoPrestasiRepository
 
         $ts ??= $this->ts();
         $years = [$ts - 2, $ts - 1, $ts];
+        $kategori = $this->kategori();
 
         $rows = $scopeProdiIds === []
             ? []
             : $this->prestasiRows($years)
+                ->filter(fn (array $row): bool => $row['kategori'] === $kategori)
                 ->filter(fn (array $row): bool => $scopeProdiIds === null || in_array($row['id_prodi'], $scopeProdiIds, true))
-                ->sortByDesc('tahun_sort')
+                // Satu baris per kegiatan (prestasi tim = satu baris).
+                ->unique('dedup_key')
+                ->sortBy([['tahun_sort', 'desc'], ['nama_kegiatan', 'asc']])
                 ->values()
                 ->map(fn (array $row, int $index): array => [
                     'no' => $index + 1,
@@ -122,41 +143,54 @@ abstract class SaptoPrestasiRepository
     }
 
     /**
-     * Baris prestasi TS-2..TS (sudah disaring jenisPrestasi()) dengan prodi
-     * kanonik dilekatkan, belum disaring scope. Di-cache per kelas karena
-     * jenisnya sudah beda per varian.
+     * Semua baris prestasi TS-2..TS (semua jenis) dengan kategori LKPS, prodi,
+     * dan kunci deduplikasi dilekatkan. Dipakai bersama kedua varian.
      *
      * @param  array<int, int>  $years
-     * @return Collection<int, array{id_prodi: ?string, nama_kegiatan: string, tahun_perolehan: int, tahun_sort: int, tingkat: string, prestasi_dicapai: string}>
+     * @return Collection<int, array{id_prodi: ?string, kategori: string, dedup_key: string, nama_kegiatan: string, tahun_perolehan: int, tahun_sort: int, tingkat: string, prestasi_dicapai: string}>
      */
     private function prestasiRows(array $years): Collection
     {
-        $cacheKey = "sapto:{$this->cachePrefix()}:rows:v1:".md5(json_encode($years));
+        $cacheKey = 'sapto:prestasi:rows:v3:'.md5(json_encode($years));
 
         $cached = Cache::remember($cacheKey, $this->cacheTtl(), function () use ($years): array {
             $yearStrings = array_map(fn (int $y): string => (string) $y, $years);
 
             $prestasi = DB::table('list_prestasi_mahasiswa')
-                ->select('id_prestasi', 'id_mahasiswa', 'nama_prestasi', 'nama_tingkat_prestasi', 'peringkat', 'tahun_prestasi')
+                ->select(
+                    'id_prestasi',
+                    'id_mahasiswa',
+                    'id_jenis_prestasi',
+                    'nama_jenis_prestasi',
+                    'nama_prestasi',
+                    'nama_tingkat_prestasi',
+                    'peringkat',
+                    'tahun_prestasi'
+                )
                 ->whereIn('tahun_prestasi', $yearStrings)
-                ->whereIn('nama_jenis_prestasi', $this->jenisPrestasi())
+                ->orderBy('id_prestasi')
                 ->get();
 
-            $prodiByMahasiswa = $this->canonicalProdiFor(
+            $registrasi = $this->registrasiFor(
                 $prestasi->pluck('id_mahasiswa')->unique()->filter()->values()->all()
             );
 
             return $prestasi
-                ->map(function (object $row) use ($prodiByMahasiswa): array {
+                ->map(function (object $row) use ($registrasi): array {
                     $tahun = (int) $row->tahun_prestasi;
+                    $nama = trim((string) $row->nama_prestasi);
+                    $tingkat = $this->classifyTingkat($row->nama_tingkat_prestasi);
+                    $prestasiLabel = $this->prestasiLabel($row->peringkat);
 
                     return [
-                        'id_prodi' => $prodiByMahasiswa[(string) $row->id_mahasiswa] ?? null,
-                        'nama_kegiatan' => (string) $row->nama_prestasi !== '' ? (string) $row->nama_prestasi : '-',
+                        'id_prodi' => $this->prodiPadaTahun($registrasi[(string) $row->id_mahasiswa] ?? [], $tahun),
+                        'kategori' => $this->classifyKategori($nama, $row->id_jenis_prestasi, $row->nama_jenis_prestasi),
+                        'dedup_key' => implode('|', [$this->normalize($nama) ?: 'id:'.$row->id_prestasi, $tahun, $tingkat, $prestasiLabel]),
+                        'nama_kegiatan' => $nama !== '' ? $nama : '-',
                         'tahun_perolehan' => $tahun,
                         'tahun_sort' => $tahun,
-                        'tingkat' => $this->classifyTingkat($row->nama_tingkat_prestasi),
-                        'prestasi_dicapai' => $this->prestasiLabel($row->peringkat),
+                        'tingkat' => $tingkat,
+                        'prestasi_dicapai' => $prestasiLabel,
                     ];
                 })
                 ->values()
@@ -167,37 +201,83 @@ abstract class SaptoPrestasiRepository
     }
 
     /**
-     * Prodi kanonik per mahasiswa: baris list_mahasiswa dengan id_periode
-     * paling baru menang (lihat docblock kelas). Dibatasi ke id_mahasiswa
-     * yang benar-benar punya prestasi supaya tidak menyapu seluruh
-     * list_mahasiswa (200rb+ baris).
+     * Klasifikasi LKPS (lihat docblock kelas untuk urutan aturan).
+     */
+    private function classifyKategori(string $nama, mixed $idJenis, mixed $namaJenis): string
+    {
+        if (preg_match(self::RE_BUKAN_LOMBA, $nama)) {
+            return self::BUKAN_LOMBA;
+        }
+
+        if (preg_match(self::RE_NON_AKADEMIK, $nama)) {
+            return self::NON_AKADEMIK;
+        }
+
+        if (preg_match(self::RE_AKADEMIK, $nama)) {
+            return self::AKADEMIK;
+        }
+
+        $isSains = (string) $idJenis === '1' || trim((string) $namaJenis) === 'Sains';
+
+        return $isSains ? self::AKADEMIK : self::NON_AKADEMIK;
+    }
+
+    /**
+     * Riwayat registrasi per mahasiswa dari list_mahasiswa, dibatasi ke
+     * id_mahasiswa yang punya prestasi.
      *
      * @param  array<int, string>  $mahasiswaIds
-     * @return array<string, ?string> id_mahasiswa => id_prodi
+     * @return array<string, array<int, array{periode: string, id_prodi: string}>>
      */
-    private function canonicalProdiFor(array $mahasiswaIds): array
+    private function registrasiFor(array $mahasiswaIds): array
     {
         if ($mahasiswaIds === []) {
             return [];
         }
 
         $result = [];
-        $latestPeriode = [];
 
         foreach (DB::table('list_mahasiswa')
             ->select('id_mahasiswa', 'id_prodi', 'id_periode')
             ->whereIn('id_mahasiswa', $mahasiswaIds)
             ->cursor() as $row) {
-            $id = (string) $row->id_mahasiswa;
-            $periode = (string) ($row->id_periode ?? '');
-
-            if (! isset($latestPeriode[$id]) || $periode > $latestPeriode[$id]) {
-                $latestPeriode[$id] = $periode;
-                $result[$id] = (string) $row->id_prodi;
-            }
+            $result[(string) $row->id_mahasiswa][] = [
+                'periode' => (string) ($row->id_periode ?? ''),
+                'id_prodi' => (string) $row->id_prodi,
+            ];
         }
 
         return $result;
+    }
+
+    /**
+     * Registrasi terakhir yang periode masuknya <= tahun prestasi; bila tidak
+     * ada, registrasi terbaru.
+     *
+     * @param  array<int, array{periode: string, id_prodi: string}>  $registrasi
+     */
+    private function prodiPadaTahun(array $registrasi, int $tahun): ?string
+    {
+        $best = null;
+        $latest = null;
+
+        foreach ($registrasi as $reg) {
+            if ($latest === null || $reg['periode'] > $latest['periode']) {
+                $latest = $reg;
+            }
+
+            $tahunMasuk = (int) substr($reg['periode'], 0, 4);
+            if ($tahunMasuk > 0 && $tahunMasuk <= $tahun && ($best === null || $reg['periode'] > $best['periode'])) {
+                $best = $reg;
+            }
+        }
+
+        return ($best ?? $latest)['id_prodi'] ?? null;
+    }
+
+    private function normalize(string $text): string
+    {
+        return mb_strtolower(trim((string) preg_replace('/\s+/u', ' ', $text)));
     }
 
     private function classifyTingkat(?string $nama): string

@@ -23,6 +23,10 @@ menjatuhkan seluruh stack selama 25 jam (2026-07-26).
 - Jangan pakai `container_name:` — mematikan namespacing compose dan bentrok
   dengan project lain yang kebetulan punya nama service sama.
 - Port milik project ini: **8020** (app), **8086** (phpmyadmin). Db tanpa port.
+  Pengecualian: **8088** (kafka-ui) hanya di-bind ke `127.0.0.1` dan memakai
+  login, diakses lewat SSH tunnel -- jangan diubah jadi `0.0.0.0` (dulu
+  terbuka tanpa password di jaringan kampus). Kafka, kafka-rest, zookeeper
+  tanpa port host.
 
 `docker/watchdog.sh` (cron tiap 5 menit) menyalakan ulang stack kalau `/up`
 mati, dan mencatat ke `storage/logs/watchdog.log`.

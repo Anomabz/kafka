@@ -11,7 +11,10 @@ use Illuminate\Support\Facades\DB;
  * Tabel 3.b.1) Pengakuan/Rekognisi DTPS.
  *
  * Tabel LISTING (bukan pivot) untuk TS-2..TS, satu baris = satu bentuk
- * rekognisi. Roster DTPS memakai {@see ResolvesPublikasiDtpsRoster} --
+ * rekognisi. Dosen yang dihitung per tahun: DTPS prodi (kolom DTPS ✓)
+ * DITAMBAH dosen yang mengajar kelas prodi itu pada tahun yang sama
+ * (dosen_pengajar_kelas_kuliah, kolom DTPS kosong) -- keputusan pengguna,
+ * pola sama dengan 3.a.1 / EWMP. Roster DTPS memakai {@see ResolvesPublikasiDtpsRoster} --
  * keluarga SISTER yang sama dengan 3.b.4/3.b.7, karena seluruh sumber
  * rekognisi juga ber-id_sdm (bukan id_dosen feeder).
  *
@@ -21,6 +24,10 @@ use Illuminate\Support\Facades\DB;
  *  - sister_list_penghargaan        -> penghargaan
  *  - sister_list_anggota_profesi    -> keanggotaan organisasi profesi
  *  - sister_list_visiting_scientist -> visiting scientist
+ *  - sister_list_pengelola_jurnal   -> editor/mitra bestari jurnal (bentuk c),
+ *    berdasarkan masa jabatan (tanggal_mulai..tanggal_selesai)
+ *  - sister_list_detasering         -> penugasan ke PT lain (bentuk a); tahun
+ *    dari tanggal_sk_penugasan, PT tujuan UNSRI dibuang
  *
  * TINGKAT (kolom Wilayah/Nasional/Internasional) hanya bisa diturunkan dari
  * sister_list_pembicara: kolom `kategori_kegiatan`-nya memuat teks eksplisit
@@ -43,6 +50,7 @@ class SaptoRekognisiDtpsRepository
     private const COLUMNS = [
         ['key' => 'no', 'label' => 'No', 'align' => 'left'],
         ['key' => 'nama_dosen', 'label' => 'Nama Dosen', 'align' => 'left'],
+        ['key' => 'dtps', 'label' => 'DTPS', 'align' => 'left'],
         ['key' => 'bidang_keahlian', 'label' => 'Bidang Keahlian', 'align' => 'left'],
         ['key' => 'rekognisi', 'label' => 'Rekognisi dan Bukti Pendukung', 'align' => 'left'],
         ['key' => 'tingkat_wilayah', 'label' => 'Wilayah', 'align' => 'left'],
@@ -77,20 +85,29 @@ class SaptoRekognisiDtpsRepository
             $dtpsIdsByYear[$year] = $scopeProdiIds === [] ? [] : array_flip($this->publikasiDtpsIds($year, $scopeProdiIds, $jenjang));
         }
 
+        // Dosen yang MENGAJAR kelas prodi ini pada tahun yang sama juga
+        // dihitung (keputusan pengguna, pola sama dengan 3.a.1 / EWMP).
+        // id_dosen feeder = id_sdm SISTER (terverifikasi >99%).
+        $pengajarByYear = $scopeProdiIds === [] ? [] : $this->pengajarByYear($years, $scopeProdiIds);
+
         $rekognisiByYear = $this->rekognisiRows($years);
 
         $items = [];
         foreach ($years as $year) {
             foreach ($rekognisiByYear[$year] ?? [] as $row) {
-                if (! isset($dtpsIdsByYear[$year][$row['id_sdm']])) {
+                $isDtps = isset($dtpsIdsByYear[$year][$row['id_sdm']]);
+
+                if (! $isDtps && ! isset($pengajarByYear[$year][$row['id_sdm']])) {
                     continue;
                 }
 
-                $items[] = $row + ['tahun' => $year];
+                $items[] = $row + ['tahun' => $year, 'dtps' => $isDtps];
             }
         }
 
+        // Tahun terbaru, DTPS dulu, lalu nama dosen dan teks rekognisi.
         usort($items, fn (array $a, array $b): int => $b['tahun'] <=> $a['tahun']
+            ?: ((int) $b['dtps'] <=> (int) $a['dtps'])
             ?: strcmp($a['nama_dosen'], $b['nama_dosen'])
             ?: strcmp($a['rekognisi'], $b['rekognisi']));
 
@@ -102,6 +119,9 @@ class SaptoRekognisiDtpsRepository
             $rows[] = [
                 'no' => $index + 1,
                 'nama_dosen' => $row['nama_dosen'],
+                // ✓ = DTPS prodi ini pada tahun itu; kosong = dosen yang
+                // mengajar di prodi ini tetapi bukan DTPS-nya.
+                'dtps' => $row['dtps'] ? '✓' : '',
                 'bidang_keahlian' => $keahlian[$row['id_sdm']] ?? '-',
                 'rekognisi' => $row['rekognisi'],
                 'tingkat_wilayah' => $row['tingkat'] === 'wilayah' ? '✓' : '',
@@ -129,7 +149,7 @@ class SaptoRekognisiDtpsRepository
      */
     private function rekognisiRows(array $years): array
     {
-        $cacheKey = 'sapto:rekognisi-dtps:rows:v1:'.md5(json_encode($years));
+        $cacheKey = 'sapto:rekognisi-dtps:rows:v4:'.md5(json_encode($years));
 
         return Cache::remember($cacheKey, $this->cacheTtl(), function () use ($years): array {
             $nama = $this->namaDosen();
@@ -195,6 +215,31 @@ class SaptoRekognisiDtpsRepository
                 ]), null);
             }
 
+            // Editor / mitra bestari jurnal -- bentuk (c) rekognisi BAN-PT.
+            $this->tambahPengelolaJurnal($tambah, $yearStrings);
+
+            // Detasering (penugasan ke PT lain) -- bentuk (a) rekognisi.
+            // Tahun = tanggal_sk_penugasan. PT tujuan UNSRI sendiri dibuang
+            // (bukan pengakuan dari luar).
+            foreach (DB::table('sister_list_detasering')
+                ->select('id_sdm', 'perguruan_tinggi', 'bidang_tugas', 'sk_penugasan', 'tanggal_sk_penugasan', 'kategori_kegiatan')
+                ->whereRaw('substr(tanggal_sk_penugasan,1,4) in ('.implode(',', array_fill(0, count($yearStrings), '?')).')', $yearStrings)
+                ->cursor() as $row) {
+                $pt = trim((string) $row->perguruan_tinggi);
+
+                if (stripos($pt, 'sriwijaya') !== false) {
+                    continue;
+                }
+
+                $sk = trim((string) $row->sk_penugasan);
+                $tambah($row->id_sdm, $row->tanggal_sk_penugasan, $this->gabung([
+                    'Detasering: '.$pt,
+                    trim((string) $row->bidang_tugas),
+                    trim((string) $row->kategori_kegiatan),
+                    $sk !== '' ? 'SK '.$sk : '',
+                ]), null);
+            }
+
             foreach (DB::table('sister_list_visiting_scientist')
                 ->select('id_sdm', 'perguruan_tinggi', 'lama_kegiatan', 'tanggal')
                 ->whereRaw('substr(tanggal,1,4) in ('.implode(',', array_fill(0, count($yearStrings), '?')).')', $yearStrings)
@@ -206,6 +251,88 @@ class SaptoRekognisiDtpsRepository
             }
 
             return $byYear;
+        });
+    }
+
+    /**
+     * Baris editor/mitra bestari dari sister_list_pengelola_jurnal
+     * (kolom: id_sdm, id, peran, sk_penugasan, aktif, tanggal_mulai,
+     * tanggal_selesai, media_publikasi).
+     *
+     * Jabatan pengelola jurnal berlangsung lintas tahun, jadi yang dipakai
+     * adalah MASA JABATAN, bukan hanya tahun mulai: baris masuk bila masa
+     * [tanggal_mulai, tanggal_selesai] beririsan dengan TS-2..TS
+     * (tanggal_selesai kosong = masih menjabat). Satu jabatan = satu baris,
+     * dengan Tahun = tahun terakhir menjabat di dalam rentang TS-2..TS.
+     * Contoh: editor 2019-sekarang, TS 2025 -> tampil sekali, tahun 2025.
+     *
+     * @param  array<int, string>  $yearStrings
+     */
+    private function tambahPengelolaJurnal(callable $tambah, array $yearStrings): void
+    {
+        $years = array_map('intval', $yearStrings);
+        $awal = min($years);
+        $akhir = max($years);
+
+        foreach (DB::table('sister_list_pengelola_jurnal')
+            ->select('id', 'id_sdm', 'peran', 'sk_penugasan', 'tanggal_mulai', 'tanggal_selesai', 'media_publikasi')
+            ->whereNotNull('tanggal_mulai')
+            ->whereRaw('substr(tanggal_mulai,1,4) <= ?', [(string) $akhir])
+            ->where(function ($q) use ($awal): void {
+                $q->whereNull('tanggal_selesai')
+                    ->orWhere('tanggal_selesai', '')
+                    ->orWhereRaw('substr(tanggal_selesai,1,4) >= ?', [(string) $awal]);
+            })
+            ->orderBy('id')
+            ->cursor() as $row) {
+            $mulai = (int) substr((string) $row->tanggal_mulai, 0, 4);
+            $selesai = trim((string) ($row->tanggal_selesai ?? ''));
+            $tahunSelesai = $selesai === '' ? $akhir : (int) substr($selesai, 0, 4);
+            $tahun = min($tahunSelesai, $akhir);
+
+            if ($tahun < $awal || $mulai > $akhir) {
+                continue;
+            }
+
+            $peran = trim((string) $row->peran);
+            $sk = trim((string) $row->sk_penugasan);
+            $periode = $mulai.'-'.($selesai === '' ? 'sekarang' : substr($selesai, 0, 4));
+
+            $tambah($row->id_sdm, (string) $tahun, $this->gabung([
+                'Pengelola jurnal'.($peran !== '' ? ' ('.$peran.')' : '').': '.trim((string) $row->media_publikasi),
+                'periode '.$periode,
+                $sk !== '' ? 'SK '.$sk : '',
+            ]), null);
+        }
+    }
+
+    /**
+     * id_dosen yang mengajar kelas prodi-prodi lingkup per tahun (semester
+     * ganjil/genap/pendek; 4 digit awal id_semester = tahun).
+     *
+     * @param  array<int, int>  $years
+     * @param  array<int, string>  $scopeProdiIds
+     * @return array<int, array<string, true>> tahun => [id_dosen => true]
+     */
+    private function pengajarByYear(array $years, array $scopeProdiIds): array
+    {
+        $cacheKey = 'sapto:rekognisi-dtps:pengajar:v1:'.md5(json_encode([$years, $scopeProdiIds]));
+
+        return Cache::remember($cacheKey, $this->cacheTtl(), function () use ($years, $scopeProdiIds): array {
+            $yearStrings = array_map(fn (int $y): string => (string) $y, $years);
+            $hasil = array_fill_keys($years, []);
+
+            foreach (DB::table('dosen_pengajar_kelas_kuliah')
+                ->selectRaw('distinct id_dosen, left(id_semester,4) as tahun')
+                ->whereIn('id_prodi', $scopeProdiIds)
+                ->whereRaw('left(id_semester,4) in ('.implode(',', array_fill(0, count($yearStrings), '?')).')', $yearStrings)
+                ->whereNotNull('id_dosen')
+                ->where('id_dosen', '<>', '')
+                ->cursor() as $row) {
+                $hasil[(int) $row->tahun][(string) $row->id_dosen] = true;
+            }
+
+            return $hasil;
         });
     }
 
@@ -300,6 +427,7 @@ class SaptoRekognisiDtpsRepository
     {
         return [
             ['label' => 'Total rekognisi (TS-2..TS)', 'value' => count($rows)],
+            ['label' => 'Rekognisi oleh DTPS', 'value' => count(array_filter($rows, fn (array $r): bool => $r['dtps'] === '✓'))],
             ['label' => 'Internasional', 'value' => count(array_filter($rows, fn (array $r): bool => $r['tingkat_internasional'] === '✓'))],
             ['label' => 'Nasional', 'value' => count(array_filter($rows, fn (array $r): bool => $r['tingkat_nasional'] === '✓'))],
             ['label' => 'Wilayah', 'value' => count(array_filter($rows, fn (array $r): bool => $r['tingkat_wilayah'] === '✓'))],
@@ -326,7 +454,7 @@ class SaptoRekognisiDtpsRepository
             'metrics' => $metrics,
             'notice' => $notice,
             'source' => [
-                'name' => 'sister_list_pembicara, orasi_ilmiah, penghargaan, anggota_profesi, visiting_scientist & sister_list_penugasan (sinkronisasi lokal)',
+                'name' => 'sister_list_pembicara, orasi_ilmiah, penghargaan, anggota_profesi, visiting_scientist, pengelola_jurnal, detasering & sister_list_penugasan (sinkronisasi lokal)',
                 'partial' => true,
             ],
         ];

@@ -47,6 +47,7 @@ class SaptoIpkLulusanRepository
                 return [
                     'no' => $index + 1,
                     'tahun_lulus' => $year.' ('.$labels[$index].')',
+                    'tahun_lulus_tahun' => $year,
                     'jumlah_lulusan' => (int) ($row['jumlah'] ?? 0),
                     'ipk_min' => $ipkN > 0 ? round((float) $row['ipk_min'], 2) : null,
                     'ipk_rata' => $ipkN > 0 ? round((float) $row['ipk_avg'], 2) : null,
@@ -76,6 +77,44 @@ class SaptoIpkLulusanRepository
         ];
     }
 
+    /** Daftar lulusan yang membentuk angka pada satu baris Tabel 8.a. */
+    public function detail(int $year, ?string $fakultasId, ?string $programStudiId): array
+    {
+        $programStudis = $this->client->programStudis();
+        $this->validateScope($programStudis, $fakultasId, $programStudiId);
+        $scopeProdiIds = $this->scopeProdiIds($programStudis, $fakultasId, $programStudiId);
+
+        if ($scopeProdiIds === []) {
+            return [];
+        }
+
+        $yearExpr = $this->graduationYearSql();
+        $query = DB::table('list_mahasiswa_lulus_do')
+            ->select([
+                'nim',
+                'nama_mahasiswa as nama',
+                'nama_program_studi as program_studi',
+                'angkatan',
+                'ipk',
+                'tanggal_keluar',
+            ])
+            ->selectRaw("{$yearExpr} as tahun_lulus")
+            ->where('nama_jenis_keluar', 'Lulus')
+
+            ->where('nama_jenis_keluar', 'Lulus')
+            ->whereRaw("{$yearExpr} = ?", [(string) $year]);
+
+        if ($scopeProdiIds !== null) {
+            $query->whereIn('id_prodi', $scopeProdiIds);
+        }
+
+        return $query
+            ->orderBy('nama_mahasiswa')
+            ->get()
+            ->map(fn ($row): array => (array) $row)
+            ->all();
+    }
+
     /**
      * Agregasi per tahun lulus di dalam scope.
      *
@@ -99,18 +138,19 @@ class SaptoIpkLulusanRepository
                 array_push($bindings, ...$scopeProdiIds);
             }
 
-            // ipk+0: koersi teks->angka konsisten di MySQL & SQLite. Batas [2,4]
-            // = ambang IPK kelulusan minimum; nilai di bawahnya (mis. 0 atau
-            // 0.17) dianggap data kotor/kosong dan tidak masuk statistik IPK.
+            // ipk+0: koersi teks->angka konsisten di MySQL & SQLite. Untuk
+            // statistik Tabel 8.a, gunakan semua IPK valid dalam rentang (0,4].
+            // Nilai 0/kosong dan nilai di atas 4 dianggap data tidak valid;
+            // IPK di bawah 2 tetap dihitung jika tercatat pada lulusan.
             $yearExpr = $this->graduationYearSql();
             $sql = "
                 select
                     {$yearExpr} as thn,
                     count(*) as jumlah,
-                    sum(case when ipk+0 >= 2 and ipk+0 <= 4 then 1 else 0 end) as ipk_n,
-                    min(case when ipk+0 >= 2 and ipk+0 <= 4 then ipk+0 end) as ipk_min,
-                    max(case when ipk+0 >= 2 and ipk+0 <= 4 then ipk+0 end) as ipk_max,
-                    avg(case when ipk+0 >= 2 and ipk+0 <= 4 then ipk+0 end) as ipk_avg
+                    sum(case when ipk+0 > 0 and ipk+0 <= 4 then 1 else 0 end) as ipk_n,
+                    min(case when ipk+0 > 0 and ipk+0 <= 4 then ipk+0 end) as ipk_min,
+                    max(case when ipk+0 > 0 and ipk+0 <= 4 then ipk+0 end) as ipk_max,
+                    avg(case when ipk+0 > 0 and ipk+0 <= 4 then ipk+0 end) as ipk_avg
                 from list_mahasiswa_lulus_do
                 where nama_jenis_keluar = 'Lulus'
                   and {$yearExpr} in ({$yearPlaceholders})

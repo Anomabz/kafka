@@ -3,11 +3,8 @@
 namespace App\Services;
 
 /**
- * Tabel 8.b.1) Prestasi Akademik Mahasiswa. Seluruh perhitungan ada di
- * {@see SaptoPrestasiRepository}; di sini hanya metadata dan filter jenis
- * prestasi ("Sains" -- lomba esai/riset/debat ilmiah, lihat docblock basis
- * untuk alasan kenapa "Lain-lain" TIDAK ikut di sini meski sebagian isinya
- * juga karya tulis ilmiah).
+ * Tabel 8.b.1) Prestasi Akademik Mahasiswa. Seluruh perhitungan dan aturan
+ * klasifikasi akademik/non-akademik ada di {@see SaptoPrestasiRepository}.
  */
 class SaptoPrestasiAkademikRepository extends SaptoPrestasiRepository
 {
@@ -21,13 +18,8 @@ class SaptoPrestasiAkademikRepository extends SaptoPrestasiRepository
         return 'Prestasi Akademik Mahasiswa';
     }
 
-    protected function jenisPrestasi(): array
+    protected function kategori(): string
     {
-        return ['Sains'];
-    }
-
-    protected function cachePrefix(): string
-    {
-        return 'prestasi-akademik';
+        return self::AKADEMIK;
     }
 }

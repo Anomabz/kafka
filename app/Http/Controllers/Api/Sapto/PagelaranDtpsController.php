@@ -9,6 +9,11 @@ use Illuminate\Http\Request;
 
 class PagelaranDtpsController extends SaptoTableController
 {
+    public function detail(Request $request, SaptoPagelaranDtpsRepository $repository): JsonResponse
+    {
+        return $this->detailFor($request, $repository, ['all', 'jurnal_tidak_terakreditasi', 'jurnal_nasional_terakreditasi', 'jurnal_internasional', 'jurnal_internasional_bereputasi', 'seminar_wilayah', 'seminar_nasional', 'seminar_internasional', 'pagelaran_wilayah', 'pagelaran_nasional', 'pagelaran_internasional']);
+    }
+
     public function summary(Request $request, SaptoPagelaranDtpsRepository $repository): JsonResponse
     {
         $ts = $this->validateTs($request);

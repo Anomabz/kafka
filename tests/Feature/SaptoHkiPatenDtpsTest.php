@@ -10,7 +10,7 @@ use Tests\TestCase;
 /**
  * Tabel 3.b.7) Bagian I: HKI (Paten, Paten Sederhana). Sumber
  * sister_detail_kekayaan_intelektual (mandiri, dedup by id, penulis dari
- * JSON `penulis`) disaring ke DTPS lewat roster sister_list_penugasan (sama
+ * JSON `penulis`) disaring ke DTPS homebase list_penugasan_dosen (penulis via sister_list_kekayaan_intelektual) (sama
  * seperti Tabel 3.b.4, Bagian III & IV) -- lihat SaptoHkiPatenDtpsRepository.
  * Baris difilter id_jenis_publikasi 41/42 (Paten nasional/internasional).
  */
@@ -38,6 +38,15 @@ class SaptoHkiPatenDtpsTest extends TestCase
             'nama' => 'Test Korprodi',
             'lingkup' => '55201',
         ]);
+
+        // DTPS = homebase di list_penugasan_dosen (id_dosen == id_sdm SISTER,
+        // terverifikasi di produksi 2026-09-30: 709/709 penulis HKI cocok).
+        foreach (['2022/2023', '2023/2024', '2024/2025'] as $ta) {
+            DB::table('list_penugasan_dosen')->insert([
+                ['id_dosen' => 'D1', 'nama_dosen' => 'Dosen D1', 'nama_tahun_ajaran' => $ta, 'id_prodi' => 'P1', 'a_sp_homebase' => '1'],
+                ['id_dosen' => 'D2', 'nama_dosen' => 'Dosen D2', 'nama_tahun_ajaran' => $ta, 'id_prodi' => 'P1', 'a_sp_homebase' => '0'],
+            ]);
+        }
 
         DB::table('sister_list_penugasan')->insert([
             // D1: homebase P1, S1 -> DTPS.
@@ -68,6 +77,13 @@ class SaptoHkiPatenDtpsTest extends TestCase
             // E: di luar rentang TS-2..TS (TS-3) -> tak terhitung.
             ['id' => 'E', 'id_list' => 'E', 'id_jenis_publikasi' => '41', 'jenis_publikasi' => 'Paten nasional', 'judul' => 'Paten Lama', 'tanggal' => '2021-01-01', 'penulis' => $this->penulis('D1')] + $blank,
         ]);
+
+        // Penulis tiap HKI dibaca repository lewat detail.id_list -> sister_list_kekayaan_intelektual.id_sdm.
+        foreach (DB::table('sister_detail_kekayaan_intelektual')->get(['id_list', 'penulis']) as $d) {
+            foreach (json_decode($d->penulis, true) as $a) {
+                DB::table('sister_list_kekayaan_intelektual')->insert(['id' => $d->id_list, 'id_sdm' => $a['id_sdm']]);
+            }
+        }
 
         $response = $this->getJson('/api/sapto/tables/hki-paten-dtps/summary?ts=2024')
             ->assertOk()

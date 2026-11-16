@@ -28,7 +28,7 @@
         </div>
         <p class="apib-pop-detail" data-f="detail">Sedang memeriksa koneksi ke API Pangkalan Data UNSRI.</p>
         <dl class="apib-meta">
-            <div><dt>Jalur</dt><dd data-f="via">Lewat Gravitee</dd></div>
+            <div><dt>Jalur</dt><dd data-f="via">Gravitee + Kafka Stream</dd></div>
             <div><dt>Waktu respons</dt><dd data-f="latency">—</dd></div>
             <div><dt>Dicek</dt><dd data-f="checked">—</dd></div>
             <div><dt>Data SAPTO</dt><dd data-f="sync">—</dd></div>
@@ -55,18 +55,18 @@
 @once
 <style>
     :root {
-        --apib-ok: #15803d;
-        --apib-ok-dot: #16a34a;
-        --apib-ok-soft: rgba(22, 163, 74, 0.14);
+        /* "Online" memakai warna aksen SAPTO (biru di desktop, marun di
+           HP -- lihat app.css), bukan hijau. Mode gelap ikut otomatis
+           karena --color-accent sudah berganti per tema. */
+        --apib-ok: var(--color-accent-dark);
+        --apib-ok-dot: var(--color-accent);
+        --apib-ok-soft: var(--color-accent-soft);
         --apib-bad: #b91c1c;
         --apib-bad-dot: #dc2626;
         --apib-bad-soft: rgba(220, 38, 38, 0.12);
     }
 
     :root[data-theme='dark'] {
-        --apib-ok: #4ade80;
-        --apib-ok-dot: #4ade80;
-        --apib-ok-soft: rgba(74, 222, 128, 0.14);
         --apib-bad: #f87171;
         --apib-bad-dot: #f87171;
         --apib-bad-soft: rgba(248, 113, 113, 0.14);
@@ -74,9 +74,6 @@
 
     @media (prefers-color-scheme: dark) {
         :root:not([data-theme]) {
-            --apib-ok: #4ade80;
-            --apib-ok-dot: #4ade80;
-            --apib-ok-soft: rgba(74, 222, 128, 0.14);
             --apib-bad: #f87171;
             --apib-bad-dot: #f87171;
             --apib-bad-soft: rgba(248, 113, 113, 0.14);
@@ -174,9 +171,9 @@
 
     .apib--hero .apib-btn:hover,
     .apib--hero .apib-btn[aria-expanded='true'] { background: rgba(255, 255, 255, 0.18); }
-    .apib--hero .apib-btn .apib-dot { top: 4px; right: 4px; box-shadow: 0 0 0 2px #182015; }
+    .apib--hero .apib-btn .apib-dot { top: 4px; right: 4px; box-shadow: 0 0 0 2px var(--brand-ink); }
     .apib--hero { --apib-tone: rgba(248, 250, 252, 0.7); --apib-dot-c: rgba(248, 250, 252, 0.6); --apib-soft: rgba(255, 255, 255, 0.12); }
-    .apib--hero[data-status='online'] { --apib-tone: #86efac; --apib-dot-c: #4ade80; --apib-soft: rgba(74, 222, 128, 0.22); }
+    .apib--hero[data-status='online'] { --apib-tone: var(--brand-light); --apib-dot-c: var(--brand-soft); --apib-soft: rgba(var(--brand-soft-rgb), 0.22); }
     .apib--hero[data-status='lambat'],
     .apib--hero[data-status='gangguan'] { --apib-tone: #fcd34d; --apib-dot-c: #fbbf24; --apib-soft: rgba(251, 191, 36, 0.22); }
     .apib--hero[data-status='offline'] { --apib-tone: #fca5a5; --apib-dot-c: #f87171; --apib-soft: rgba(248, 113, 113, 0.22); }
@@ -418,7 +415,7 @@
                 pop.setAttribute('data-status', status);
                 field('label', data && data.label ? data.label : WORD[status]);
                 field('detail', data && data.detail ? data.detail : fallbackDetail);
-                field('via', data && data.via ? 'Lewat ' + data.via : 'Lewat Gravitee');
+                field('via', 'Gravitee API + Kafka Stream');
                 field('latency', latency(data ? data.latency_ms : null));
                 field('checked', data ? relative(data.checked_at) : '—');
                 field('sync', data ? syncText(data.last_sync) : '—');

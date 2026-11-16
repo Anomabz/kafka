@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Penugasan;
+use App\Services\KafkaProducerService;
 use App\Services\SaptoProgramStudiRepository;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -127,6 +128,7 @@ class PenugasanController extends Controller
         ]);
 
         Log::info('Admin SAPTO memberi akses.', $this->jejak($admin, $penugasan));
+        app(KafkaProducerService::class)->audit('penugasan.granted', $this->jejak($admin, $penugasan), $request);
 
         return redirect()->route('admin.peran')->with('status', 'Akses ditambahkan: '.($penugasan->nama ?: $penugasan->nip ?: $penugasan->email).'.');
     }
@@ -141,6 +143,7 @@ class PenugasanController extends Controller
         // Tidak perlu membuang sesi orangnya: SaptoUserContext menghitung
         // ulang hak akses setiap request, jadi pencabutan berlaku seketika.
         Log::info('Admin SAPTO mencabut akses.', $this->jejak($admin, $penugasan));
+        app(KafkaProducerService::class)->audit('penugasan.revoked', $this->jejak($admin, $penugasan), $request);
 
         return redirect()->route('admin.peran')->with('status', 'Akses dicabut: '.($penugasan->nama ?: $penugasan->nip ?: $penugasan->email).'.');
     }

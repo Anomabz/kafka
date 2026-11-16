@@ -1,11 +1,13 @@
 {{-- resources/views/components/table-panel.blade.php --}}
-<section id="table-panel-section" class="glass overflow-hidden rounded-2xl">
-    <header class="flex items-center justify-between gap-3 px-4 py-3.5" style="border-bottom:1px solid var(--color-line)">
+<section id="table-panel-section" class="glass overflow-hidden rounded-2xl" data-view="kartu">
+    <header class="tp-head flex items-center justify-between gap-3 px-4 py-3.5" style="border-bottom:1px solid var(--color-line)">
         <h2 id="table-card-title" class="text-[15px] font-bold text-ink">Dosen Pembimbing Utama Tugas Akhir</h2>
         <span id="table-status" class="text-[12px] text-muted">Memuat data...</span>
+        {{-- Khusus HP: ganti tampilan kartu <-> tabel lengkap (lihat app.css). --}}
+        <button type="button" class="tp-view-btn sm:hidden" data-view-toggle>Lihat sebagai tabel</button>
     </header>
 
-    <div class="flex flex-wrap items-center gap-2 px-4 py-3" style="border-bottom:1px solid var(--color-line)">
+    <div class="tp-toolbar flex flex-wrap items-center gap-2 px-4 py-3" style="border-bottom:1px solid var(--color-line)">
         <div class="relative min-w-[180px] flex-1">
             <svg class="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.7" />
@@ -39,6 +41,11 @@
          dulu payload ber-notice membuat seluruh barisnya tidak dirender. --}}
     <p id="table-notice" class="px-4 py-3 text-[12px] leading-relaxed text-muted" style="border-top:1px solid var(--color-line)" hidden></p>
 
+    {{-- Daftar kartu (mobile). Diisi renderCards() di sapto.blade.php dari
+         kolom/baris yang sama dengan tabel; disembunyikan lewat CSS di layar
+         lebar atau saat mode Tabel dipilih. --}}
+    <div id="table-cards" class="table-cards"></div>
+
     <div class="table-scroll">
         <table class="w-full min-w-[1120px] border-collapse">
             <thead id="table-head"></thead>
@@ -53,4 +60,24 @@
     </div>
 
     <div id="table-pagination" class="flex flex-col items-center justify-between gap-3 px-4 py-3 sm:flex-row" style="border-top:1px solid var(--color-line)"></div>
+
+    <section id="table-detail-panel" class="hidden px-4 py-4" style="border-top:1px solid var(--color-line)" aria-live="polite">
+        <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div>
+                <h3 id="table-detail-title" class="text-[14px] font-bold text-ink">Rincian data</h3>
+                <p id="table-detail-status" class="mt-1 text-[12px] text-muted"></p>
+            </div>
+            <div class="flex items-center gap-2">
+                <button type="button" id="table-detail-export" class="rounded-lg px-3 py-1.5 text-[12px] font-semibold text-ink hover:bg-accent-soft" style="border:1px solid var(--input-border)">Export Excel</button>
+                <button type="button" id="table-detail-close" class="rounded-lg px-3 py-1.5 text-[12px] font-semibold text-ink hover:bg-accent-soft" style="border:1px solid var(--input-border)">Tutup rincian</button>
+            </div>
+        </div>
+        <div class="table-scroll">
+            <table class="w-full min-w-[700px] border-collapse">
+                <thead id="table-detail-head"></thead>
+                <tbody id="table-detail-body"></tbody>
+            </table>
+        </div>
+        <div id="table-detail-pagination" class="mt-3 flex flex-col items-center justify-between gap-3 sm:flex-row"></div>
+    </section>
 </section>

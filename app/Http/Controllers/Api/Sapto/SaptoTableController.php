@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api\Sapto;
 
 use App\Http\Controllers\Controller;
+use App\Support\SaptoUserContext;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -12,6 +14,21 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
  */
 abstract class SaptoTableController extends Controller
 {
+    protected function detailFor(Request $request, object $repository, array $categories): JsonResponse
+    {
+        $data = $request->validate([
+            'year' => ['required', 'integer', 'min:2000', 'max:2100'],
+            'category' => ['required', 'in:'.implode(',', $categories)],
+        ]);
+        $context = SaptoUserContext::fromRequest($request);
+
+        return response()->json(['items' => $repository->detail(
+            (int) $data['year'], $data['category'],
+            $context->resolveFakultasId($request),
+            $context->resolveProgramStudiId($request),
+        )]);
+    }
+
     /**
      * TS opsional: null/''/'all' -> repository memakai tahun terbaru di database.
      */

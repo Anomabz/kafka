@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="theme-color" id="theme-color-meta" content="#e7ecf5">
+    <meta name="theme-color" id="theme-color-meta" content="#eef0f3">
     <title>@yield('title', 'SAPTO v1.0 - UNSRI — Sistem Akreditasi Perguruan Tinggi Online Universitas Sriwijaya')</title>
     <link rel="icon" href="{{ asset('images/logo-unsri.webp') }}" type="image/webp">
     @include('components.seo-meta')
@@ -20,7 +20,7 @@
                 }
                 document.documentElement.setAttribute('data-theme', t);
                 var m = document.getElementById('theme-color-meta');
-                if (m) m.setAttribute('content', t === 'dark' ? '#0a0a0c' : '#e7ecf5');
+                if (m) m.setAttribute('content', t === 'dark' ? '#0a0a0c' : '#eef0f3');
             } catch (e) {}
         })();
     </script>
@@ -35,7 +35,7 @@
             display: grid;
             place-items: center;
             overflow: hidden;
-            background: #0b100b;
+            background: #0b0b10;
             opacity: 1;
             visibility: visible;
             transition: opacity 0.6s ease, visibility 0.6s ease;
@@ -68,7 +68,7 @@
             position: absolute;
             inset: 0;
             border-radius: 50%;
-            border: 1.5px solid rgba(143, 191, 126, 0.35);
+            border: 1.5px solid rgba(var(--brand-soft-rgb, 157, 187, 239), 0.35);
             opacity: 0;
             animation: intro-ring-pulse 2.1s 0.5s ease-out infinite;
         }
@@ -113,7 +113,7 @@
             font-size: 2.5rem;
             font-weight: 800;
             letter-spacing: 0.03em;
-            color: #f8fdfc;
+            color: #f8f9fb;
         }
 
         .intro-title span {
@@ -133,7 +133,7 @@
             font-weight: 600;
             letter-spacing: 0.2em;
             text-transform: uppercase;
-            color: rgba(243, 250, 248, 0.68);
+            color: rgba(243, 245, 248, 0.68);
             opacity: 0;
             transform: translateY(8px);
             animation: intro-rise 0.6s 1.15s ease forwards;
@@ -159,7 +159,7 @@
             height: 100%;
             width: 0%;
             border-radius: 999px;
-            background: linear-gradient(90deg, #4b7a42, #b7dba9);
+            background: linear-gradient(90deg, var(--brand, #2b4f8e), var(--brand-light, #cddcf6));
             animation: intro-bar-fill 1.2s 1.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
         }
 
@@ -328,12 +328,12 @@
             inset: 0;
             z-index: 0;
             opacity: 0.12;
-            background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%2744%27%20height%3D%2744%27%20viewBox%3D%270%200%2044%2044%27%3E%3Cpath%20d%3D%27M22%200%20L44%2022%20L22%2044%20L0%2022%20Z%27%20fill%3D%27none%27%20stroke%3D%27rgba%2875%2C122%2C66%2C0.5%29%27%20stroke-width%3D%270.9%27/%3E%3Cg%20transform%3D%27translate%2822%2C22%29%27%20fill%3D%27none%27%20stroke%3D%27rgba%2875%2C122%2C66%2C0.6%29%27%20stroke-width%3D%271%27%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%2860%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28120%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28180%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28240%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28300%29%27/%3E%3Ccircle%20r%3D%271.8%27%20fill%3D%27rgba%2875%2C122%2C66%2C0.6%29%27%20stroke%3D%27none%27/%3E%3C/g%3E%3C/svg%3E");
+            background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%2744%27%20height%3D%2744%27%20viewBox%3D%270%200%2044%2044%27%3E%3Cpath%20d%3D%27M22%200%20L44%2022%20L22%2044%20L0%2022%20Z%27%20fill%3D%27none%27%20stroke%3D%27rgba%2870%2C90%2C110%2C0.5%29%27%20stroke-width%3D%270.9%27/%3E%3Cg%20transform%3D%27translate%2822%2C22%29%27%20fill%3D%27none%27%20stroke%3D%27rgba%2870%2C90%2C110%2C0.6%29%27%20stroke-width%3D%271%27%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%2860%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28120%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28180%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28240%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28300%29%27/%3E%3Ccircle%20r%3D%271.8%27%20fill%3D%27rgba%2870%2C90%2C110%2C0.6%29%27%20stroke%3D%27none%27/%3E%3C/g%3E%3C/svg%3E");
             background-size: 44px 44px;
         }
 
         :root[data-theme='dark'] .app-footer::before {
-            background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%2744%27%20height%3D%2744%27%20viewBox%3D%270%200%2044%2044%27%3E%3Cpath%20d%3D%27M22%200%20L44%2022%20L22%2044%20L0%2022%20Z%27%20fill%3D%27none%27%20stroke%3D%27rgba%28143%2C191%2C126%2C0.5%29%27%20stroke-width%3D%270.9%27/%3E%3Cg%20transform%3D%27translate%2822%2C22%29%27%20fill%3D%27none%27%20stroke%3D%27rgba%28143%2C191%2C126%2C0.6%29%27%20stroke-width%3D%271%27%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%2860%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28120%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28180%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28240%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28300%29%27/%3E%3Ccircle%20r%3D%271.8%27%20fill%3D%27rgba%28143%2C191%2C126%2C0.6%29%27%20stroke%3D%27none%27/%3E%3C/g%3E%3C/svg%3E");
+            background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%2744%27%20height%3D%2744%27%20viewBox%3D%270%200%2044%2044%27%3E%3Cpath%20d%3D%27M22%200%20L44%2022%20L22%2044%20L0%2022%20Z%27%20fill%3D%27none%27%20stroke%3D%27rgba%28143%2C163%2C179%2C0.5%29%27%20stroke-width%3D%270.9%27/%3E%3Cg%20transform%3D%27translate%2822%2C22%29%27%20fill%3D%27none%27%20stroke%3D%27rgba%28143%2C163%2C179%2C0.6%29%27%20stroke-width%3D%271%27%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%2860%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28120%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28180%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28240%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28300%29%27/%3E%3Ccircle%20r%3D%271.8%27%20fill%3D%27rgba%28143%2C163%2C179%2C0.6%29%27%20stroke%3D%27none%27/%3E%3C/g%3E%3C/svg%3E");
         }
     </style>
 </head>
@@ -396,8 +396,10 @@
 
         <div class="flex min-w-0 flex-col">
             @include('components.topbar')
+            @include('components.mobile-appbar')
 
             <main class="px-3 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-7">
+                @include('components.mobile-pages')
                 @yield('content')
             </main>
 
@@ -409,6 +411,7 @@
         </div>
     </div>
 
+    @include('components.mobile-nav')
     @yield('overlays')
 
     <div id="toast-stack" class="toast-stack" aria-live="polite" aria-atomic="false"></div>

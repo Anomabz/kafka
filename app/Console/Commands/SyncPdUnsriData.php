@@ -17,7 +17,7 @@ use Illuminate\Console\Command;
  */
 class SyncPdUnsriData extends Command
 {
-    protected $signature = 'sapto:sync-pd-unsri {--only= : Tarik tabel tertentu saja, dipisah koma (mis. list_kurikulum,detail_kurikulum)}';
+    protected $signature = 'sapto:sync-pd-unsri {--only= : Nama satu tabel yang akan disinkronkan (mis. list_mahasiswa)}';
 
     protected $description = 'Mulai sinkronisasi mingguan seluruh tabel data akademik dari PD UNSRI';
 
@@ -30,6 +30,13 @@ class SyncPdUnsriData extends Command
         }
 
         $only = array_values(array_filter(array_map('trim', explode(',', (string) $this->option('only')))));
+
+        if (count($only) > 1) {
+            $this->error('Pilih satu tabel saja per perintah --only.');
+
+            return self::FAILURE;
+        }
+
         $batch = $dispatcher->dispatch($only === [] ? 'jadwal' : 'manual (--only)', $only);
 
         $this->info("Sinkronisasi PD UNSRI dimulai: batch {$batch->id}, {$batch->totalJobs} tabel.");

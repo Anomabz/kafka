@@ -11,25 +11,34 @@ use Illuminate\Support\Facades\DB;
 /**
  * Tabel 3.b.7) Luaran Penelitian/PkM Lainnya -- Bagian III: Teknologi Tepat
  * Guna, Produk (Terstandarisasi/Tersertifikasi), Karya Seni, Rekayasa
- * Sosial. Sama bentuknya dengan {@see SaptoBukuDtpsRepository} (Bagian IV):
- * tabel LISTING, satu baris per judul, tanpa baris "Jumlah".
+ * Sosial. Tabel LISTING: satu baris per judul, tanpa baris "Jumlah".
  *
- * Sumber: sister_detail_kekayaan_intelektual (skema hampir identik dengan
- * sister_detail_publikasi -- satu keluarga luaran SISTER, mandiri, tidak
- * perlu join ke sister_list_kekayaan_intelektual karena sudah punya kolom
- * `penulis` sendiri). Baris difilter:
- * - id_kategori_capaian_luaran = '1' (Produk Teknologi Tepat Guna), ATAU
- * - id_jenis_publikasi 51/52/53/54/55 (karya seni: monumental/rupa/
- *   kriya/pertunjukan/desain) atau 29 (Penemuan teknologi)
- * dan tahun TS-2..TS. "Keterangan" gabungan kolom kategori_capaian_luaran +
- * jenis_publikasi yang SUDAH berupa teks di baris sumber (bukan hasil
- * lookup id) -- beda dari Bagian IV yang perlu lookup tabel jenis_publikasi
- * karena di situ cuma ada kode + label yang saya hardcode.
+ * Sumber: sister_detail_kekayaan_intelektual. Baris yang masuk:
+ * - id_jenis_publikasi 29 (Penemuan teknologi), 51-54 (Rancangan dan karya
+ *   seni monumental/rupa/kriya/pertunjukan), 55 (Karya desain), 56 (Karya
+ *   sastra) -- kategori capaian luaran apa pun; ATAU
+ * - id_kategori_capaian_luaran = '1' (Produk Teknologi Tepat Guna) dengan
+ *   jenis lain, mis. 71 "Hasil penelitian yang tidak dipublikasikan".
+ * Paten/hak cipta (41-44) SELALU dikecualikan apa pun kategorinya -- sudah
+ * masuk Bagian I/II.
  *
- * "DTPS" pakai roster {@see ResolvesPublikasiDtpsRoster} yang sama dengan
- * Tabel 3.b.4 & Bagian IV (sister_list_penugasan). Jenjang gabungan
- * akademik+vokasi, sama seperti Bagian IV -- tabel ini juga tidak dibagi
- * akademik/vokasi.
+ * Catatan: kategori_capaian_luaran dipilih bebas oleh dosen (ada paten
+ * berkategori "Publikasi", hak cipta berkategori "Jenis Luaran Lainnya"),
+ * jadi id_jenis_publikasi tetap acuan utama; kategori 1 hanya pelengkap.
+ * "Rekayasa Sosial" tidak punya kode jenis maupun kategori di SISTER --
+ * isi manual.
+ *
+ * DTPS: roster ResolvesPublikasiDtpsRoster per tahun (TS-2/TS-1/TS), definisi
+ * sama dengan Tabel 3.a.1, 3.b.4 & 3.b.7 Bagian I/II/IV. Berlaku untuk semua
+ * prodi termasuk Profesi dan Spesialis.
+ *
+ * Penulis: gabungan id_sdm dari sister_list_kekayaan_intelektual (lewat
+ * detail.id_list, sama dengan Bagian I/II) DAN dosen di JSON `penulis` --
+ * keduanya terverifikasi lengkap untuk data Bagian III.
+ *
+ * Deduplikasi per (tahun, judul ternormalisasi), sama dengan Bagian II:
+ * karya yang diinput ulang tiap pencipta dengan id berbeda digabung jadi satu
+ * baris. Dedup hanya di dalam tabel satu prodi.
  */
 class SaptoTeknologiDtpsRepository
 {
@@ -37,8 +46,11 @@ class SaptoTeknologiDtpsRepository
     use ResolvesSaptoScope;
     use ResolvesSaptoTs;
 
-    /** Kode id_jenis_publikasi yang termasuk karya seni/teknologi Bagian III. */
-    private const KARYA_SENI_CODES = ['51', '52', '53', '54', '55', '29'];
+    /** Kode id_jenis_publikasi teknologi & karya seni Bagian III. */
+    private const KARYA_CODES = ['29', '51', '52', '53', '54', '55', '56'];
+
+    /** Paten & hak cipta -- milik Bagian I/II, selalu dikecualikan. */
+    private const HKI_CODES = ['41', '42', '43', '44'];
 
     private const KATEGORI_TEKNOLOGI_TEPAT_GUNA = '1';
 
@@ -71,17 +83,17 @@ class SaptoTeknologiDtpsRepository
 
         $dtpsIdsByYear = [];
         foreach ($years as $year) {
-            $dtpsIdsByYear[$year] = $scopeProdiIds === [] ? [] : $this->publikasiDtpsIds($year, $scopeProdiIds, $jenjang);
+            $dtpsIdsByYear[$year] = $scopeProdiIds === []
+                ? []
+                : array_flip($this->publikasiDtpsIds($year, $scopeProdiIds, $jenjang));
         }
 
         $luaranRows = $this->luaranRows($years);
 
         $items = [];
         foreach ($years as $year) {
-            $dtpsIds = array_flip($dtpsIdsByYear[$year]);
-
             foreach ($luaranRows[$year] ?? [] as $row) {
-                if (! $this->hasDtpsAuthor($row['id_sdm_list'], $dtpsIds)) {
+                if (! $this->hasDtpsAuthor($row['id_sdm_list'], $dtpsIdsByYear[$year])) {
                     continue;
                 }
 
@@ -116,59 +128,102 @@ class SaptoTeknologiDtpsRepository
     }
 
     /**
-     * Jenjang gabungan varian akademik + vokasi, sama seperti
-     * SaptoBukuDtpsRepository::jenjangFilter() -- tabel ini juga tidak
-     * dibagi seperti 3.b.4.
+     * Jenjang prodi yang tercatat di program_studi.nama_jenjang_pendidikan --
+     * tabel ini tidak dibagi akademik/vokasi, berlaku untuk semua prodi
+     * termasuk Profesi dan Spesialis.
      *
      * @return array<int, string>
      */
     private function jenjangFilter(): array
     {
-        return ['S1', 'S2', 'S3', 'D3', 'D4', 'Sarjana Terapan', 'Magister Terapan', 'Doktor Terapan'];
+        return ['D3', 'S1', 'S2', 'S3', 'Profesi', 'Sp-1', 'Sp-2'];
     }
 
     /**
-     * Judul teknologi tepat guna/produk/karya seni dari
-     * sister_detail_kekayaan_intelektual, dedup per id, dikelompokkan per
-     * tahun.
+     * Karya Bagian III dari sister_detail_kekayaan_intelektual, dikelompokkan
+     * per (tahun, judul ternormalisasi). id_sdm dari list + JSON penulis
+     * semua record digabung.
      *
      * @param  array<int, int>  $years
      * @return array<int, array<int, array{luaran: string, keterangan: string, id_sdm_list: array<int, string>}>>
      */
     private function luaranRows(array $years): array
     {
-        $cacheKey = 'sapto:teknologi-dtps:luaran:v1:'.md5(json_encode($years));
+        $cacheKey = 'sapto:teknologi-dtps:luaran:v3:'.md5(json_encode($years));
 
         return Cache::remember($cacheKey, $this->cacheTtl(), function () use ($years): array {
             $yearStrings = array_map(fn (int $y): string => (string) $y, $years);
             $yearPlaceholders = implode(',', array_fill(0, count($yearStrings), '?'));
 
-            $byId = [];
+            $groups = [];
+            $parsedPenulis = [];
 
-            foreach (DB::table('sister_detail_kekayaan_intelektual')
-                ->select('id', 'judul', 'tanggal', 'kategori_capaian_luaran', 'jenis_publikasi', 'penulis')
+            $query = DB::table('sister_detail_kekayaan_intelektual as d')
+                ->leftJoin('sister_list_kekayaan_intelektual as l', 'l.id', '=', 'd.id_list')
+                ->select(
+                    'd.id',
+                    'd.judul',
+                    'd.tanggal',
+                    'd.id_kategori_capaian_luaran',
+                    'd.jenis_publikasi',
+                    'd.penulis',
+                    'l.id_sdm'
+                )
                 ->where(function ($query): void {
-                    $query->where('id_kategori_capaian_luaran', self::KATEGORI_TEKNOLOGI_TEPAT_GUNA)
-                        ->orWhereIn('id_jenis_publikasi', self::KARYA_SENI_CODES);
+                    $query->whereIn('d.id_jenis_publikasi', self::KARYA_CODES)
+                        ->orWhere('d.id_kategori_capaian_luaran', self::KATEGORI_TEKNOLOGI_TEPAT_GUNA);
                 })
-                ->whereRaw("substr(tanggal,1,4) in ({$yearPlaceholders})", $yearStrings)
-                ->cursor() as $row) {
-                $byId[(string) $row->id] ??= $row;
+                ->whereNotIn('d.id_jenis_publikasi', self::HKI_CODES)
+                ->whereRaw("substr(d.tanggal,1,4) in ({$yearPlaceholders})", $yearStrings)
+                ->orderBy('d.id');
+
+            foreach ($query->cursor() as $row) {
+                $year = (int) substr((string) $row->tanggal, 0, 4);
+                $key = $year.'|'.$this->judulKey($row->judul, (string) $row->id);
+
+                $groups[$key] ??= [
+                    'year' => $year,
+                    'judul' => trim((string) $row->judul),
+                    'jenis' => [],
+                    'ttg' => false,
+                    'id_sdm_list' => [],
+                ];
+
+                $jenis = trim((string) ($row->jenis_publikasi ?? ''));
+                if ($jenis !== '') {
+                    $groups[$key]['jenis'][$jenis] = $jenis;
+                }
+
+                if ((string) $row->id_kategori_capaian_luaran === self::KATEGORI_TEKNOLOGI_TEPAT_GUNA) {
+                    $groups[$key]['ttg'] = true;
+                }
+
+                $idSdm = trim((string) ($row->id_sdm ?? ''));
+                if ($idSdm !== '') {
+                    $groups[$key]['id_sdm_list'][$idSdm] = $idSdm;
+                }
+
+                // JSON penulis cukup diurai sekali per id detail.
+                $detailId = (string) $row->id;
+                if (! isset($parsedPenulis[$detailId])) {
+                    $parsedPenulis[$detailId] = true;
+                    foreach ($this->dosenIdsFromPenulis($row->penulis) as $id) {
+                        $groups[$key]['id_sdm_list'][$id] = $id;
+                    }
+                }
             }
 
             $byYear = array_fill_keys($years, []);
 
-            foreach ($byId as $row) {
-                $year = (int) substr((string) $row->tanggal, 0, 4);
-
-                if (! isset($byYear[$year])) {
+            foreach ($groups as $group) {
+                if (! isset($byYear[$group['year']])) {
                     continue;
                 }
 
-                $byYear[$year][] = [
-                    'luaran' => (string) $row->judul,
-                    'keterangan' => $this->keterangan($row),
-                    'id_sdm_list' => $this->dosenIdsFromPenulis($row->penulis),
+                $byYear[$group['year']][] = [
+                    'luaran' => $group['judul'],
+                    'keterangan' => $this->keterangan($group),
+                    'id_sdm_list' => array_values($group['id_sdm_list']),
                 ];
             }
 
@@ -176,12 +231,35 @@ class SaptoTeknologiDtpsRepository
         });
     }
 
-    private function keterangan(object $row): string
+    /**
+     * Kunci deduplikasi judul: lowercase + spasi dirapikan (setara
+     * LOWER(TRIM(REGEXP_REPLACE(judul,'[[:space:]]+',' '))) di MySQL).
+     * Judul kosong jatuh kembali ke id.
+     */
+    private function judulKey(?string $judul, string $id): string
     {
-        $parts = array_filter([
-            trim((string) ($row->kategori_capaian_luaran ?? '')),
-            trim((string) ($row->jenis_publikasi ?? '')),
-        ], fn (string $part): bool => $part !== '');
+        $normal = mb_strtolower(trim((string) preg_replace('/\s+/u', ' ', (string) $judul)));
+
+        return $normal === '' ? 'id:'.$id : md5($normal);
+    }
+
+    /**
+     * Jenis publikasi, ditambah "Produk Teknologi Tepat Guna" bila salah satu
+     * record berkategori TTG (kategori lain tidak informatif, lihat docblock).
+     *
+     * @param  array{jenis: array<string, string>, ttg: bool}  $group
+     */
+    private function keterangan(array $group): string
+    {
+        $parts = [];
+
+        if ($group['ttg']) {
+            $parts[] = 'Produk Teknologi Tepat Guna';
+        }
+
+        if ($group['jenis'] !== []) {
+            $parts[] = implode(' / ', $group['jenis']);
+        }
 
         return implode(', ', $parts);
     }
@@ -280,7 +358,7 @@ class SaptoTeknologiDtpsRepository
     private function sourcePayload(): array
     {
         return [
-            'name' => 'sister_detail_kekayaan_intelektual & sister_list_penugasan (sinkronisasi lokal)',
+            'name' => 'sister_detail_kekayaan_intelektual, sister_list_kekayaan_intelektual & list_penugasan_dosen (sinkronisasi lokal)',
             'partial' => true,
         ];
     }

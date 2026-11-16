@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="theme-color" id="theme-color-meta" content="#e7ecf5">
+    <meta name="theme-color" id="theme-color-meta" content="#eef0f3">
     <meta name="robots" content="noindex, nofollow">
     <title>Akses ditolak — SAPTO</title>
     <link rel="icon" href="{{ asset('images/logo-unsri.webp') }}" type="image/webp">
@@ -16,7 +16,7 @@
                 }
                 document.documentElement.setAttribute('data-theme', t);
                 var m = document.getElementById('theme-color-meta');
-                if (m) m.setAttribute('content', t === 'dark' ? '#0a0a0c' : '#e7ecf5');
+                if (m) m.setAttribute('content', t === 'dark' ? '#0a0a0c' : '#eef0f3');
             } catch (e) {}
         })();
     </script>

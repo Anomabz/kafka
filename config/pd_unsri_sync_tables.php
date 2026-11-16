@@ -1,9 +1,10 @@
 <?php
 
 /**
- * Subset dari config/pd_unsri_tables.php yang benar-benar di-query fitur
- * SAPTO (Sapto*Repository, Api\Sapto\MahasiswaController) -- tabel sumber
- * untuk 23 tabel laporan LKPS yang sudah punya backend.
+ * Tabel sumber yang benar-benar di-query fitur SAPTO (Sapto*Repository,
+ * Api\Sapto\MahasiswaController) untuk laporan LKPS yang sudah berjalan.
+ * Key adalah slug endpoint sumber; value adalah nama tabel lokal. Beberapa
+ * endpoint LPPM memakai slug yang berbeda dari nama tabel lokal.
  *
  * Dipakai PdUnsriSyncDispatcher (sinkronisasi mingguan + tombol admin).
  * TIDAK memengaruhi endpoint baca /api/v1/{table}, yang tetap melayani
@@ -30,6 +31,7 @@ return [
 
     // 3.a.1 Dosen Tetap, 3.a.4 Dosen Tidak Tetap, dan roster DTPS 3.b.*
     'list-penugasan-dosen' => 'list_penugasan_dosen',
+    'aktivitas-mengajar-dosen' => 'aktivitas_mengajar_dosen',
     'riwayat-fungsional-dosen' => 'riwayat_fungsional_dosen',
     'riwayat-pendidikan-dosen' => 'riwayat_pendidikan_dosen',
     'riwayat-sertifikasi-dosen' => 'riwayat_sertifikasi_dosen',
@@ -44,12 +46,16 @@ return [
     // 3.b.2 Penelitian DTPS, 3.b.3 PkM DTPS
     'sister-detail-penelitian' => 'sister_detail_penelitian',
     'sister-detail-pengabdian' => 'sister_detail_pengabdian',
+    'penelitian-dosen' => 'lppm_penelitian_dosen',
+    'pengabdian-dosen' => 'lppm_pengabdian_dosen',
 
     // 3.b.4 Publikasi Ilmiah & Pagelaran DTPS
     'sister-list-publikasi' => 'sister_list_publikasi',
 
     // 3.b.7 HKI, Teknologi, Buku DTPS
     'sister-detail-kekayaan-intelektual' => 'sister_detail_kekayaan_intelektual',
+    'sister-list-kekayaan-intelektual' => 'sister_list_kekayaan_intelektual',
+    'sister-sdm' => 'sister_sdm',
     'sister-detail-publikasi' => 'sister_detail_publikasi',
     'jenis-publikasi' => 'jenis_publikasi',
 
@@ -81,6 +87,10 @@ return [
     // 3.a.2 & 3.a.3 bimbingan mahasiswa
     'sister-list-bimbingan-mahasiswa' => 'sister_list_bimbingan_mahasiswa',
     'sister-detail-bimbingan-mahasiswa' => 'sister_detail_bimbingan_mahasiswa',
+
+    // Data dosen pengajar kelas kuliah (dipakai tabel dosen, EWMP, penelitian,
+    // PkM, publikasi, serta keterlibatan mahasiswa).
+    'dosen-pengajar-kelas-kuliah' => 'dosen_pengajar_kelas_kuliah',
 
     // 3.a.1 & 3.a.4 profil dosen (pendidikan, sertifikasi, jabatan, penugasan)
     'sister-list-pendidikan-formal' => 'sister_list_pendidikan_formal',
@@ -130,6 +140,18 @@ return [
     'list-bimbing-mahasiswa' => 'list_bimbing_mahasiswa',
     'list-uji-mahasiswa' => 'list_uji_mahasiswa',
 
+     // Aktivitas akademik mahasiswa (sumber PD-DIKTI untuk kebutuhan lanjutan)
+    'aktivitas-kuliah-mahasiswa' => 'aktivitas_kuliah_mahasiswa',
+    'sister-list-pengelola-jurnal' => 'sister_list_pengelola_jurnal',
+    'sister-list-pengabdian' => 'sister_list_pengabdian',
+    'sister-list-penelitian' => 'sister_list_penelitian',
+    'sister-list-bkd-penelitian' => 'sister_list_bkd_penelitian',
+    'sister-list-bkd-pengabdian' => 'sister_list_bkd_pengabdian',
+    'sister-list-bkd-penunjang' => 'sister_list_bkd_penunjang',
+    'sister-list-penunjang-lain' => 'sister_list_penunjang_lain',
+    'sister-list-detasering' => 'sister_list_detasering',
+
+
     // 8.f.1 luaran mahasiswa: penulis_publikasi SENGAJA tidak disinkronkan.
     // Tabel itu punya foreign key ke `detail_publikasi` yang TIDAK ADA di
     // database (bersama dokumen_publikasi dan bidang_ilmu_publikasi) --
@@ -169,15 +191,24 @@ return [
     'negara' => ['2.b'],
     'program_studi' => ['Semua tabel'],
     'list_penugasan_dosen' => ['3.a.1', '3.a.4', '3.b.x'],
+    'aktivitas_mengajar_dosen' => ['3.a.1'],
+    'dosen_pengajar_kelas_kuliah' => ['3.a.1', '3.a.3', '3.a.4', '3.b.1', '3.b.2', '3.b.3', '3.b.4', '3.b.6', '3.b.7', '6.b', '7.b'],
+    'lppm_penelitian_dosen' => ['6.b'],
+    'lppm_pengabdian_dosen' => ['7.b'],
     'riwayat_fungsional_dosen' => ['3.a.1'],
     'riwayat_pendidikan_dosen' => ['3.a.1'],
     'riwayat_sertifikasi_dosen' => ['3.a.1'],
     'sister_list_penugasan' => ['3.b.4', '3.b.7'],
+    'sister_list_kekayaan_intelektual' => ['3.b.6', '3.b.7'],
+    'sister_sdm' => ['3.a.5', '3.b.1', '3.b.2', '3.b.3', '3.b.4', '3.b.6', '3.b.7'],
     'dosen_pembimbing' => ['3.a.2'],
     'list_aktivitas_mahasiswa' => ['3.a.2'],
     'sister_detail_penelitian' => ['3.b.2'],
     'sister_detail_pengabdian' => ['3.b.3'],
     'sister_list_publikasi' => ['3.b.4'],
+    'sister_list_bkd_penelitian' => ['3.a.3 EWMP'],
+    'sister_list_bkd_pengabdian' => ['3.a.3 EWMP'],
+    'sister_list_bkd_penunjang' => ['3.a.3 EWMP'],
     'sister_detail_kekayaan_intelektual' => ['3.b.7 HKI', '3.b.7 Teknologi'],
     'sister_detail_publikasi' => ['3.b.7 Buku'],
     'jenis_publikasi' => ['3.b.7 Buku'],

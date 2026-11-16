@@ -10,26 +10,29 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Tabel 3.b.7) Luaran Penelitian/PkM Lainnya -- Bagian IV: Buku ber-ISBN,
- * Book Chapter. Beda bentuk dari 3.b.2/3.b.3/3.b.4 (matriks hitung per
- * kategori/tahun): ini tabel LISTING, satu baris per judul, tanpa baris
- * "Jumlah".
+ * Book Chapter. Tabel LISTING: satu baris per judul, tanpa baris "Jumlah".
  *
- * Sumber: sister_detail_publikasi (mandiri, tidak perlu join ke
- * sister_list_publikasi -- setiap baris sudah punya kolom `penulis` berisi
- * JSON daftar penulis + id_sdm, sama seperti `anggota` di
- * sister_detail_penelitian/sister_detail_pengabdian). Baris difilter
- * id_jenis_publikasi 11/12/13/14/15 (Monograf, Buku referensi, Buku lainnya,
- * Book chapter nasional/internasional -- kode Bagian IV, lihat BOOK_CODES)
- * dan tahun TS-2..TS. Label buat kolom "Keterangan" diambil dari tabel
- * referensi jenis_publikasi (id -> nama), bukan di-hardcode.
+ * Sumber utama: sister_list_publikasi (sama dengan Tabel 3.b.4), difilter
+ * jenis_publikasi Monograf / Buku referensi / Buku lainnya / Book chapter
+ * nasional / Book chapter internasional (kode 11-15 di referensi
+ * jenis_publikasi). "Abstrak buku/pustaka" (28) bukan buku ber-ISBN -> tidak
+ * dihitung.
  *
- * "DTPS" pakai roster {@see ResolvesPublikasiDtpsRoster} yang sama dengan
- * Tabel 3.b.4 (sister_list_penugasan, bukan list_penugasan_dosen yang
- * dipakai 3.b.2/3.b.3 -- keluarga publikasi SISTER beda pipeline sync dari
- * keluarga penelitian/PkM). Roster dihitung per tahun (TS-2/TS-1/TS) dan
- * dicocokkan terhadap tahun publikasi baris itu sendiri. Tabel ini tidak
- * dibagi akademik/vokasi seperti 3.b.4 -- jenjangFilter gabungan kedua
- * varian supaya benar untuk prodi jenjang apapun.
+ * sister_detail_publikasi hanya PELENGKAP (LEFT JOIN per id) untuk penerbit,
+ * ISBN, dan judul bab: terverifikasi baru ~60 dari ~1.340 buku 2023-2025 yang
+ * tersinkron ke tabel detail, jadi tidak bisa jadi sumber utama. Buku tanpa
+ * detail tetap tampil; keterangannya hanya berisi jenis publikasi (penerbit
+ * & ISBN muncul otomatis setelah detailnya tersinkron).
+ *
+ * DTPS: roster ResolvesPublikasiDtpsRoster per tahun (TS-2/TS-1/TS), definisi
+ * sama dengan Tabel 3.a.1 & 3.b.4. Tabel ini berlaku untuk semua prodi
+ * (tidak dibagi akademik/vokasi), termasuk Profesi dan Spesialis.
+ *
+ * Deduplikasi per (tahun, judul ternormalisasi dari sister_list_publikasi):
+ * buku/bab yang sama diinput ulang tiap penulis dengan id berbeda digabung
+ * menjadi satu baris, id_sdm semua penulisnya dikumpulkan. Dedup hanya di
+ * dalam tabel satu prodi -- buku bersama dosen prodi lain tetap tampil di
+ * tabel prodi itu juga.
  */
 class SaptoBukuDtpsRepository
 {
@@ -37,14 +40,16 @@ class SaptoBukuDtpsRepository
     use ResolvesSaptoScope;
     use ResolvesSaptoTs;
 
-    /**
-     * Kode id_jenis_publikasi yang termasuk Bagian IV (Buku ber-ISBN, Book
-     * Chapter) -- aturan tabel ini, bukan berasal dari tabel jenis_publikasi
-     * (yang cuma daftar semua kode+nama, tidak mengelompokkan per bagian
-     * SPS). Label buat kolom "Keterangan" diambil dari tabel jenis_publikasi
-     * lewat {@see jenisLabels()}, bukan di-hardcode di sini.
-     */
-    private const BOOK_CODES = ['11', '12', '13', '14', '15'];
+    /** Label jenis_publikasi di sister_list_publikasi yang termasuk Bagian IV. */
+    private const BOOK_JENIS = [
+        'Monograf',
+        'Buku referensi',
+        'Buku lainnya',
+        'Book chapter nasional',
+        'Book chapter internasional',
+    ];
+
+    private const CHAPTER_JENIS = ['Book chapter nasional', 'Book chapter internasional'];
 
     private const COLUMNS = [
         ['key' => 'no', 'label' => 'No', 'align' => 'left'],
@@ -75,17 +80,17 @@ class SaptoBukuDtpsRepository
 
         $dtpsIdsByYear = [];
         foreach ($years as $year) {
-            $dtpsIdsByYear[$year] = $scopeProdiIds === [] ? [] : $this->publikasiDtpsIds($year, $scopeProdiIds, $jenjang);
+            $dtpsIdsByYear[$year] = $scopeProdiIds === []
+                ? []
+                : array_flip($this->publikasiDtpsIds($year, $scopeProdiIds, $jenjang));
         }
 
         $bukuRows = $this->bukuRows($years);
 
         $items = [];
         foreach ($years as $year) {
-            $dtpsIds = array_flip($dtpsIdsByYear[$year]);
-
             foreach ($bukuRows[$year] ?? [] as $row) {
-                if (! $this->hasDtpsAuthor($row['id_sdm_list'], $dtpsIds)) {
+                if (! $this->hasDtpsAuthor($row['id_sdm_list'], $dtpsIdsByYear[$year])) {
                     continue;
                 }
 
@@ -120,56 +125,100 @@ class SaptoBukuDtpsRepository
     }
 
     /**
-     * Jenjang gabungan varian akademik (SaptoPublikasiIlmiahDtpsRepository)
-     * + vokasi (SaptoPagelaranDtpsRepository) -- tabel ini tidak dibagi
-     * seperti 3.b.4, jadi harus cocok untuk prodi jenjang apapun.
+     * Jenjang prodi yang tercatat di program_studi.nama_jenjang_pendidikan --
+     * tabel ini tidak dibagi akademik/vokasi, berlaku untuk semua prodi
+     * termasuk Profesi dan Spesialis.
      *
      * @return array<int, string>
      */
     private function jenjangFilter(): array
     {
-        return ['S1', 'S2', 'S3', 'D3', 'D4', 'Sarjana Terapan', 'Magister Terapan', 'Doktor Terapan'];
+        return ['D3', 'S1', 'S2', 'S3', 'Profesi', 'Sp-1', 'Sp-2'];
     }
 
     /**
-     * Judul buku/book chapter dari sister_detail_publikasi, dedup per id,
-     * dikelompokkan per tahun.
+     * Buku/book chapter dari sister_list_publikasi (+ detail bila ada),
+     * dikelompokkan per (tahun, judul ternormalisasi).
      *
      * @param  array<int, int>  $years
      * @return array<int, array<int, array{luaran: string, keterangan: string, id_sdm_list: array<int, string>}>>
      */
     private function bukuRows(array $years): array
     {
-        $cacheKey = 'sapto:buku-dtps:buku:v1:'.md5(json_encode($years));
+        $cacheKey = 'sapto:buku-dtps:buku:v3:'.md5(json_encode($years));
 
         return Cache::remember($cacheKey, $this->cacheTtl(), function () use ($years): array {
             $yearStrings = array_map(fn (int $y): string => (string) $y, $years);
             $yearPlaceholders = implode(',', array_fill(0, count($yearStrings), '?'));
-            $labels = $this->jenisLabels();
 
-            $byId = [];
+            $groups = [];
 
-            foreach (DB::table('sister_detail_publikasi')
-                ->select('id', 'id_jenis_publikasi', 'judul', 'judul_artikel', 'penerbit', 'isbn', 'tanggal', 'penulis')
-                ->whereIn('id_jenis_publikasi', self::BOOK_CODES)
-                ->whereRaw("substr(tanggal,1,4) in ({$yearPlaceholders})", $yearStrings)
-                ->cursor() as $row) {
-                $byId[(string) $row->id] ??= $row;
+            $query = DB::table('sister_list_publikasi as l')
+                ->leftJoin('sister_detail_publikasi as d', 'd.id', '=', 'l.id')
+                ->select(
+                    'l.id',
+                    'l.id_sdm',
+                    'l.judul',
+                    'l.jenis_publikasi',
+                    'l.tanggal',
+                    'd.judul as judul_buku',
+                    'd.judul_artikel',
+                    'd.penerbit',
+                    'd.isbn'
+                )
+                ->whereIn('l.jenis_publikasi', self::BOOK_JENIS)
+                ->whereRaw("substr(l.tanggal,1,4) in ({$yearPlaceholders})", $yearStrings)
+                ->orderBy('l.id');
+
+            foreach ($query->cursor() as $row) {
+                $year = (int) substr((string) $row->tanggal, 0, 4);
+                $key = $year.'|'.$this->judulKey($row->judul, (string) $row->id);
+
+                $groups[$key] ??= [
+                    'year' => $year,
+                    'judul' => trim((string) $row->judul),
+                    'jenis' => [],
+                    'judul_buku' => '',
+                    'judul_artikel' => '',
+                    'penerbit' => '',
+                    'isbn' => '',
+                    'id_sdm_list' => [],
+                ];
+
+                $group = &$groups[$key];
+
+                $jenis = trim((string) ($row->jenis_publikasi ?? ''));
+                if ($jenis !== '') {
+                    $group['jenis'][$jenis] = $jenis;
+                }
+
+                // Lengkapi dari record mana pun yang punya detail.
+                foreach (['judul_buku', 'judul_artikel', 'penerbit', 'isbn'] as $field) {
+                    $value = trim((string) ($row->{$field} ?? ''));
+                    if ($group[$field] === '' && $value !== '') {
+                        $group[$field] = $value;
+                    }
+                }
+
+                $idSdm = trim((string) ($row->id_sdm ?? ''));
+                if ($idSdm !== '') {
+                    $group['id_sdm_list'][$idSdm] = $idSdm;
+                }
+
+                unset($group);
             }
 
             $byYear = array_fill_keys($years, []);
 
-            foreach ($byId as $row) {
-                $year = (int) substr((string) $row->tanggal, 0, 4);
-
-                if (! isset($byYear[$year])) {
+            foreach ($groups as $group) {
+                if (! isset($byYear[$group['year']])) {
                     continue;
                 }
 
-                $byYear[$year][] = [
-                    'luaran' => $this->luaranTitle($row),
-                    'keterangan' => $this->keterangan($row, $labels),
-                    'id_sdm_list' => $this->dosenIdsFromPenulis($row->penulis),
+                $byYear[$group['year']][] = [
+                    'luaran' => $this->luaranTitle($group),
+                    'keterangan' => $this->keterangan($group),
+                    'id_sdm_list' => array_values($group['id_sdm_list']),
                 ];
             }
 
@@ -178,74 +227,50 @@ class SaptoBukuDtpsRepository
     }
 
     /**
-     * Label id_jenis_publikasi -> nama, dari tabel referensi jenis_publikasi
-     * (sinkronisasi lokal, 32 kode). Dicache terpisah dari daftar buku itu
-     * sendiri karena jarang berubah.
-     *
-     * @return array<string, string> id (string) => nama
+     * Kunci deduplikasi judul: lowercase + spasi dirapikan (setara
+     * LOWER(TRIM(REGEXP_REPLACE(judul,'[[:space:]]+',' '))) di MySQL).
+     * Judul kosong jatuh kembali ke id.
      */
-    private function jenisLabels(): array
+    private function judulKey(?string $judul, string $id): string
     {
-        return Cache::remember('sapto:jenis-publikasi:v1', $this->cacheTtl(), function (): array {
-            return DB::table('jenis_publikasi')
-                ->pluck('nama', 'id')
-                ->mapWithKeys(fn (string $nama, int|string $id): array => [(string) $id => $nama])
-                ->all();
-        });
-    }
+        $normal = mb_strtolower(trim((string) preg_replace('/\s+/u', ' ', (string) $judul)));
 
-    private function luaranTitle(object $row): string
-    {
-        $jenis = (string) $row->id_jenis_publikasi;
-        $judulArtikel = trim((string) ($row->judul_artikel ?? ''));
-
-        if (in_array($jenis, ['14', '15'], true) && $judulArtikel !== '') {
-            return "{$judulArtikel} (dalam buku: {$row->judul})";
-        }
-
-        return (string) $row->judul;
+        return $normal === '' ? 'id:'.$id : md5($normal);
     }
 
     /**
-     * @param  array<string, string>  $labels
+     * Book chapter dengan detail lengkap: "judul bab (dalam buku: judul buku)".
+     * Selain itu judul apa adanya dari sister_list_publikasi.
+     *
+     * @param  array<string, mixed>  $group
      */
-    private function keterangan(object $row, array $labels): string
+    private function luaranTitle(array $group): string
     {
-        $parts = [$labels[(string) $row->id_jenis_publikasi] ?? 'Lainnya'];
+        $isChapter = array_intersect($group['jenis'], self::CHAPTER_JENIS) !== [];
 
-        $penerbit = trim((string) ($row->penerbit ?? ''));
-        if ($penerbit !== '') {
-            $parts[] = $penerbit;
+        if ($isChapter && $group['judul_artikel'] !== '' && $group['judul_buku'] !== '') {
+            return "{$group['judul_artikel']} (dalam buku: {$group['judul_buku']})";
         }
 
-        $isbn = trim((string) ($row->isbn ?? ''));
-        if ($isbn !== '') {
-            $parts[] = "ISBN {$isbn}";
+        return $group['judul'];
+    }
+
+    /**
+     * @param  array<string, mixed>  $group
+     */
+    private function keterangan(array $group): string
+    {
+        $parts = [implode(' / ', $group['jenis']) ?: 'Lainnya'];
+
+        if ($group['penerbit'] !== '') {
+            $parts[] = $group['penerbit'];
+        }
+
+        if ($group['isbn'] !== '') {
+            $parts[] = "ISBN {$group['isbn']}";
         }
 
         return implode(', ', $parts);
-    }
-
-    /**
-     * @return array<int, string>
-     */
-    private function dosenIdsFromPenulis(?string $json): array
-    {
-        if ($json === null || $json === '') {
-            return [];
-        }
-
-        $decoded = json_decode($json, true);
-
-        if (! is_array($decoded)) {
-            return [];
-        }
-
-        return collect($decoded)
-            ->filter(fn (mixed $penulis): bool => is_array($penulis) && ($penulis['jenis'] ?? null) === 'Dosen' && ! empty($penulis['id_sdm']))
-            ->map(fn (array $penulis): string => (string) $penulis['id_sdm'])
-            ->values()
-            ->all();
     }
 
     /**
@@ -320,7 +345,7 @@ class SaptoBukuDtpsRepository
     private function sourcePayload(): array
     {
         return [
-            'name' => 'sister_detail_publikasi, jenis_publikasi & sister_list_penugasan (sinkronisasi lokal)',
+            'name' => 'sister_list_publikasi (+ sister_detail_publikasi bila ada) & list_penugasan_dosen (sinkronisasi lokal)',
             'partial' => true,
         ];
     }

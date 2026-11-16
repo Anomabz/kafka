@@ -133,10 +133,16 @@ class SaptoNewTablesTest extends TestCase
             ['id_dosen' => 'D1', 'nama_jenjang_pendidikan' => 'S3', 'nama_bidang_studi' => 'Ilmu Komputer', 'nama_perguruan_tinggi' => 'Universitas Gadjah Mada', 'tahun_lulus' => '2015'],
         ]);
 
-        DB::table('riwayat_fungsional_dosen')->insert([
-            ['id_dosen' => 'D1', 'nama_jabatan_fungsional' => 'Lektor', 'mulai_sk_jabatan' => '2016-01-01'],
+        // Jabatan dibaca dari sister_list_jabatan_fungsional (id_sdm == id_dosen);
+        // di produksi sumber ini sedikit lebih lengkap dari riwayat_fungsional_dosen.
+        DB::table('sister_list_jabatan_fungsional')->insert([
+            ['id_sdm' => 'D1', 'jabatan_fungsional' => 'Lektor', 'tanggal_mulai' => '2016-01-01'],
             // Baris terbaru -> harus menang atas 'Lektor', dan "Profesor" dipetakan ke "Guru Besar".
-            ['id_dosen' => 'D1', 'nama_jabatan_fungsional' => 'Profesor', 'mulai_sk_jabatan' => '2020-01-01'],
+            ['id_sdm' => 'D1', 'jabatan_fungsional' => 'Profesor', 'tanggal_mulai' => '2020-01-01'],
+            // Jabatan non-akademik (tendik) tidak dianggap jabatan akademik.
+            ['id_sdm' => 'D1', 'jabatan_fungsional' => 'Pustakawan Pertama', 'tanggal_mulai' => '2021-01-01'],
+            // Sesudah akhir TS 2024 (31 Agustus 2025) -> belum berlaku.
+            ['id_sdm' => 'D1', 'jabatan_fungsional' => 'Lektor Kepala', 'tanggal_mulai' => '2026-01-01'],
         ]);
 
         DB::table('riwayat_sertifikasi_dosen')->insert([

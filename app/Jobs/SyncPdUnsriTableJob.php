@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\PdUnsriSyncResult;
+use App\Services\KafkaProducerService;
 use App\Services\PangkalanDataApiClient;
 use Illuminate\Bus\Batchable;
 use Illuminate\Bus\Queueable;
@@ -17,8 +18,9 @@ use RuntimeException;
 
 /**
  * Sinkronisasi satu tabel dari api-pangkalan-data.unsri.ac.id (lewat Gravitee,
- * lihat PangkalanDataApiClient::baseUrl()) ke tabel lokal dengan nama yang
- * sama -- lihat config/pd_unsri_sync_tables.php.
+ * lihat PangkalanDataApiClient::baseUrl()) ke tabel lokal yang dipetakan di
+ * config/pd_unsri_sync_tables.php. Beberapa endpoint memakai nama lokal
+ * berbeda dan dapat memerlukan normalisasi payload sebelum disimpan.
  *
  * Pola staging + atomic swap: data baru ditarik penuh ke tabel sementara
  * "<table>_sync_staging" dulu. Tabel asli ("live", yang dibaca dashboard dan
@@ -110,6 +112,16 @@ class SyncPdUnsriTableJob implements ShouldQueue
         $this->swap($staging);
         $this->record->finish(PdUnsriSyncResult::DONE, null, $result['fetched'], $result['total']);
 
+        // Kabar untuk consumer Kafka (arsip event & halaman monitor). Tidak
+        // pernah menggagalkan sinkronisasi: kegagalan kirim masuk outbox.
+        app(KafkaProducerService::class)->publish('sapto.sync.table_updated', 'sync.table_updated', [
+            'slug' => $this->slug,
+            'table' => $this->table,
+            'rows_fetched' => $result['fetched'],
+            'rows_source' => $result['total'] ?? null,
+            'batch_id' => $this->batchId,
+        ], key: $this->table);
+
         Log::info(sprintf(
             'PD UNSRI sync: %s selesai, %d baris diterima (sumber melaporkan %s).',
             $this->slug, $result['fetched'], $result['total'] ?? '?',
@@ -182,6 +194,34 @@ class SyncPdUnsriTableJob implements ShouldQueue
             $chunk = [];
 
             foreach ($data as $row) {
+                // Endpoint LPPM mengembalikan anggota_non_dosen sebagai array,
+                // sedangkan tabel lokal menyimpannya sebagai JSON. Jalur
+                // sinkronisasi batch memakai konversi yang sama dengan
+                // command LPPM lama.
+                if (in_array($this->slug, ['penelitian-dosen', 'pengabdian-dosen'], true)) {
+                    $anggota = $row['anggota_non_dosen'] ?? [];
+                    if (is_string($anggota)) {
+                        $decoded = json_decode($anggota, true);
+                        $anggota = is_array($decoded) ? $decoded : [];
+                    }
+                    $row['anggota_non_dosen'] = json_encode(
+                        is_array($anggota) ? $anggota : [],
+                        JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR,
+                    );
+                }
+
+                // Timestamp lokal tidak dikirim oleh endpoint ini; beri nilai
+                // saat sinkronisasi supaya kolom tersebut tidak memerlukan
+                // carry-over dari tabel lama.
+                if (in_array($this->slug, ['penelitian-dosen', 'pengabdian-dosen', 'sister-sdm'], true)) {
+                    $syncedAt = now()->toDateTimeString();
+                    foreach (['created_at', 'updated_at'] as $timestampColumn) {
+                        if (in_array($timestampColumn, $columns, true) && empty($row[$timestampColumn])) {
+                            $row[$timestampColumn] = $syncedAt;
+                        }
+                    }
+                }
+
                 $sent += array_fill_keys(array_keys($row), true);
 
                 // Semua baris dipaksa punya set kolom yang sama supaya INSERT

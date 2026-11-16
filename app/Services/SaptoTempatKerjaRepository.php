@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Services\Concerns\ComputesGraduationYear;
 use App\Services\Concerns\CountsLulusanPerProdi;
+use App\Services\Concerns\CountsTracerLulusanPerProdi;
 use App\Services\Concerns\ResolvesSaptoScope;
 use App\Services\Concerns\ResolvesSaptoTs;
 
@@ -16,15 +17,15 @@ use App\Services\Concerns\ResolvesSaptoTs;
  *
  * Sumber "Jumlah Lulusan": sama seperti Tabel 8.d.1/8.d.2
  * (list_mahasiswa_lulus_do lewat CountsLulusanPerProdi/ComputesGraduationYear,
- * supaya ketiganya menghitung lulusan yang sama). Kolom sisanya (terlacak,
- * tingkat tempat kerja) butuh data tracer study alumni yang TIDAK ADA
- * sumbernya di database ini -- lihat SaptoWaktuTungguLulusanRepository.
- * Selalu 0 sampai ada sumber tracer study terpisah; isi manual.
+ * supaya ketiganya menghitung lulusan yang sama). Jumlah terlacak diambil
+ * dari tracert_iku berdasarkan NIM. Sumber tersebut tidak memuat skala
+ * lokal/nasional/internasional, sehingga klasifikasi skala tetap 0.
  */
 class SaptoTempatKerjaRepository
 {
     use ComputesGraduationYear;
     use CountsLulusanPerProdi;
+    use CountsTracerLulusanPerProdi;
     use ResolvesSaptoScope;
     use ResolvesSaptoTs;
 
@@ -63,6 +64,7 @@ class SaptoTempatKerjaRepository
 
         $years = array_map(fn (int $back): int => $ts - $back, self::BACK_YEARS);
         $lulusanByYear = $this->lulusanCountsByYear(self::CACHE_NAMESPACE, (string) $programStudi['id'], $years);
+        $tracerByYear = $this->tracerCountsByGraduationYear(self::CACHE_NAMESPACE, (string) $programStudi['id'], $years);
 
         $numericKeys = collect(self::COLUMNS)
             ->pluck('key')
@@ -75,7 +77,9 @@ class SaptoTempatKerjaRepository
             $row = array_fill_keys($numericKeys, 0);
             $row['no'] = $index + 1;
             $row['tahun_lulus'] = $year.' (TS-'.$back.')';
+            $row['tahun_lulus_tahun'] = $year;
             $row['jumlah_lulusan'] = $lulusanByYear[$year] ?? 0;
+            $row['jumlah_terlacak'] = $tracerByYear[$year]['jumlah_terlacak'] ?? 0;
             $rows[] = $row;
         }
 
@@ -142,7 +146,7 @@ class SaptoTempatKerjaRepository
     private function sourcePayload(): array
     {
         return [
-            'name' => 'list_mahasiswa_lulus_do (sinkronisasi lokal) -- kolom tracer study (terlacak/tingkat tempat kerja) belum ada sumbernya',
+            'name' => 'list_mahasiswa_lulus_do + tracert_iku (dicocokkan berdasarkan NIM)',
             'partial' => true,
         ];
     }

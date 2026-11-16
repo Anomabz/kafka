@@ -7,6 +7,7 @@ use App\Services\PdUnsriSyncDispatcher;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 
 /**
  * /admin/sync-pd-unsri — status sinkronisasi mingguan data akademik dari PD
@@ -21,6 +22,7 @@ class PdUnsriSyncController extends Controller
 
         return view('admin.sync-pd-unsri', [
             'payload' => $dispatcher->statusPayload(),
+            'syncTables' => config('pd_unsri_sync_tables.tables', []),
         ]);
     }
 
@@ -37,23 +39,38 @@ class PdUnsriSyncController extends Controller
     {
         $this->ensureAdmin($request);
 
+        $syncAll = $request->boolean('all');
+        $tableNames = array_values(config('pd_unsri_sync_tables.tables', []));
+        $validated = $syncAll ? [] : $request->validate([
+            'table' => ['required', 'string', Rule::in($tableNames)],
+        ]);
+
         if ($dispatcher->isRunning()) {
             return redirect()->route('admin.sync-pd-unsri')
                 ->with('status', 'Sinkronisasi sebelumnya masih berjalan, belum dimulai ulang.');
         }
 
         $admin = (array) $request->session()->get('sso_user', []);
-        $batch = $dispatcher->dispatch('admin:'.($admin['email'] ?? $admin['nomor_identitas'] ?? 'tidak diketahui'));
+        $batch = $dispatcher->dispatch(
+            'admin:'.($admin['email'] ?? $admin['nomor_identitas'] ?? 'tidak diketahui'),
+            $syncAll ? [] : [$validated['table']],
+        );
 
-        Log::info('Admin SAPTO memulai sinkronisasi PD UNSRI manual.', [
+        Log::info($syncAll
+            ? 'Admin SAPTO memulai sinkronisasi seluruh tabel PD UNSRI manual.'
+            : 'Admin SAPTO memulai sinkronisasi satu tabel PD UNSRI manual.', [
             'admin_email' => $admin['email'] ?? null,
             'admin_nip' => $admin['nomor_identitas'] ?? null,
             'batch_id' => $batch->id,
-            'total_tabel' => $batch->totalJobs,
+            'seluruh_tabel' => $syncAll,
+            'jumlah_tabel' => $batch->totalJobs,
+            'tabel' => $syncAll ? null : $validated['table'],
         ]);
 
         return redirect()->route('admin.sync-pd-unsri')
-            ->with('status', "Sinkronisasi dimulai: {$batch->totalJobs} tabel diproses di latar belakang.");
+            ->with('status', $syncAll
+                ? "Sinkronisasi seluruh {$batch->totalJobs} tabel dimulai di latar belakang."
+                : "Sinkronisasi tabel {$validated['table']} dimulai di latar belakang.");
     }
 
     public function cancel(Request $request, PdUnsriSyncDispatcher $dispatcher)

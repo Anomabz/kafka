@@ -10,6 +10,12 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
 <style>
+        /* Salinan token "Warna merek" dari resources/css/app.css (halaman ini
+           tidak memuat app.css): desktop Biru Sriwijaya, HP Merah Marun. */
+        :root { --brand: #2b4f8e; --brand-rgb: 43, 79, 142; --brand-ink: #12203a; --brand-ink-rgb: 18, 32, 58; --brand-muted: #4f6fa6; --brand-light: #cddcf6; --brand-soft: #9dbbef; --brand-soft-rgb: 157, 187, 239; }
+        @media (max-width: 639.98px) {
+            :root { --brand: #8a2a3a; --brand-rgb: 138, 42, 58; --brand-ink: #2a0b11; --brand-ink-rgb: 42, 11, 17; --brand-muted: #a8495a; --brand-light: #f1c9cf; --brand-soft: #eba3ae; --brand-soft-rgb: 235, 163, 174; }
+        }
   /*
    * Easter egg, sengaja tidak ditautkan dari nav manapun (lihat
    * routes/web.php). Fixed-dark terlepas dari preferensi tema, sama
@@ -37,7 +43,7 @@
     justify-content: center;
     padding: 3rem 1.25rem;
     background:
-      radial-gradient(42rem 32rem at 15% -10%, rgba(143, 191, 126, 0.12), transparent 60%),
+      radial-gradient(42rem 32rem at 15% -10%, rgba(var(--brand-soft-rgb), 0.12), transparent 60%),
       #0c0e11;
   }
 
@@ -107,7 +113,7 @@
     font-weight: 700;
     letter-spacing: 0.14em;
     text-transform: uppercase;
-    color: #8fbf7e;
+    color: var(--brand-soft);
   }
 
   .heading h1 {
@@ -167,8 +173,8 @@
     font-size: 10.5px;
     font-weight: 700;
     letter-spacing: 0.03em;
-    color: #b7dba9;
-    background: rgba(143, 191, 126, 0.14);
+    color: var(--brand-light);
+    background: rgba(var(--brand-soft-rgb), 0.14);
   }
 
   .closing {
@@ -209,7 +215,7 @@
       </radialGradient>
       <mask id="batikMask"><rect width="280" height="280" fill="url(#batikFade)"/></mask>
     </defs>
-    <g mask="url(#batikMask)" fill="none" stroke="#8fbf7e" stroke-width="1.1">
+    <g mask="url(#batikMask)" fill="none" style="stroke:var(--brand-soft)" stroke-width="1.1">
       <circle cx="140" cy="140" r="118"/>
       <circle cx="140" cy="140" r="96"/>
       <g transform="translate(140,140)">
@@ -224,7 +230,7 @@
           <path d="M0 -86 C 14 -70, 14 -50, 0 -40 C -14 -50, -14 -70, 0 -86 Z" transform="rotate(315)"/>
         </g>
         <circle r="16"/>
-        <circle r="8" fill="#8fbf7e" stroke="none"/>
+        <circle r="8" style="fill:var(--brand-soft)" stroke="none"/>
       </g>
     </g>
   </svg>

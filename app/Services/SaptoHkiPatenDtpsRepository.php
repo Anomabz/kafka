@@ -10,17 +10,25 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Tabel 3.b.7) Luaran Penelitian/PkM Lainnya -- Bagian I: HKI (Paten, Paten
- * Sederhana). Sama bentuk & sumber dengan {@see SaptoTeknologiDtpsRepository}
- * (Bagian III): tabel LISTING dari sister_detail_kekayaan_intelektual,
- * mandiri (kolom `penulis` sendiri, tidak perlu join sister_list_kekayaan_
- * intelektual), DTPS lewat roster {@see ResolvesPublikasiDtpsRoster} sama
- * seperti Tabel 3.b.4.
+ * Sederhana).
  *
- * Baris difilter id_jenis_publikasi 41/42 (Paten nasional/internasional --
- * SISTER tidak membedakan "sederhana" secara kode terpisah, sama seperti di
- * query sumber) dan tahun TS-2..TS. "Keterangan" gabungan jenis_publikasi +
- * "No. {nomor_paten}" (kalau ada) + pemberi_paten -- beda dari Bagian III
- * yang gabungan kategori_capaian_luaran + jenis_publikasi.
+ * Alur:
+ *  1. Pilih prodi.
+ *  2. Ambil DTPS per tahun TS-2..TS lewat ResolvesPublikasiDtpsRoster --
+ *     definisi sama dengan Tabel 3.a.1 & 3.b.4 (homebase, ikatan kerja
+ *     tetap A/B/F/H/I/N, id_prodi terdaftar di program_studi). Semua jenjang.
+ *  3. Ambil HKI dari sister_detail_kekayaan_intelektual (id_jenis_publikasi
+ *     41 = Paten nasional, 42 = Paten internasional). SISTER tidak punya kode
+ *     terpisah untuk Paten Sederhana -- diinput sebagai Paten nasional (41),
+ *     dan nomor_paten (awalan IDP/IDS) hampir selalu kosong sehingga tidak
+ *     bisa dibedakan.
+ *  4. detail.id_list -> sister_list_kekayaan_intelektual.id -> id_sdm.
+ *  5. Cocokkan id_sdm dengan DTPS prodi (id_dosen = id_sdm), tampilkan HKI.
+ *
+ * Deduplikasi per detail.id sudah cukup: terverifikasi tidak ada paten dengan
+ * judul sama tapi id berbeda (88 id = 88 judul). Baris dengan id sama berulang
+ * di detail/list (per inventor / sinkronisasi ganda) digabung, id_sdm-nya
+ * dikumpulkan.
  */
 class SaptoHkiPatenDtpsRepository
 {
@@ -56,21 +64,23 @@ class SaptoHkiPatenDtpsRepository
         }
 
         $years = [$ts - 2, $ts - 1, $ts];
-        $jenjang = $this->jenjangFilter();
 
+        // 1) DTPS per tahun (definisi bersama 3.a.1/3.b.4), semua jenjang.
         $dtpsIdsByYear = [];
         foreach ($years as $year) {
-            $dtpsIdsByYear[$year] = $scopeProdiIds === [] ? [] : $this->publikasiDtpsIds($year, $scopeProdiIds, $jenjang);
+            $dtpsIdsByYear[$year] = empty($scopeProdiIds)
+                ? []
+                : array_flip($this->publikasiDtpsIds($year, $scopeProdiIds, []));
         }
 
+        // 2) HKI + id_sdm dari list_kekayaan_intelektual.
         $luaranRows = $this->luaranRows($years);
 
+        // 3) Cocokkan id_sdm dengan DTPS prodi.
         $items = [];
         foreach ($years as $year) {
-            $dtpsIds = array_flip($dtpsIdsByYear[$year]);
-
             foreach ($luaranRows[$year] ?? [] as $row) {
-                if (! $this->hasDtpsAuthor($row['id_sdm_list'], $dtpsIds)) {
+                if (! $this->hasDtpsAuthor($row['id_sdm_list'], $dtpsIdsByYear[$year])) {
                     continue;
                 }
 
@@ -105,26 +115,17 @@ class SaptoHkiPatenDtpsRepository
     }
 
     /**
-     * Jenjang gabungan varian akademik + vokasi, sama seperti Bagian
-     * III/IV -- tabel ini juga tidak dibagi seperti 3.b.4.
-     *
-     * @return array<int, string>
-     */
-    private function jenjangFilter(): array
-    {
-        return ['S1', 'S2', 'S3', 'D3', 'D4', 'Sarjana Terapan', 'Magister Terapan', 'Doktor Terapan'];
-    }
-
-    /**
-     * Judul HKI paten dari sister_detail_kekayaan_intelektual, dedup per
-     * id, dikelompokkan per tahun.
+     * HKI paten dari sister_detail_kekayaan_intelektual. Dosen (id_sdm)
+     * diambil lewat detail.id_list -> sister_list_kekayaan_intelektual.id.
+     * Dedup per detail.id; id_sdm dari semua baris list yang terhubung
+     * dikumpulkan.
      *
      * @param  array<int, int>  $years
      * @return array<int, array<int, array{luaran: string, keterangan: string, id_sdm_list: array<int, string>}>>
      */
     private function luaranRows(array $years): array
     {
-        $cacheKey = 'sapto:hki-paten-dtps:luaran:v1:'.md5(json_encode($years));
+        $cacheKey = 'sapto:hki-paten-dtps:luaran:v2:'.md5(json_encode($years));
 
         return Cache::remember($cacheKey, $this->cacheTtl(), function () use ($years): array {
             $yearStrings = array_map(fn (int $y): string => (string) $y, $years);
@@ -132,17 +133,35 @@ class SaptoHkiPatenDtpsRepository
 
             $byId = [];
 
-            foreach (DB::table('sister_detail_kekayaan_intelektual')
-                ->select('id', 'judul', 'tanggal', 'jenis_publikasi', 'nomor_paten', 'pemberi_paten', 'penulis')
-                ->whereIn('id_jenis_publikasi', self::PATEN_CODES)
-                ->whereRaw("substr(tanggal,1,4) in ({$yearPlaceholders})", $yearStrings)
-                ->cursor() as $row) {
-                $byId[(string) $row->id] ??= $row;
+            $query = DB::table('sister_detail_kekayaan_intelektual as d')
+                ->join('sister_list_kekayaan_intelektual as l', 'l.id', '=', 'd.id_list')
+                ->select(
+                    'd.id',
+                    'd.judul',
+                    'd.tanggal',
+                    'd.jenis_publikasi',
+                    'd.nomor_paten',
+                    'd.pemberi_paten',
+                    'l.id_sdm'
+                )
+                ->whereIn('d.id_jenis_publikasi', self::PATEN_CODES)
+                ->whereRaw("substr(d.tanggal,1,4) in ({$yearPlaceholders})", $yearStrings);
+
+            foreach ($query->cursor() as $row) {
+                $key = (string) $row->id;
+
+                $byId[$key] ??= ['row' => $row, 'id_sdm_list' => []];
+
+                $idSdm = trim((string) ($row->id_sdm ?? ''));
+                if ($idSdm !== '') {
+                    $byId[$key]['id_sdm_list'][$idSdm] = $idSdm;
+                }
             }
 
             $byYear = array_fill_keys($years, []);
 
-            foreach ($byId as $row) {
+            foreach ($byId as $item) {
+                $row = $item['row'];
                 $year = (int) substr((string) $row->tanggal, 0, 4);
 
                 if (! isset($byYear[$year])) {
@@ -152,7 +171,7 @@ class SaptoHkiPatenDtpsRepository
                 $byYear[$year][] = [
                     'luaran' => (string) $row->judul,
                     'keterangan' => $this->keterangan($row),
-                    'id_sdm_list' => $this->dosenIdsFromPenulis($row->penulis),
+                    'id_sdm_list' => array_values($item['id_sdm_list']),
                 ];
             }
 
@@ -171,28 +190,6 @@ class SaptoHkiPatenDtpsRepository
         ], fn (string $part): bool => $part !== '');
 
         return implode(', ', $parts);
-    }
-
-    /**
-     * @return array<int, string>
-     */
-    private function dosenIdsFromPenulis(?string $json): array
-    {
-        if ($json === null || $json === '') {
-            return [];
-        }
-
-        $decoded = json_decode($json, true);
-
-        if (! is_array($decoded)) {
-            return [];
-        }
-
-        return collect($decoded)
-            ->filter(fn (mixed $penulis): bool => is_array($penulis) && ($penulis['jenis'] ?? null) === 'Dosen' && ! empty($penulis['id_sdm']))
-            ->map(fn (array $penulis): string => (string) $penulis['id_sdm'])
-            ->values()
-            ->all();
     }
 
     /**
@@ -267,7 +264,7 @@ class SaptoHkiPatenDtpsRepository
     private function sourcePayload(): array
     {
         return [
-            'name' => 'sister_detail_kekayaan_intelektual & sister_list_penugasan (sinkronisasi lokal)',
+            'name' => 'sister_detail_kekayaan_intelektual, sister_list_kekayaan_intelektual & list_penugasan_dosen (sinkronisasi lokal)',
             'partial' => true,
         ];
     }

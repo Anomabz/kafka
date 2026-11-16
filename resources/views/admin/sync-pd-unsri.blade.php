@@ -1,7 +1,7 @@
 @extends('layouts.admin')
 
 @section('title', 'Sinkronisasi PD UNSRI')
-@section('subtitle', 'Tarik ulang data akademik dari PD UNSRI lewat Gravitee ke database SAPTO — otomatis tiap minggu, atau mulai manual di sini.')
+@section('subtitle', 'Sinkronkan satu tabel atau seluruh tabel sumber PD UNSRI ke database SAPTO.')
 
 @push('styles')
 <style>
@@ -55,6 +55,10 @@
 
     .sync-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
     .sync-actions form { margin: 0; }
+    .sync-table-select {
+        min-width: min(20rem, 70vw); max-width: 28rem; min-height: 40px; padding: 0.5rem 0.75rem;
+        border: 1px solid var(--input-border); border-radius: 0.75rem; color: var(--color-ink); background: var(--input-bg);
+    }
 
     .sync-btn {
         display: inline-flex; align-items: center; gap: 0.45rem;
@@ -118,6 +122,7 @@
     .sync-tname { display: block; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; font-weight: 700; color: var(--color-ink); overflow-wrap: anywhere; }
     .sync-codes { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.3rem; }
     .sync-code { padding: 0.1rem 0.45rem; border-radius: 0.4rem; font-size: 10.5px; font-weight: 800; color: var(--color-accent); background: var(--color-accent-soft); }
+    .sync-row-sync { margin-top: 0.45rem; padding: 0.35rem 0.7rem; border-radius: 0.6rem; font-size: 11px; }
 
     .sync-status { grid-area: status; display: inline-flex; align-items: center; justify-self: start; gap: 0.35rem; padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 11.5px; font-weight: 800; white-space: nowrap; color: var(--color-muted); background: var(--color-slate-soft); }
     .sync-status::before { content: ''; width: 6px; height: 6px; border-radius: 999px; background: currentColor; }
@@ -246,11 +251,25 @@
                             Batalkan
                         </button>
                     </form>
+                    <form method="POST" action="{{ route('admin.sync-pd-unsri.store') }}" id="form-start-all">
+                        @csrf
+                        <input type="hidden" name="all" value="1">
+                        <button type="submit" class="sync-btn sync-btn-ghost" id="btn-start-all" data-dialog="dialog-start-all">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/><path d="m8 9 2 2 4-4"/></svg>
+                            Sinkronkan Semua Tabel
+                        </button>
+                    </form>
                     <form method="POST" action="{{ route('admin.sync-pd-unsri.store') }}" id="form-start">
                         @csrf
+                        <label class="sr-only" for="sync-table">Pilih tabel yang akan disinkronkan</label>
+                        <select class="sync-table-select" name="table" id="sync-table" required>
+                            @foreach ($syncTables as $slug => $table)
+                                <option value="{{ $table }}">{{ $table }} ({{ $slug }})</option>
+                            @endforeach
+                        </select>
                         <button type="submit" class="sync-btn sync-btn-primary" id="btn-start" data-dialog="dialog-start">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
-                            Sinkronisasi Sekarang
+                            Sinkronkan Tabel Ini
                         </button>
                     </form>
                 </div>
@@ -291,14 +310,14 @@
                 <details class="sync-how">
                     <summary>Cara kerja sinkronisasi</summary>
                     <ol class="sync-steps">
-                        <li><b>Pemicu.</b> Jadwal mingguan otomatis, atau tombol <b>Sinkronisasi Sekarang</b> di halaman ini. Keduanya menjalankan hal yang sama, dan tidak bisa dimulai dua kali bersamaan.</li>
-                        <li><b>Antrean per tabel.</b> Tiap tabel sumber jadi satu pekerjaan yang dikerjakan satu per satu di latar belakang oleh <i>queue worker</i>, jadi browser tidak perlu dibiarkan terbuka.</li>
+                        <li><b>Pemicu manual.</b> Sinkronkan satu tabel yang dipilih atau klik <b>Sinkronkan Semua Tabel</b> untuk menarik seluruh sumber.</li>
+                        <li><b>Antrean.</b> Permintaan manual dijalankan di latar belakang oleh <i>queue worker</i>, jadi browser tidak perlu dibiarkan terbuka.</li>
                         <li><b>Tabel sementara.</b> Untuk tiap tabel dibuat salinan kosong (<code>_sync_staging</code>). Data baru ditarik ke sana dulu; tabel yang dibaca laporan belum disentuh.</li>
                         <li><b>Lewat Gravitee.</b> Data ditarik 1.000 baris per permintaan dari API PD UNSRI melalui Gravitee API Gateway. Hanya permintaan token login yang langsung ke server kampus.</li>
                         <li><b>Pemeriksaan keamanan.</b> Tabel <b>tidak</b> diganti kalau sumber membalas 0 baris, kalau baris yang diterima kurang dari 99% total sumber, atau kalau tabelnya punya relasi foreign key. Tabel yang tidak tersedia di sumber (404) atau belum diizinkan (403) dilewati.</li>
                         <li><b>Data pribadi dipertahankan.</b> Kolom yang sengaja dirahasiakan API (NIK, alamat, kontak, orang tua) disalin dari data lama supaya tidak hilang.</li>
                         <li><b>Ganti sekaligus.</b> Tabel sementara ditukar dengan tabel asli dalam satu langkah. Laporan tidak pernah melihat tabel kosong atau setengah terisi; kalau ada yang gagal, data lama tetap dipakai.</li>
-                        <li><b>Hitung ulang laporan.</b> Setelah semua tabel selesai, cache laporan dihapus dan dihitung ulang (beberapa menit) supaya dashboard menampilkan angka terbaru.</li>
+                        <li><b>Hitung ulang laporan.</b> Setelah tabel terpilih selesai, cache laporan dihapus agar laporan membaca data terbaru.</li>
                     </ol>
                     <p>Kalau ada tabel gagal atau dilewati, buka alasannya di daftar di atas. Detail teknis ada di <code>storage/logs/laravel.log</code> (cari “PD UNSRI sync”) dan <code>storage/logs/queue-worker.log</code>.</p>
                 </details>
@@ -310,12 +329,12 @@
 
     <dialog class="adm-dialog" id="dialog-start" aria-labelledby="dialog-start-title">
         <div class="adm-dialog-head">
-            <h2 id="dialog-start-title">Mulai sinkronisasi sekarang?</h2>
-            <p>Menarik ulang semua tabel sumber SAPTO dari PD UNSRI.</p>
+            <h2 id="dialog-start-title">Sinkronkan tabel terpilih?</h2>
+            <p>Hanya tabel yang dipilih akan ditarik ulang dari PD UNSRI.</p>
         </div>
         <div class="adm-dialog-body">
             <ul>
-                <li>Sekitar <b>±1,4 juta baris</b> dari <b><span data-total-tables>20</span> tabel</b> ditarik lewat Gravitee, perkiraan <b>20–40 menit</b>.</li>
+                <li>Hanya satu tabel yang ditarik lewat Gravitee.</li>
                 <li>Selama berjalan, laporan <b>tetap memakai data lama</b>. Tiap tabel baru diganti setelah tarikannya lengkap.</li>
                 <li>Tabel yang gagal atau dilewati tetap memakai data lama, tidak dikosongkan.</li>
                 <li>Setelah selesai, cache laporan dihitung ulang otomatis.</li>
@@ -328,6 +347,24 @@
         <div class="adm-dialog-foot">
             <form method="dialog"><button class="sync-btn sync-btn-ghost" value="batal">Batal</button></form>
             <button type="submit" form="form-start" class="sync-btn sync-btn-primary">Ya, mulai</button>
+        </div>
+    </dialog>
+
+    <dialog class="adm-dialog" id="dialog-start-all" aria-labelledby="dialog-start-all-title">
+        <div class="adm-dialog-head">
+            <h2 id="dialog-start-all-title">Sinkronkan seluruh tabel?</h2>
+            <p>Sebanyak {{ count($syncTables) }} tabel sumber akan ditarik ulang dari PD UNSRI.</p>
+        </div>
+        <div class="adm-dialog-body">
+            <ul>
+                <li>Satu pekerjaan akan dibuat untuk setiap tabel dan dimasukkan ke batch antrean. Lama proses bergantung pada jumlah baris dan kapasitas worker.</li>
+                <li>Selama proses berjalan, laporan tetap memakai data lama. Tiap tabel baru diganti setelah tarikannya lengkap.</li>
+                <li>Tabel yang gagal atau dilewati tetap memakai data lama; cache laporan dihitung ulang setelah batch selesai.</li>
+            </ul>
+        </div>
+        <div class="adm-dialog-foot">
+            <form method="dialog"><button class="sync-btn sync-btn-ghost" value="batal">Batal</button></form>
+            <button type="submit" form="form-start-all" class="sync-btn sync-btn-primary">Ya, sinkronkan semua</button>
         </div>
     </dialog>
 
@@ -400,6 +437,13 @@
             failed: ['Gagal', 'is-err'],
             cancelled: ['Dibatalkan', '']
         };
+        var DIRECT_SYNC_TABLES = new Set([
+            'aktivitas_mengajar_dosen',
+            'lppm_pengabdian_dosen',
+            'lppm_penelitian_dosen',
+            'sister_list_kekayaan_intelektual',
+            'sister_sdm'
+        ]);
         var BATCH = {
             running: ['Sedang berjalan', 'is-run'],
             stalled: ['Terhenti — menunggu queue worker', 'is-warn'],
@@ -465,12 +509,14 @@
 
             $('btn-start').disabled = isActive;
             $('btn-start').title = isActive ? 'Tunggu sinkronisasi yang sedang berjalan selesai, atau batalkan dulu.' : '';
+            $('btn-start-all').disabled = isActive;
+            $('btn-start-all').title = isActive ? 'Tunggu sinkronisasi yang sedang berjalan selesai, atau batalkan dulu.' : '';
             $('form-cancel').hidden = !isActive;
 
             if (!b) {
                 $('run-dot').className = 'sync-dot';
                 $('run-title-text').textContent = 'Belum pernah disinkronkan';
-                $('run-sub').textContent = 'Klik "Sinkronisasi Sekarang" untuk menarik data pertama kali.';
+                $('run-sub').textContent = 'Sinkronkan satu tabel atau seluruh tabel sumber secara manual.';
                 $('run-progress').hidden = true;
                 $('run-current').innerHTML = '';
                 $('run-notes').innerHTML = '';
@@ -567,9 +613,12 @@
                     var codes = (t.used_by || []).map(function (c) { return '<span class="sync-code">' + esc(c) + '</span>'; }).join('');
                     var reason = t.message && ['skipped', 'failed', 'cancelled'].indexOf(t.status) !== -1
                         ? '<details class="sync-reason"><summary>Lihat alasan</summary><p>' + esc(t.message) + '</p></details>' : '';
+                    var syncButton = DIRECT_SYNC_TABLES.has(t.table)
+                        ? '<button type="button" class="sync-btn sync-btn-ghost sync-row-sync" data-sync-table="' + esc(t.table) + '" aria-label="Sinkronkan ' + esc(t.table) + '"' + (active() ? ' disabled' : '') + '>Sinkronkan tabel ini</button>'
+                        : '';
                     return '<li class="sync-row ' + (t.status ? 'is-' + esc(t.status) : '') + '">' +
                         '<div class="sync-row-main"><span class="sync-tname">' + esc(t.table) + '</span>' +
-                        (codes ? '<div class="sync-codes" aria-label="Dipakai tabel laporan">' + codes + '</div>' : '') + '</div>' +
+                        (codes ? '<div class="sync-codes" aria-label="Dipakai tabel laporan">' + codes + '</div>' : '') + syncButton + '</div>' +
                         '<span class="sync-status ' + s[1] + '">' + esc(s[0]) + est + '</span>' +
                         '<div class="sync-rows-info">' + rowsInfo(t) + '</div>' +
                         '<div class="sync-when">' + whenInfo(t) + '</div>' + reason + '</li>';
@@ -683,6 +732,25 @@
             });
         });
 
+        $('table-rows').addEventListener('click', function (event) {
+            var button = event.target.closest('[data-sync-table]');
+            if (!button || button.disabled || active()) return;
+
+            var select = $('sync-table');
+            select.value = button.dataset.syncTable;
+            if (select.value !== button.dataset.syncTable) return;
+
+            $('dialog-start-title').textContent = 'Sinkronkan ' + button.dataset.syncTable + '?';
+            $('dialog-start').querySelector('.adm-dialog-head p').textContent = 'Hanya tabel ini yang akan ditarik ulang dari PD UNSRI.';
+
+            $('btn-start').click();
+        });
+
+        $('sync-table').addEventListener('change', function () {
+            $('dialog-start-title').textContent = 'Sinkronkan tabel terpilih?';
+            $('dialog-start').querySelector('.adm-dialog-head p').textContent = 'Hanya tabel yang dipilih akan ditarik ulang dari PD UNSRI.';
+        });
+
         // Tombol form membuka dialog konfirmasi dulu; tanpa <dialog> (browser
         // lama) form langsung terkirim seperti biasa.
         document.querySelectorAll('[data-dialog]').forEach(function (btn) {
@@ -691,7 +759,7 @@
             btn.addEventListener('click', function (e) { e.preventDefault(); dialog.showModal(); });
         });
 
-        ['form-start', 'form-cancel'].forEach(function (id) {
+        ['form-start', 'form-start-all', 'form-cancel'].forEach(function (id) {
             $(id).addEventListener('submit', function () {
                 document.querySelectorAll('button[form="' + id + '"], #' + id + ' button').forEach(function (b) { b.disabled = true; });
             });

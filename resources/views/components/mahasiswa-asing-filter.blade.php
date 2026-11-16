@@ -7,7 +7,7 @@
     admin (is_admin=true) dapat can_select_fakultas/can_select_program_studi
     dari API dan JS yang nampilin dua field ini.
 --}}
-<div class="glass mb-4 grid grid-cols-1 gap-2.5 rounded-2xl p-3.5 sm:mb-5 sm:grid-cols-4 sm:gap-3 sm:p-4 lg:grid-cols-[110px_1fr_1.4fr_1fr]">
+<div id="ma-filter-bar" class="glass mb-4 grid grid-cols-1 gap-2.5 rounded-2xl p-3.5 sm:mb-5 sm:grid-cols-4 sm:gap-3 sm:p-4 lg:grid-cols-[110px_1fr_1.4fr_1fr]">
     <div class="flex flex-col gap-1.5">
         <label for="ma-ts" class="text-[11px] font-semibold uppercase tracking-wide text-muted">TS</label>
         <select id="ma-ts" class="filter-select"></select>

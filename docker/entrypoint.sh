@@ -62,4 +62,27 @@ php artisan view:cache || true
     done
 ) >>storage/logs/queue-worker.log 2>&1 &
 
+# Consumer Kafka (lihat docs/kafka.md): membaca event SAPTO dari topic dan
+# menyimpannya ke kafka_event_log (arsip audit + halaman Admin -> Event Stream).
+# Pola sama dengan queue worker di atas. Dua tahap dalam satu latar belakang:
+#  1. sapto:kafka-setup membuat topic (idempoten) dan menunggu REST Proxy siap
+#     -- sesudah reboot server broker bisa butuh lebih dari semenit;
+#  2. sapto:kafka-consume keluar sendiri tiap jam, loop menyalakannya lagi
+#     (memori dilepas, kode baru terpakai).
+# Kalau Kafka mati, yang terjadi hanya log di sini; aplikasi utama tidak
+# terganggu dan event yang gagal terkirim ditampung outbox.
+if [ "${KAFKA_ENABLED:-true}" = "true" ]; then
+    (
+        until php artisan sapto:kafka-setup --wait=180; do
+            echo "$(date -Is) sapto:kafka-setup gagal, diulang 30 detik lagi"
+            sleep 30
+        done
+        while true; do
+            php artisan sapto:kafka-consume
+            echo "$(date -Is) sapto:kafka-consume keluar (kode $?), dinyalakan ulang dalam 5 detik"
+            sleep 5
+        done
+    ) >>storage/logs/kafka-consumer.log 2>&1 &
+fi
+
 php artisan serve --host=0.0.0.0 --port=8000

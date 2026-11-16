@@ -6,88 +6,92 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Roster id_sdm DTPS untuk tabel keluarga "Luaran/Publikasi" SISTER (3.b.4
- * dst) -- diekstrak dari SaptoPublikasiDtpsRepository supaya bisa dipakai
- * ulang oleh tabel lain di keluarga yang sama (mis. 3.b.7) tanpa duplikasi.
+ * Roster id_sdm dosen untuk tabel keluarga "Luaran/Publikasi" SISTER (3.b.4
+ * dst) -- dipakai ulang oleh tabel lain di keluarga yang sama (3.b.7 Paten,
+ * Hak Cipta, Teknologi, Buku; 3.b.1 Rekognisi).
  *
- * BEDA dari CountsLulusanPerProdi/tabel 3.b.2-3.b.3 (yang pakai
- * list_penugasan_dosen.a_sp_homebase + id_prodi): keluarga publikasi ini
- * sumbernya sister_list_penugasan (pipeline sync SISTER terpisah), dan
- * prodi dicocokkan lewat unit_kerja = nama_program_studi (string), bukan
- * id_prodi -- karena sister_list_penugasan tidak punya kolom id_prodi.
+ * Roster per tahun = (a) DTPS DITAMBAH (b) dosen pengajar (keputusan
+ * pengguna, pola sama dengan 3.a.1 / EWMP / 3.b.2 / 3.b.3):
  *
- * Menggunakan sister_list_penugasan dengan ROW_NUMBER untuk memilih
- * penugasan homebase terakhir tiap dosen yang masih aktif pada tahun
- * tertentu, disaring jenjang_pendidikan. Class pemakai wajib punya
- * `cacheTtl()` (lihat ResolvesSaptoScope).
+ * (a) DTPS -- definisi SAMA dengan Tabel 3.a.1:
+ *     - list_penugasan_dosen, baris homebase (a_sp_homebase = 1)
+ *     - ikatan kerja tetap: A, B, F, H, I, N
+ *     - TS = 4 digit awal nama_tahun_ajaran
+ *     - id_prodi wajib terdaftar di program_studi (buang unit non-akademik)
+ *     - prodi disaring menurut jenjang (program_studi.nama_jenjang_pendidikan)
+ *
+ * (b) Dosen yang MENGAJAR kelas prodi di scope pada tahun itu
+ *     (dosen_pengajar_kelas_kuliah, semester ganjil/genap/pendek; prodi
+ *     disaring jenjang yang sama). Ikut hanya bila $termasukPengajar = true
+ *     (default). 3.b.1 Rekognisi memanggil dengan false karena butuh daftar
+ *     DTPS murni untuk kolom tanda DTPS dan menambah pengajar sendiri.
+ *
+ * id_dosen feeder diperlakukan sama dengan id_sdm SISTER (terverifikasi
+ * >99%).
+ *
+ * Class pemakai wajib punya `cacheTtl()` (lihat ResolvesSaptoScope).
  */
 trait ResolvesPublikasiDtpsRoster
 {
     /**
-     * @param  array<int, string>|null  $scopeProdiIds
-     * @param  array<int, string>  $jenjangValues
-     * @return array<int, string>
+     * @param  int  $year  TS (tahun awal tahun ajaran, mis. 2025 untuk 2025/2026)
+     * @param  array<int, string>|null  $scopeProdiIds  null/[] = semua prodi
+     * @param  array<int, string>  $jenjangValues  mis. ['S1','S2','S3']; [] = tanpa filter jenjang
+     * @param  bool  $termasukPengajar  true = DTPS + dosen pengajar; false = DTPS saja
+     * @return array<int, string>  daftar id_sdm (= id_dosen) unik
      */
-    private function publikasiDtpsIds(int $year, ?array $scopeProdiIds, array $jenjangValues): array
+    private function publikasiDtpsIds(int $year, ?array $scopeProdiIds, array $jenjangValues, bool $termasukPengajar = true): array
     {
-        $cacheKey = 'sapto:publikasi-dtps:roster:v2:'.md5(json_encode([$year, $scopeProdiIds, $jenjangValues]));
+        $cacheKey = 'sapto:publikasi-dtps:roster:v4:'.md5(json_encode([$year, $scopeProdiIds, $jenjangValues, $termasukPengajar]));
 
-        return Cache::remember($cacheKey, $this->cacheTtl(), function () use ($year, $scopeProdiIds, $jenjangValues): array {
-            $bindings = [];
-            $unitFilter = '';
+        return Cache::remember($cacheKey, $this->cacheTtl(), function () use ($year, $scopeProdiIds, $jenjangValues, $termasukPengajar): array {
+            // Harus sama persis dengan filter ikatan kerja di Tabel 3.a.1.
+            $ikatanKerjaTetap = ['A', 'B', 'F', 'H', 'I', 'N'];
+
+            $prodiValid = function ($sub) use ($jenjangValues): void {
+                $sub->select('id_prodi')
+                    ->from('program_studi')
+                    ->whereNotNull('nama_program_studi')
+                    ->where('nama_program_studi', '<>', '');
+
+                if ($jenjangValues !== []) {
+                    $sub->whereIn('nama_jenjang_pendidikan', $jenjangValues);
+                }
+            };
+
+            $query = DB::table('list_penugasan_dosen as lpd')
+                ->where('lpd.a_sp_homebase', '1')
+                ->whereIn('lpd.id_ikatan_kerja', $ikatanKerjaTetap)
+                ->whereRaw('substr(lpd.nama_tahun_ajaran,1,4) = ?', [(string) $year])
+                ->whereNotNull('lpd.id_dosen')
+                ->where('lpd.id_dosen', '<>', '')
+                ->whereIn('lpd.id_prodi', $prodiValid);
 
             if ($scopeProdiIds !== null && $scopeProdiIds !== []) {
-                $namaProdis = DB::table('program_studi')
-                    ->whereIn('id_prodi', $scopeProdiIds)
-                    ->whereNotNull('nama_program_studi')
-                    ->where('nama_program_studi', '<>', '')
-                    ->pluck('nama_program_studi')
-                    ->all();
-
-                if ($namaProdis === []) {
-                    return [];
-                }
-
-                $placeholders = implode(',', array_fill(0, count($namaProdis), '?'));
-                $unitFilter = "AND pg.unit_kerja IN ({$placeholders})";
-                $bindings = $namaProdis;
-            } else {
-                $unitFilter = "AND pg.unit_kerja IN (SELECT nama_program_studi FROM program_studi WHERE nama_program_studi IS NOT NULL AND nama_program_studi <> '')";
+                $query->whereIn('lpd.id_prodi', $scopeProdiIds);
             }
 
-            $jenjangPlaceholders = implode(',', array_fill(0, count($jenjangValues), '?'));
-            $fullBindings = array_merge($bindings, [(string) $year, (string) $year], $jenjangValues);
+            $ids = $query->distinct()->pluck('lpd.id_dosen');
 
-            $rows = DB::select("
-                SELECT id_sdm
-                FROM (
-                    SELECT
-                        pg.id_sdm,
-                        pg.jenjang_pendidikan,
-                        pg.tanggal_mulai,
-                        pg.tanggal_keluar,
-                        ROW_NUMBER() OVER (
-                            PARTITION BY pg.id_sdm
-                            ORDER BY SUBSTR(pg.tanggal_mulai, 1, 10) DESC,
-                                     (pg.apakah_penugasan_homebase IN ('1','Ya','ya','Y','true')) DESC,
-                                     pg.id DESC
-                        ) AS rn
-                    FROM sister_list_penugasan pg
-                    WHERE pg.perguruan_tinggi = 'Universitas Sriwijaya'
-                      AND SUBSTR(pg.tanggal_mulai, 1, 4) BETWEEN '1900' AND '2100'
-                      AND pg.apakah_penugasan_homebase IN ('1','Ya','ya','Y','true')
-                      {$unitFilter}
-                ) ranked
-                WHERE rn = 1
-                  AND SUBSTR(tanggal_mulai, 1, 4) <= ?
-                  AND (tanggal_keluar IS NULL OR tanggal_keluar = '' OR SUBSTR(tanggal_keluar, 1, 4) >= ?)
-                  AND jenjang_pendidikan IN ({$jenjangPlaceholders})
-            ", $fullBindings);
+            if ($termasukPengajar) {
+                $pengajar = DB::table('dosen_pengajar_kelas_kuliah as dp')
+                    ->whereRaw('left(dp.id_semester,4) = ?', [(string) $year])
+                    ->whereNotNull('dp.id_dosen')
+                    ->where('dp.id_dosen', '<>', '')
+                    ->whereIn('dp.id_prodi', $prodiValid);
 
-            return array_values(array_unique(array_map(
-                fn (object $row): string => (string) $row->id_sdm,
-                $rows,
-            )));
+                if ($scopeProdiIds !== null && $scopeProdiIds !== []) {
+                    $pengajar->whereIn('dp.id_prodi', $scopeProdiIds);
+                }
+
+                $ids = $ids->merge($pengajar->distinct()->pluck('dp.id_dosen'));
+            }
+
+            return $ids
+                ->map(fn ($id): string => (string) $id)
+                ->unique()
+                ->values()
+                ->all();
         });
     }
 }

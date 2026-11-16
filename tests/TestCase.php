@@ -48,6 +48,23 @@ abstract class TestCase extends BaseTestCase
             'foreign_key_constraints' => true,
         ]);
 
+        // config/queue.php membaca env('DB_CONNECTION') LANGSUNG untuk batch
+        // dan failed_jobs, bukan database.default -- jadi tanpa ini `mysql`
+        // dari environment container tetap terpakai. 2026-09-30: tes yang
+        // membuat batch menulis empat baris `running` ke job_batches PRODUKSI,
+        // dan sinkronisasi mingguan hampir dilewati karena dikira masih
+        // berjalan. Semua konfigurasi yang bisa menunjuk database di luar
+        // config('database.default') harus dipaksa di sini.
+        $app['config']->set('queue.batching.database', 'sqlite');
+        $app['config']->set('queue.failed.database', 'sqlite');
+        $app['config']->set('queue.connections.database.connection', 'sqlite');
+        $app['config']->set('session.connection', 'sqlite');
+        $app['config']->set('cache.stores.database.connection', 'sqlite');
+
+        // Repository batch dibuat sekali lalu disimpan; buang supaya dibuat
+        // ulang dengan koneksi di atas.
+        $app->forgetInstance(\Illuminate\Bus\BatchRepository::class);
+
         // Drop any connection that may already have been resolved so the new
         // sqlite config is what actually gets used.
         $app->make('db')->purge();

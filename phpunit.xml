@@ -34,6 +34,12 @@
              dan tiap test HTTP menulis file session nyata. -->
         <server name="CACHE_STORE" value="array" force="true"/>
         <env name="CACHE_STORE" value="array" force="true"/>
+        <!-- Sama seperti CACHE_STORE: tes berjalan di container produksi, jadi
+             tanpa dipaksa mati, tes SSO/penugasan mengirim event sungguhan ke
+             Kafka produksi. false = publish langsung ke outbox tanpa jaringan
+             (lihat config/kafka.php). -->
+        <server name="KAFKA_ENABLED" value="false" force="true"/>
+        <env name="KAFKA_ENABLED" value="false" force="true"/>
         <env name="DB_CONNECTION" value="sqlite" force="true"/>
         <env name="DB_DATABASE" value=":memory:" force="true"/>
         <env name="DB_URL" value=""/>

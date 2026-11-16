@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\Penugasan;
 use App\Models\User;
+use App\Services\KafkaProducerService;
 use App\Support\TelegramNotifier;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Request;
@@ -137,6 +138,10 @@ class SsoController extends Controller
         // Admin SAPTO tidak wajib punya penugasan — hak aksesnya universitas.
         if (! $ssoUser['is_admin'] && ! $this->hasPenugasan($ssoUser)) {
             $this->logAccessDenied($ssoUser, (string) $userinfo->json('preferred_username'), $request);
+            // Sesi belum dibuat untuk akun ini, jadi pelakunya dikirim eksplisit.
+            app(KafkaProducerService::class)->publish('sapto.audit', 'auth.access_denied', [
+                'ip' => $request->ip(),
+            ], $ssoUser['email'] ?? null, KafkaProducerService::actor($ssoUser));
 
             return redirect('/')->with('not_korprodi_hint', $userinfo->json('name') ?: $userinfo->json('preferred_username'));
         }
@@ -159,6 +164,10 @@ class SsoController extends Controller
         }
 
         $this->notifyLogin($ssoUser, $request);
+        app(KafkaProducerService::class)->audit('auth.login', [
+            'ip' => $request->ip(),
+            'admin' => (bool) $ssoUser['is_admin'],
+        ], $request);
 
         return redirect()->intended('/');
     }
@@ -289,6 +298,8 @@ class SsoController extends Controller
     public function logout(Request $request)
     {
         $idToken = $request->session()->pull('sso_id_token');
+        // Sebelum sesi dikosongkan, supaya pelakunya masih terbaca.
+        app(KafkaProducerService::class)->audit('auth.logout', ['ip' => $request->ip()], $request);
         $request->session()->flush();
         $request->session()->regenerate();
 

@@ -27,8 +27,15 @@ class WebNotificationController extends Controller
 
         $afterId = (int) $request->integer('after_id');
 
+        // Notifikasi khusus admin (audience='admin') disaring di server, bukan
+        // di frontend -- isinya info operasional yang bukan untuk korprodi.
+        // Saat admin menyamar, sso_user adalah akun tiruan tanpa is_admin,
+        // jadi yang terlihat tetap sama dengan orang yang disamarkan.
+        $isAdmin = (bool) ($request->session()->get('sso_user')['is_admin'] ?? false);
+
         $notifications = WebNotification::query()
             ->where('id', '>', $afterId)
+            ->when(! $isAdmin, fn ($q) => $q->whereNull('audience'))
             ->orderBy('id')
             ->limit(20)
             ->get(['id', 'message', 'created_at']);

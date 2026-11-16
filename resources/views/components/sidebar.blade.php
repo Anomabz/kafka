@@ -185,6 +185,18 @@
     </div>
 
     <nav id="menu" class="menu flex-1 space-y-4 overflow-y-auto px-3 py-3" aria-label="Menu tabel SAPTO">
+        {{-- Beranda: halaman awal desktop (ringkasan). Bukan tabel, jadi di luar
+             grup dan tidak ikut disaring pencarian tabel di atas. --}}
+        <button
+            type="button"
+            data-table-id="beranda"
+            class="menu-item menu-home {{ ($activeTableId ?? '') === 'beranda' ? 'is-active' : '' }}"
+            title="Beranda"
+        >
+            <svg class="menu-home-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" /></svg>
+            <span class="menu-home-text">Beranda</span>
+        </button>
+
         @foreach ($groups as $groupKey => $items)
             @if (in_array($groupKey, $dropdownGroups, true))
                 @php
@@ -973,6 +985,19 @@
         color: var(--side-text);
     }
 
+    /* Beranda: item tunggal di atas daftar grup, bergaya seperti judul grup. */
+    .menu-home {
+        gap: 0.75rem;
+        font-weight: 700;
+        color: var(--side-text);
+    }
+
+    .menu-home-icon {
+        width: 1.1rem;
+        height: 1.1rem;
+        flex-shrink: 0;
+    }
+
     /* Rail (sidebar "tertutup") di desktop — lihat #app-shell.sidebar-closed
        di app.css untuk lebar/grid-nya. Aturan isi rail ditaruh di sini
        (bukan app.css) karena blok <style> ini unlayered (di luar @layer
@@ -992,8 +1017,15 @@
         #app-shell.sidebar-closed #sidebar .menu-group-chevron,
         #app-shell.sidebar-closed #sidebar .menu-group-panel,
         #app-shell.sidebar-closed #sidebar .sidebar-admin-link-text,
+        #app-shell.sidebar-closed #sidebar .menu-home-text,
         #app-shell.sidebar-closed #sidebar .sidebar-identity-text {
             display: none;
+        }
+
+        #app-shell.sidebar-closed #sidebar .menu-home {
+            justify-content: center;
+            padding-left: 0;
+            padding-right: 0;
         }
 
         #app-shell.sidebar-closed #sidebar .menu-group-toggle {
@@ -1067,11 +1099,11 @@
         inset: 0;
         z-index: -1;
         opacity: 0.12;
-        background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%2744%27%20height%3D%2744%27%20viewBox%3D%270%200%2044%2044%27%3E%3Cpath%20d%3D%27M22%200%20L44%2022%20L22%2044%20L0%2022%20Z%27%20fill%3D%27none%27%20stroke%3D%27rgba%2875%2C122%2C66%2C0.5%29%27%20stroke-width%3D%270.9%27/%3E%3Cg%20transform%3D%27translate%2822%2C22%29%27%20fill%3D%27none%27%20stroke%3D%27rgba%2875%2C122%2C66%2C0.6%29%27%20stroke-width%3D%271%27%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%2860%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28120%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28180%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28240%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28300%29%27/%3E%3Ccircle%20r%3D%271.8%27%20fill%3D%27rgba%2875%2C122%2C66%2C0.6%29%27%20stroke%3D%27none%27/%3E%3C/g%3E%3C/svg%3E");
+        background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%2744%27%20height%3D%2744%27%20viewBox%3D%270%200%2044%2044%27%3E%3Cpath%20d%3D%27M22%200%20L44%2022%20L22%2044%20L0%2022%20Z%27%20fill%3D%27none%27%20stroke%3D%27rgba%2870%2C90%2C110%2C0.5%29%27%20stroke-width%3D%270.9%27/%3E%3Cg%20transform%3D%27translate%2822%2C22%29%27%20fill%3D%27none%27%20stroke%3D%27rgba%2870%2C90%2C110%2C0.6%29%27%20stroke-width%3D%271%27%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%2860%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28120%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28180%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28240%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28300%29%27/%3E%3Ccircle%20r%3D%271.8%27%20fill%3D%27rgba%2870%2C90%2C110%2C0.6%29%27%20stroke%3D%27none%27/%3E%3C/g%3E%3C/svg%3E");
         background-size: 40px 40px;
     }
 
     :root[data-theme='dark'] .sidebar-header::before {
-        background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%2744%27%20height%3D%2744%27%20viewBox%3D%270%200%2044%2044%27%3E%3Cpath%20d%3D%27M22%200%20L44%2022%20L22%2044%20L0%2022%20Z%27%20fill%3D%27none%27%20stroke%3D%27rgba%28143%2C191%2C126%2C0.5%29%27%20stroke-width%3D%270.9%27/%3E%3Cg%20transform%3D%27translate%2822%2C22%29%27%20fill%3D%27none%27%20stroke%3D%27rgba%28143%2C191%2C126%2C0.6%29%27%20stroke-width%3D%271%27%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%2860%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28120%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28180%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28240%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28300%29%27/%3E%3Ccircle%20r%3D%271.8%27%20fill%3D%27rgba%28143%2C191%2C126%2C0.6%29%27%20stroke%3D%27none%27/%3E%3C/g%3E%3C/svg%3E");
+        background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%2744%27%20height%3D%2744%27%20viewBox%3D%270%200%2044%2044%27%3E%3Cpath%20d%3D%27M22%200%20L44%2022%20L22%2044%20L0%2022%20Z%27%20fill%3D%27none%27%20stroke%3D%27rgba%28143%2C163%2C179%2C0.5%29%27%20stroke-width%3D%270.9%27/%3E%3Cg%20transform%3D%27translate%2822%2C22%29%27%20fill%3D%27none%27%20stroke%3D%27rgba%28143%2C163%2C179%2C0.6%29%27%20stroke-width%3D%271%27%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%2860%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28120%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28180%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28240%29%27/%3E%3Cellipse%20cx%3D%270%27%20cy%3D%27-8.5%27%20rx%3D%273.6%27%20ry%3D%277%27%20transform%3D%27rotate%28300%29%27/%3E%3Ccircle%20r%3D%271.8%27%20fill%3D%27rgba%28143%2C163%2C179%2C0.6%29%27%20stroke%3D%27none%27/%3E%3C/g%3E%3C/svg%3E");
     }
 </style>

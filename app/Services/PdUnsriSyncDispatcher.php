@@ -2,9 +2,9 @@
 
 namespace App\Services;
 
-use App\Jobs\RefreshSaptoCacheJob;
 use App\Jobs\SyncPdUnsriTableJob;
 use App\Models\PdUnsriSyncResult;
+use App\Services\Kafka\KafkaMonitor;
 use Cron\CronExpression;
 use Illuminate\Bus\Batch;
 use Illuminate\Support\Carbon;
@@ -60,8 +60,43 @@ class PdUnsriSyncDispatcher
             ->name(self::BATCH_NAME)
             ->allowFailures()
             ->withOption('triggered_by', $triggeredBy)
-            ->finally(fn () => RefreshSaptoCacheJob::dispatch())
+            // Objek invokable, bukan closure: callback ini diserialisasi ke
+            // tabel job_batches (lihat PdUnsriSyncFinished).
+            ->finally(new PdUnsriSyncFinished)
             ->dispatch();
+    }
+
+    /**
+     * Kabar "putaran sinkronisasi selesai" ke Kafka (topic
+     * sapto.sync.batch_finished). Consumer menjadikannya notifikasi admin.
+     * Kegagalan di sini tidak boleh membatalkan callback batch, jadi semuanya
+     * dibungkus: producer sendiri sudah menelan error jaringan, ini menjaga
+     * dari kesalahan lain (mis. tabel hasil belum ada).
+     */
+    public static function announceBatchFinished(Batch $batch): void
+    {
+        try {
+            $count = PdUnsriSyncResult::query()
+                ->where('batch_id', $batch->id)
+                ->selectRaw('status, COUNT(*) AS n')
+                ->groupBy('status')
+                ->pluck('n', 'status');
+
+            $end = $batch->finishedAt ?? $batch->cancelledAt ?? now();
+
+            app(KafkaProducerService::class)->publish('sapto.sync.batch_finished', 'sync.batch_finished', [
+                'batch_id' => $batch->id,
+                'triggered_by' => $batch->options['triggered_by'] ?? null,
+                'total' => $batch->totalJobs,
+                'done' => (int) ($count[PdUnsriSyncResult::DONE] ?? 0),
+                'skipped' => (int) ($count[PdUnsriSyncResult::SKIPPED] ?? 0),
+                'failed' => (int) ($count[PdUnsriSyncResult::FAILED] ?? 0) + $batch->failedJobs,
+                'cancelled' => $batch->cancelled(),
+                'duration_seconds' => (int) $batch->createdAt->diffInSeconds($end, true),
+            ], key: $batch->id);
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 
     /** Batch yang paling baru dimulai, kalau ada. */
@@ -228,6 +263,13 @@ class PdUnsriSyncDispatcher
             'total_tables' => count($rows),
             'next_run_at' => $this->nextScheduledRun()->toIso8601String(),
             'history' => $this->history(5),
+            // Status nyata dari producer & consumer (cache + database, tanpa
+            // jaringan) -- dulu kartu ini selalu menulis "Aktif & Terhubung"
+            // walau Kafka tidak pernah menerima satu pesan pun.
+            'kafka' => app(KafkaMonitor::class)->brief() + [
+                'topic' => 'sapto.sync.table_updated',
+                'url' => route('admin.kafka'),
+            ],
         ];
     }
 

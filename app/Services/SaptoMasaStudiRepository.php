@@ -93,6 +93,7 @@ class SaptoMasaStudiRepository
                 $row = [
                     'no' => $index + 1,
                     'tahun_masuk' => $tahunMasuk.' (TS-'.$back.')',
+                    'tahun_masuk_tahun' => $tahunMasuk,
                     'diterima' => (int) ($data['diterima'][$tahunMasuk] ?? 0),
                 ];
 
@@ -102,10 +103,12 @@ class SaptoMasaStudiRepository
                     // Lulus hanya mungkin setelah masuk; sel sebelum tahun masuk 0.
                     $count = $gradYear >= $tahunMasuk ? (int) ($cohort['grad'][$gradYear] ?? 0) : 0;
                     $row['g_'.$g] = $count;
+                    $row['tahun_lulus_g_'.$g] = $gradYear;
                     $lulusSdTs += $count;
                 }
 
                 $row['lulus_sd_ts'] = $lulusSdTs;
+                $row['tahun_lulus_sd_ts'] = $ts;
                 $row['masa_studi_rata'] = $cohort['masa_n'] > 0
                     ? round($cohort['masa_total'] / $cohort['masa_n'], 2)
                     : null;
@@ -127,6 +130,71 @@ class SaptoMasaStudiRepository
             'notice' => null,
             'source' => $this->sourcePayload(),
         ];
+    }
+
+    /** Detail mahasiswa pada angka jumlah di Tabel 8.c. */
+    public function detail(int $ts, int $angkatan, ?int $tahunLulus, string $jenis, ?string $fakultasId, ?string $programStudiId): array
+    {
+        $programStudis = $this->client->programStudis();
+        [$programStudi] = $this->validateScope($programStudis, $fakultasId, $programStudiId);
+
+        if ($programStudi === null) {
+            return [];
+        }
+
+        [$cohortsBack, $gradColsBack] = $this->jenjangConfig((string) ($programStudi['jenjang'] ?? ''));
+        $cohortYears = array_map(fn (int $back): int => $ts - $back, $cohortsBack);
+        $gradYears = array_map(fn (int $back): int => $ts - $back, $gradColsBack);
+
+        if (! in_array($angkatan, $cohortYears, true)
+            || ! in_array($jenis, ['diterima', 'lulus'], true)
+            || ($tahunLulus !== null && ! in_array($tahunLulus, $gradYears, true))
+            || ($jenis === 'diterima' && $tahunLulus !== null)) {
+            return [];
+        }
+
+        $query = DB::table('list_mahasiswa')
+            ->select(['nim', 'nama_mahasiswa as nama', 'nama_program_studi as program_studi', 'id_periode', 'id_periode_keluar', 'tanggal_keluar', 'ipk', 'nama_status_mahasiswa'])
+            ->where('id_prodi', (string) $programStudi['id'])
+            ->whereRaw('substr(id_periode,1,4) = ?', [(string) $angkatan]);
+
+        if ($jenis === 'lulus') {
+            $query->where('nama_status_mahasiswa', 'Lulus');
+        }
+
+        $items = [];
+        foreach ($query->orderBy('nama_mahasiswa')->cursor() as $row) {
+            $gradYear = null;
+            $gradPeriod = (string) ($row->id_periode_keluar ?? '');
+            $gradIndex = $this->periodeIndex($gradPeriod);
+            $gradYear = $gradIndex !== null ? (int) substr($gradPeriod, 0, 4) : null;
+
+            if ($jenis === 'lulus') {
+                if ($gradYear === null) {
+                    $date = $this->parseDate((string) ($row->tanggal_keluar ?? ''));
+                    $gradYear = $date?->format('Y') !== null ? (int) $date->format('Y') : null;
+                }
+
+                if ($gradYear === null
+                    || $gradYear < $angkatan
+                    || ! in_array($gradYear, $gradYears, true)
+                    || ($tahunLulus !== null && $gradYear !== $tahunLulus)) {
+                    continue;
+                }
+            }
+
+            $items[] = [
+                'nim' => $row->nim,
+                'nama' => $row->nama,
+                'program_studi' => $row->program_studi,
+                'angkatan' => $angkatan,
+                'tahun_lulus' => $gradYear,
+                'ipk' => $row->ipk,
+                'status' => $row->nama_status_mahasiswa,
+            ];
+        }
+
+        return $items;
     }
 
     /**

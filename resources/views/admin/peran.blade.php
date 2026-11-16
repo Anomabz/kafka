@@ -26,7 +26,7 @@
         font-weight: 800;
         white-space: nowrap;
         color: #ffffff;
-        background: #4b7a42;
+        background: var(--brand);
         box-shadow: none;
         cursor: pointer;
         transition: transform 120ms ease, filter 120ms ease;
@@ -178,7 +178,7 @@
         left: 0;
         right: 0;
         height: 3px;
-        background: #4b7a42;
+        background: var(--brand);
     }
 
     .adm-dialog-head h2 { margin: 0; font-size: 18px; font-weight: 800; letter-spacing: -0.01em; }
@@ -228,7 +228,7 @@
     .adm-btn-primary {
         border: 0;
         color: #ffffff;
-        background: #4b7a42;
+        background: var(--brand);
         box-shadow: none;
     }
 

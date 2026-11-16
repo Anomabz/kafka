@@ -2,33 +2,53 @@
 
 namespace App\Services;
 
+use App\Services\Concerns\ResolvesDosenProfil;
 use App\Services\Concerns\ResolvesSaptoScope;
 use App\Services\Concerns\ResolvesSaptoTs;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Tabel 3.a.4) Dosen Tidak Tetap. Sumber: list_penugasan_dosen, sama seperti
- * SaptoDosenTetapRepository tapi kebalikan flag-nya: baris a_sp_homebase = 0
- * berarti dosen itu ditugaskan mengajar di prodi tsb tanpa prodi itu jadi
- * homebase-nya — persis definisi operasional "dosen tidak tetap pada PS ini".
- * Terverifikasi di data produksi: 114 dari 192 dosen tidak tetap TS 2024
- * justru tercatat homebase (dosen tetap) di prodi lain, konsisten dengan pola
- * "dosen tetap PS lain yang diperbantukan mengajar di sini". Satu baris per
- * pasangan (dosen, prodi) — beda dari Dosen Tetap yang satu baris per dosen,
- * karena dosen tidak tetap yang sama boleh legitimately muncul di lebih dari
- * satu PS.
+ * Tabel 3.a.4) Dosen Tidak Tetap.
  *
- * Catatan: kolom akreditasi lengkap (pendidikan, jabatan akademik, sertifikat
- * pendidik, bidang keahlian, mata kuliah) belum tersedia — tabel biodata/
- * riwayat dosen masih kosong di sumber, dan kelas_kuliah cuma menyimpan kode
- * kelas ("222P1"), bukan nama mata kuliah — jadi roster ini menampilkan
- * identitas + prodi penugasan saja.
+ * Status dinilai PADA TS TERPILIH (TS = 4 digit awal nama_tahun_ajaran /
+ * id_semester). Dosen yang tidak tetap di 2022 lalu tetap di 2023 tampil di
+ * 3.a.4 untuk TS 2022 dan di 3.a.1 mulai TS 2023.
+ *
+ * "Dosen tetap" pada TS = punya penugasan dengan ikatan kerja tetap
+ * (A/B/F/H/I/N), homebase 1 MAUPUN 0 -- definisi yang sama dengan Tabel 3.a.1.
+ * Dosen tetap yang mengajar di PS lain masuk 3.a.1, bukan tabel ini.
+ *
+ * Dosen masuk daftar program studi B bila:
+ *  1. punya penugasan di B pada TS dengan ikatan kerja G -- KODE G YANG
+ *     MENENTUKAN (keputusan pengguna), APA PUN nilai a_sp_homebase-nya.
+ *     Terverifikasi dosen G (contoh: ERWEDI, S1 Teknik Pertambangan)
+ *     tercatat a_sp_homebase = 1, sehingga syarat lama "a_sp_homebase = 0"
+ *     membuatnya hilang dari 3.a.1 maupun 3.a.4. PENGECUALIAN: bila pada TS
+ *     yang sama dosen itu juga punya penugasan berkode tetap di prodi yang
+ *     sama (diangkat CPNS/PPPK di tengah tahun), status tetap yang menang
+ *     dan ia hanya tampil di 3.a.1; ATAU
+ *  2. mengajar kelas di B pada TS (dosen_pengajar_kelas_kuliah, semester
+ *     ganjil atau genap) dan BUKAN dosen tetap pada TS itu.
+ * Roster dihimpun per pasangan dosen + prodi, lalu DITAMPILKAN SATU BARIS PER
+ * DOSEN: prodi-prodinya digabung dalam kolom Program Studi (dipisah "; ").
+ * Total = jumlah dosen unik.
+ *
+ * Pendidikan pasca sarjana (doktor, bila tidak ada magister), bidang
+ * keahlian, jabatan akademik, dan sertifikat lewat trait ResolvesDosenProfil
+ * (sama dengan 3.a.1). Kolom mata kuliah dan kesesuaian masih "-".
  */
 class SaptoDosenTidakTetapRepository
 {
+    use ResolvesDosenProfil;
     use ResolvesSaptoScope;
     use ResolvesSaptoTs;
+
+    /** Ikatan kerja tetap -- harus sama dengan Tabel 3.a.1. */
+    private const IKATAN_TETAP = ['A', 'B', 'F', 'H', 'I', 'N'];
+
+    /** Ikatan kerja yang MENENTUKAN dosen tidak tetap (keputusan pengguna). */
+    private const IKATAN_TIDAK_TETAP = ['G'];
 
     public function __construct(
         private readonly SaptoProgramStudiRepository $client,
@@ -45,21 +65,60 @@ class SaptoDosenTidakTetapRepository
 
         $roster = $scopeProdiIds === [] ? [] : $this->roster($ts, $scopeProdiIds);
 
+        $dosenIds = array_values(array_unique(array_map(fn (array $row): string => (string) $row['id_dosen'], $roster)));
+        $pendidikan = $this->pendidikanByDosen($dosenIds);
+        $jabatan = $this->jabatanAkademikByDosen($dosenIds, $ts);
+        $sertifikat = $this->sertifikatByDosen($dosenIds);
+
         $rows = collect($roster)
-            ->map(function (array $row) use ($programIndex): array {
+            ->map(function (array $row) use ($programIndex, $pendidikan, $jabatan, $sertifikat): array {
                 $program = $programIndex->get((string) $row['id_prodi']);
+                $dosenId = (string) $row['id_dosen'];
+                $edu = $pendidikan[$dosenId] ?? ['magister' => null, 'doktor' => null, 'bidang_keahlian' => null];
+                $sert = $sertifikat[$dosenId] ?? ['pendidik' => null, 'kompetensi' => null];
 
                 return [
-                    'dosen_id' => (string) $row['id_dosen'],
+                    'dosen_id' => $dosenId,
                     'nama_dosen' => (string) $row['nama_dosen'],
-                    'nidn' => (string) ($row['nidn'] ?? ''),
+                    'nidn' => $this->nidnAtauNuptk($row['nidn'] ?? null, $row['nuptk'] ?? null),
                     'nuptk' => (string) ($row['nuptk'] ?? ''),
                     'jenis_kelamin' => $this->jenisKelamin((string) ($row['jk'] ?? '')),
-                    'program_studi' => SaptoProgramStudiRepository::cleanLabel($program['label'] ?? $row['nama_program_studi'] ?? 'Belum Dipetakan'),
+                    'program_studi' => SaptoProgramStudiRepository::cleanLabel(
+                        $program['label'] ?? $row['nama_program_studi'] ?? 'Belum Dipetakan'
+                    ),
                     'fakultas' => (string) ($program['fakultas'] ?? 'Belum Dipetakan'),
+                    // Pendidikan pasca sarjana tertinggi: doktor, lalu magister.
+                    'pendidikan_pasca_sarjana' => $edu['doktor'] ?? $edu['magister'],
+                    'bidang_keahlian' => $edu['bidang_keahlian'],
+                    'jabatan_akademik' => $jabatan[$dosenId] ?? null,
+                    'sertifikat_pendidik' => $sert['pendidik'],
+                    'sertifikat_kompetensi' => $sert['kompetensi'],
                 ];
             })
-            ->sortBy([['fakultas', 'asc'], ['program_studi', 'asc'], ['nama_dosen', 'asc']])
+            // SATU BARIS PER DOSEN (keputusan pengguna): dosen yang mengajar
+            // di beberapa prodi tidak diulang; prodinya digabung dalam satu sel.
+            ->groupBy('dosen_id')
+            ->map(function ($group): array {
+                $first = $group->first();
+                $first['program_studi'] = $group->pluck('program_studi')->unique()->sort()->implode('; ');
+                $first['fakultas'] = $group->pluck('fakultas')->unique()->sort()->implode('; ');
+
+                foreach ($group as $row) {
+                    foreach ($row as $field => $value) {
+                        if (($first[$field] ?? null) === null || $first[$field] === '' || $first[$field] === '-') {
+                            $first[$field] = $value;
+                        }
+                    }
+                }
+
+                return $first;
+            })
+            ->values()
+            ->sortBy([
+                ['fakultas', 'asc'],
+                ['program_studi', 'asc'],
+                ['nama_dosen', 'asc'],
+            ])
             ->values()
             ->map(function (array $row, int $index): array {
                 $row['no'] = $index + 1;
@@ -75,11 +134,6 @@ class SaptoDosenTidakTetapRepository
             'available_years' => $this->availableYears(),
             'fakultas' => $fakultas,
             'program_studi' => $programStudi,
-            // Kolom mengikuti format BAN-PT Tabel 3.a.4. Kolom pendidikan pasca
-            // sarjana, bidang keahlian, jabatan akademik, sertifikat, dan mata
-            // kuliah belum bisa diisi (tabel biodata/riwayat dosen masih kosong
-            // di sumber) sehingga tampil "-" — generic renderer memetakan key
-            // yang tidak ada menjadi "-".
             'columns' => [
                 ['key' => 'no', 'label' => 'No', 'align' => 'left'],
                 ['key' => 'nama_dosen', 'label' => 'Nama Dosen', 'align' => 'left'],
@@ -100,44 +154,170 @@ class SaptoDosenTidakTetapRepository
     }
 
     /**
-     * Satu baris per pasangan (dosen, prodi): baris non-homebase pada tahun
-     * ajaran terpilih. Duplikat (dosen,prodi) yang sama (mis. tercatat ganjil
-     * & genap) punya fakta identik, jadi cukup diambil satu (baris pertama).
+     * Satu baris per pasangan dosen + prodi (lihat docblock kelas).
      *
-     * @param  array<int, string>|null  $scopeProdiIds
+     * @param  array<int, string>|null  $scopeProdiIds  null = semua prodi
      * @return array<int, array<string, mixed>>
      */
     private function roster(int $ts, ?array $scopeProdiIds): array
     {
-        $cacheKey = 'sapto:dosen-tidak-tetap:v1:'.md5(json_encode([$ts, $scopeProdiIds]));
+        $cacheKey = 'sapto:dosen-tidak-tetap:v7:'.md5(json_encode([$ts, $scopeProdiIds]));
 
         return Cache::remember($cacheKey, $this->cacheTtl(), function () use ($ts, $scopeProdiIds): array {
-            $query = DB::table('list_penugasan_dosen')
-                ->select('id_dosen', 'nama_dosen', 'nidn', 'nuptk', 'jk', 'id_prodi', 'nama_program_studi')
-                ->where('a_sp_homebase', '0')
-                ->whereRaw('substr(nama_tahun_ajaran,1,4) = ?', [(string) $ts]);
-
-            if ($scopeProdiIds !== null) {
-                $query->whereIn('id_prodi', $scopeProdiIds);
-            }
-
+            $tetap = array_flip($this->dosenTetapIds($ts));
             $byPair = [];
 
-            foreach ($query->cursor() as $row) {
-                $dosenId = (string) $row->id_dosen;
-                $prodiId = (string) $row->id_prodi;
+            // 1) Penugasan berkode G di prodi pada TS, homebase 0 maupun 1.
+            //    Kode G yang menentukan: selalu masuk, tidak disaring status tetap.
+            $penugasan = DB::table('list_penugasan_dosen')
+                ->select('id_dosen', 'nama_dosen', 'nidn', 'nuptk', 'jk', 'id_prodi', 'nama_program_studi')
+                ->whereRaw('substr(nama_tahun_ajaran,1,4) = ?', [(string) $ts])
+                ->whereIn('id_ikatan_kerja', self::IKATAN_TIDAK_TETAP)
+                ->whereIn('id_prodi', $this->prodiValidSubquery());
 
-                if ($dosenId === '' || $prodiId === '') {
-                    continue;
-                }
-
-                // Duplikat (dosen,prodi) yang sama (mis. tercatat per semester)
-                // punya fakta identik, jadi baris pertama yang ditemukan cukup.
-                $byPair["{$dosenId}|{$prodiId}"] ??= $row;
+            if ($scopeProdiIds !== null) {
+                $penugasan->whereIn('id_prodi', $scopeProdiIds);
             }
 
-            return array_map(fn (object $row): array => (array) $row, array_values($byPair));
+            // Kecuali dosen yang pada TS yang sama JUGA punya penugasan berkode
+            // tetap di prodi yang sama -> status tetap yang menang (mis. DEWI
+            // PRATITA TS 2025: G hb0 -> N hb1 di S1 Pend. Ekonomi, diangkat
+            // PPPK di tengah tahun). Tanpa ini ia tercatat ganda di 3.a.1 & 3.a.4.
+            $tetapDiProdi = $this->pasanganTetap($ts);
+
+            foreach ($penugasan->cursor() as $row) {
+                if (isset($tetapDiProdi[(string) $row->id_dosen.'|'.(string) $row->id_prodi])) {
+                    continue;
+                }
+                $this->tambahPasangan($byPair, [], (array) $row);
+            }
+
+            // 2) Mengajar kelas di prodi pada TS dan bukan dosen tetap (dosen
+            //    tetap yang mengajar di PS lain masuk Tabel 3.a.1).
+            $pengajar = DB::table('dosen_pengajar_kelas_kuliah')
+                ->select('id_dosen', 'nama_dosen', 'nidn', 'nuptk', 'id_prodi')
+                ->whereRaw('left(id_semester,4) = ?', [(string) $ts])
+                ->whereNotNull('id_dosen')
+                ->where('id_dosen', '<>', '')
+                ->whereIn('id_prodi', $this->prodiValidSubquery());
+
+            if ($scopeProdiIds !== null) {
+                $pengajar->whereIn('id_prodi', $scopeProdiIds);
+            }
+
+            foreach ($pengajar->cursor() as $row) {
+                $this->tambahPasangan($byPair, $tetap, (array) $row + ['jk' => null, 'nama_program_studi' => null]);
+            }
+
+            // Jenis kelamin untuk dosen yang hanya ditemukan lewat data mengajar.
+            $tanpaJk = array_values(array_unique(array_map(
+                fn (array $row): string => (string) $row['id_dosen'],
+                array_filter($byPair, fn (array $row): bool => trim((string) ($row['jk'] ?? '')) === ''),
+            )));
+
+            if ($tanpaJk !== []) {
+                $jk = DB::table('list_penugasan_dosen')
+                    ->whereIn('id_dosen', $tanpaJk)
+                    ->whereNotNull('jk')
+                    ->where('jk', '<>', '')
+                    ->pluck('jk', 'id_dosen')
+                    ->all();
+
+                foreach ($byPair as &$row) {
+                    if (trim((string) ($row['jk'] ?? '')) === '') {
+                        $row['jk'] = $jk[(string) $row['id_dosen']] ?? null;
+                    }
+                }
+                unset($row);
+            }
+
+            return array_values($byPair);
         });
+    }
+
+    /**
+     * @param  array<string, array<string, mixed>>  $byPair
+     * @param  array<string, int>  $tetap
+     * @param  array<string, mixed>  $row
+     */
+    private function tambahPasangan(array &$byPair, array $tetap, array $row): void
+    {
+        $dosenId = (string) ($row['id_dosen'] ?? '');
+        $prodiId = (string) ($row['id_prodi'] ?? '');
+
+        if ($dosenId === '' || $prodiId === '' || isset($tetap[$dosenId])) {
+            return;
+        }
+
+        $key = "{$dosenId}|{$prodiId}";
+
+        if (! isset($byPair[$key])) {
+            $byPair[$key] = $row;
+
+            return;
+        }
+
+        // Lengkapi kolom kosong dari sumber lain (mis. jk/NIDN dari penugasan).
+        foreach ($row as $field => $value) {
+            if (trim((string) ($byPair[$key][$field] ?? '')) === '' && trim((string) ($value ?? '')) !== '') {
+                $byPair[$key][$field] = $value;
+            }
+        }
+    }
+
+    /**
+     * id_dosen yang berstatus dosen tetap pada TS (definisi 3.a.1).
+     *
+     * @return array<int, string>
+     */
+    private function dosenTetapIds(int $ts): array
+    {
+        // Homebase 1 maupun 0: kode tetap (A/B/F/H/I/N) yang menentukan.
+        // Dosen A + homebase 0 (mis. HERSYAMSI TS 2025) masuk 3.a.1, bukan sini.
+        return DB::table('list_penugasan_dosen')
+            ->whereIn('id_ikatan_kerja', self::IKATAN_TETAP)
+            ->whereRaw('substr(nama_tahun_ajaran,1,4) = ?', [(string) $ts])
+            ->whereNotNull('id_dosen')
+            ->distinct()
+            ->pluck('id_dosen')
+            ->map(fn ($id): string => (string) $id)
+            ->all();
+    }
+
+    /**
+     * Pasangan "id_dosen|id_prodi" yang punya penugasan berkode tetap pada TS
+     * (homebase 1 maupun 0).
+     *
+     * @return array<string, true>
+     */
+    private function pasanganTetap(int $ts): array
+    {
+        $pairs = [];
+        $rows = DB::table('list_penugasan_dosen')
+            ->select('id_dosen', 'id_prodi')
+            ->whereIn('id_ikatan_kerja', self::IKATAN_TETAP)
+            ->whereRaw('substr(nama_tahun_ajaran,1,4) = ?', [(string) $ts])
+            ->whereNotNull('id_dosen')
+            ->cursor();
+
+        foreach ($rows as $row) {
+            $pairs[(string) $row->id_dosen.'|'.(string) $row->id_prodi] = true;
+        }
+
+        return $pairs;
+    }
+
+    /**
+     * id_prodi yang benar-benar program studi (bukan biro/unit lain).
+     */
+    private function prodiValidSubquery(): \Closure
+    {
+        return function ($sub): void {
+            $sub->select('id_prodi')
+                ->from('program_studi')
+                ->whereNotNull('nama_program_studi')
+                ->where('nama_program_studi', '<>', '');
+        };
     }
 
     private function jenisKelamin(string $jk): string
@@ -171,14 +351,13 @@ class SaptoDosenTidakTetapRepository
      */
     public function availableYears(): array
     {
-        return Cache::remember('sapto:dosen-tidak-tetap:years:v1', $this->cacheTtl(), function (): array {
+        return Cache::remember('sapto:dosen-tidak-tetap:years:v2', $this->cacheTtl(), function (): array {
             $rows = DB::select("
-                select distinct substr(nama_tahun_ajaran,1,4) as thn
-                from list_penugasan_dosen
-                where a_sp_homebase = '0'
-                  and nama_tahun_ajaran is not null
-                  and nama_tahun_ajaran <> ''
-                order by thn desc
+                SELECT DISTINCT SUBSTR(nama_tahun_ajaran, 1, 4) AS thn
+                FROM list_penugasan_dosen
+                WHERE nama_tahun_ajaran IS NOT NULL
+                  AND nama_tahun_ajaran <> ''
+                ORDER BY thn DESC
             ");
 
             return array_values(array_filter(
@@ -191,7 +370,7 @@ class SaptoDosenTidakTetapRepository
     private function sourcePayload(): array
     {
         return [
-            'name' => 'Pangkalan Data UNSRI (sinkronisasi lokal)',
+            'name' => 'list_penugasan_dosen & dosen_pengajar_kelas_kuliah (sinkronisasi lokal)',
             'partial' => true,
         ];
     }

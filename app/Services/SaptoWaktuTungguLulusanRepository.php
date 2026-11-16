@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Services\Concerns\ComputesGraduationYear;
 use App\Services\Concerns\CountsLulusanPerProdi;
+use App\Services\Concerns\CountsTracerLulusanPerProdi;
 use App\Services\Concerns\ResolvesSaptoScope;
 use App\Services\Concerns\ResolvesSaptoTs;
 
@@ -22,16 +23,15 @@ use App\Services\Concerns\ResolvesSaptoTs;
  *
  * Sumber "Jumlah Lulusan": list_mahasiswa_lulus_do, tahun lulus lewat
  * ComputesGraduationYear (sama seperti Tabel 8.a & 8.c, supaya ketiganya
- * menghitung lulusan yang sama). Kolom sisanya (terlacak, dipesan sebelum
- * lulus, waktu tunggu) butuh data tracer study alumni yang TIDAK ADA di
- * sinkronisasi manapun di database ini -- sudah dicek: pekerjaan,
- * jenis_pekerjaan, ikatan_kerja, sister_list_riwayat_pekerjaan semuanya 0
- * baris. Selalu 0 sampai ada sumber tracer study terpisah; isi manual.
+ * menghitung lulusan yang sama). Data terlacak dan waktu tunggu berasal dari
+ * tracert_iku, dicocokkan ke lulusan berdasarkan NIM. Sumber tersebut tidak
+ * memiliki kolom pemesanan sebelum lulus, sehingga kolom itu tetap 0.
  */
 class SaptoWaktuTungguLulusanRepository
 {
     use ComputesGraduationYear;
     use CountsLulusanPerProdi;
+    use CountsTracerLulusanPerProdi;
     use ResolvesSaptoScope;
     use ResolvesSaptoTs;
 
@@ -67,6 +67,7 @@ class SaptoWaktuTungguLulusanRepository
 
         $years = array_map(fn (int $back): int => $ts - $back, self::BACK_YEARS);
         $lulusanByYear = $this->lulusanCountsByYear(self::CACHE_NAMESPACE, (string) $programStudi['id'], $years);
+        $tracerByYear = $this->tracerCountsByGraduationYear(self::CACHE_NAMESPACE, (string) $programStudi['id'], $years, $variant === 'd3');
 
         $columns = $this->columnsForVariant($variant);
         $numericKeys = collect($columns)
@@ -80,7 +81,13 @@ class SaptoWaktuTungguLulusanRepository
             $row = array_fill_keys($numericKeys, 0);
             $row['no'] = $index + 1;
             $row['tahun_lulus'] = $year.' (TS-'.$back.')';
+            $row['tahun_lulus_tahun'] = $year;
             $row['jumlah_lulusan'] = $lulusanByYear[$year] ?? 0;
+            $tracer = $tracerByYear[$year] ?? [];
+            $row['jumlah_terlacak'] = $tracer['jumlah_terlacak'] ?? 0;
+            $row['wt_1'] = $tracer['wt_1'] ?? 0;
+            $row['wt_2'] = $tracer['wt_2'] ?? 0;
+            $row['wt_3'] = $tracer['wt_3'] ?? 0;
             $rows[] = $row;
         }
 
@@ -192,7 +199,7 @@ class SaptoWaktuTungguLulusanRepository
     private function sourcePayload(): array
     {
         return [
-            'name' => 'list_mahasiswa_lulus_do (sinkronisasi lokal) -- kolom tracer study (terlacak/dipesan/waktu tunggu) belum ada sumbernya',
+            'name' => 'list_mahasiswa_lulus_do + tracert_iku (dicocokkan berdasarkan NIM)',
             'partial' => true,
         ];
     }

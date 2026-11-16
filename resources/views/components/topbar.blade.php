@@ -1,5 +1,5 @@
 {{-- resources/views/components/topbar.blade.php --}}
-<header class="glass-strong sticky top-0 z-20 flex items-center gap-3 px-4 py-3 sm:gap-4 sm:px-6 sm:py-4 lg:px-8">
+<header id="topbar" class="glass-strong sticky top-0 z-20 flex items-center gap-3 px-4 py-3 sm:gap-4 sm:px-6 sm:py-4 lg:px-8">
     <button
         type="button"
         id="sidebar-toggle"

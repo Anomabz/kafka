@@ -40,6 +40,15 @@ class SaptoHkiHakCiptaDtpsTest extends TestCase
             'lingkup' => '55201',
         ]);
 
+        // DTPS = homebase di list_penugasan_dosen (id_dosen == id_sdm SISTER,
+        // terverifikasi di produksi 2026-09-30: 709/709 penulis HKI cocok).
+        foreach (['2022/2023', '2023/2024', '2024/2025'] as $ta) {
+            DB::table('list_penugasan_dosen')->insert([
+                ['id_dosen' => 'D1', 'nama_dosen' => 'Dosen D1', 'nama_tahun_ajaran' => $ta, 'id_prodi' => 'P1', 'a_sp_homebase' => '1'],
+                ['id_dosen' => 'D2', 'nama_dosen' => 'Dosen D2', 'nama_tahun_ajaran' => $ta, 'id_prodi' => 'P1', 'a_sp_homebase' => '0'],
+            ]);
+        }
+
         DB::table('sister_list_penugasan')->insert([
             // D1: homebase P1, S1 -> DTPS.
             ['id' => 'PG1', 'id_sdm' => 'D1', 'jenjang_pendidikan' => 'S1', 'unit_kerja' => 'Teknik Informatika', 'tanggal_mulai' => '2020-01-01', 'tanggal_keluar' => null, 'apakah_penugasan_homebase' => '1', 'perguruan_tinggi' => 'Universitas Sriwijaya'],
@@ -71,6 +80,13 @@ class SaptoHkiHakCiptaDtpsTest extends TestCase
             // F: di luar rentang TS-2..TS (TS-3) -> tak terhitung.
             ['id' => 'F', 'id_list' => 'F', 'id_jenis_publikasi' => '43', 'jenis_publikasi' => 'Hak cipta nasional', 'judul' => 'Hak Cipta Lama', 'tanggal' => '2021-01-01', 'penulis' => $this->penulis('D1')] + $blank,
         ]);
+
+        // Penulis tiap HKI dibaca repository lewat detail.id_list -> sister_list_kekayaan_intelektual.id_sdm.
+        foreach (DB::table('sister_detail_kekayaan_intelektual')->get(['id_list', 'penulis']) as $d) {
+            foreach (json_decode($d->penulis, true) as $a) {
+                DB::table('sister_list_kekayaan_intelektual')->insert(['id' => $d->id_list, 'id_sdm' => $a['id_sdm']]);
+            }
+        }
 
         $response = $this->getJson('/api/sapto/tables/hki-hak-cipta-dtps/summary?ts=2024')
             ->assertOk()

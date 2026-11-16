@@ -42,7 +42,7 @@ class SaptoKerjasamaPendidikanRepository extends SaptoKerjasamaRepository
             'pendidikan', 'pelatihan', 'pembelajaran', 'kurikulum', 'pengajaran',
             'magang', 'praktik kerja', 'pkl', 'workshop', 'akademik', 'kuliah',
             'sertifikasi kompetensi', 'bimbingan', 'pengembangan sdm', 'beasiswa',
-            'pertukaran mahasiswa', 'pertukaran dosen', 'dosen tamu', 'studi lanjut',
+            'pertukaran mahasiswa', 'pertukaran dosen', 'dosen tamu', 'studi lanjut','belajar',
         ];
     }
 }

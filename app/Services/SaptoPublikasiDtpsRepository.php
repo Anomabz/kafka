@@ -22,16 +22,25 @@ use Illuminate\Support\Facades\DB;
  *
  * Baris 1-7 (jurnal + seminar) identik di kedua varian.
  *
- * Sumber: sister_list_publikasi (hasil sinkronisasi SISTER, klaim BKD per
- * dosen) -- satu publikasi bisa muncul sebagai beberapa baris dengan `id`
- * sama (satu baris per penulis/id_sdm), jadi dikelompokkan per id sebelum
- * dihitung.
+ * Roster dari ResolvesPublikasiDtpsRoster = DTPS (definisi sama dengan Tabel
+ * 3.a.1: list_penugasan_dosen homebase, ikatan kerja tetap, jenjang prodi
+ * sesuai varian) DITAMBAH dosen yang mengajar kelas prodi itu pada tahun yang
+ * sama (keputusan pengguna). Roster dihitung PER TAHUN kolom (TS-2/TS-1/TS):
+ * publikasi dihitung di prodi tempat dosen ber-homebase atau mengajar pada
+ * tahun tersebut. Kartu "Jumlah DTPS" tetap DTPS murni. Contoh:
+ * DTPS S3 Ilmu Komputer baru ber-homebase di sana sejak 2024 (sebelumnya S1
+ * Sistem Komputer / S2 Ilmu Komputer), jadi kolom 2023 prodi itu memang 0.
  *
- * "DTPS" ditentukan dari sister_list_penugasan: penugasan homebase terakhir
- * tiap dosen (ROW_NUMBER) yang masih aktif pada tahun pelaporan (tanggal_mulai
- * <= tahun AND (tanggal_keluar IS NULL OR tanggal_keluar >= tahun)), disaring
- * jenjang_pendidikan sesuai varian. Filter scope prodi dilakukan lewat kolom
- * unit_kerja. Roster dihitung terpisah untuk TS-2/TS-1/TS.
+ * Sumber publikasi: sister_list_publikasi (klaim BKD per dosen). Satu artikel
+ * bisa tercatat berkali-kali: satu baris per penulis dengan `id` sama, ATAU
+ * diinput ulang tiap penulis dengan `id` berbeda. Karena itu deduplikasi
+ * memakai JUDUL yang dinormalisasi (lowercase, spasi dirapikan), bukan `id`:
+ * satu judul dihitung sekali per kategori per tahun. Judul kosong jatuh
+ * kembali ke `id`.
+ *
+ * Klasifikasi mengikuti jenis_publikasi apa adanya: judul yang tercatat di
+ * dua jenis berbeda kategori (mis. prosiding + jurnal bereputasi) dihitung
+ * di kedua baris -- disengaja, sesuai keputusan pengguna.
  *
  * jenis_publikasi yang tidak ada di peta varian (buku, monograf, dst) di luar
  * cakupan tabel dan tidak dihitung.
@@ -65,11 +74,43 @@ abstract class SaptoPublikasiDtpsRepository
     abstract protected function jenisMap(): array;
 
     /**
-     * Nilai jenjang_pendidikan yang dianggap DTPS untuk varian ini.
+     * Nilai jenjang prodi (program_studi.nama_jenjang_pendidikan) yang
+     * dianggap DTPS untuk varian ini.
      *
      * @return array<int, string>
      */
     abstract protected function jenjangFilter(): array;
+
+    public function detail(int $year, string $category, ?string $fakultasId, ?string $programStudiId): array
+    {
+        $programStudis = $this->client->programStudis();
+        $this->validateScope($programStudis, $fakultasId, $programStudiId);
+        $scopeProdiIds = $this->scopeProdiIds($programStudis, $fakultasId, $programStudiId);
+        $roster = array_flip($scopeProdiIds === [] ? [] : $this->publikasiDtpsIds($year, $scopeProdiIds, $this->jenjangFilter()));
+        $jenisMap = $this->jenisMap();
+        $seen = [];
+        $items = [];
+
+        foreach (DB::table('sister_list_publikasi')
+            ->select('id', 'id_sdm', 'jenis_publikasi', 'judul', 'tanggal', 'quartile')
+            ->whereRaw('substr(tanggal,1,4) = ?', [(string) $year])->orderBy('judul')->cursor() as $row) {
+            $rowCategory = $jenisMap[$row->jenis_publikasi] ?? null;
+            if ($rowCategory === null || ($category !== 'all' && $rowCategory !== $category) || ! isset($roster[(string) $row->id_sdm])) continue;
+
+            $title = trim((string) preg_replace('/\\s+/u', ' ', (string) $row->judul));
+            $dedupeKey = $rowCategory.'|'.($title !== '' ? mb_strtolower($title) : 'id:'.(string) $row->id);
+            if (isset($seen[$dedupeKey])) continue;
+            $seen[$dedupeKey] = true;
+            $items[] = [
+                'judul' => $title !== '' ? $title : '(Judul tidak tersedia)',
+                'jenis' => $row->jenis_publikasi ?: '-', 'tahun' => substr((string) $row->tanggal, 0, 4),
+                'kategori' => $this->categories()[$rowCategory] ?? $rowCategory,
+                'quartile' => $row->quartile ?: '-',
+            ];
+        }
+
+        return $items;
+    }
 
     public function summary(?int $ts, ?string $fakultasId, ?string $programStudiId): array
     {
@@ -83,9 +124,15 @@ abstract class SaptoPublikasiDtpsRepository
         $categories = $this->categories();
         $jenisMap = $this->jenisMap();
 
+        // Roster DTPS per tahun kolom: publikasi dihitung di prodi homebase
+        // dosen pada tahun tersebut (dosen yang pindah homebase, mis. dari
+        // S1 Sistem Komputer ke S3 Ilmu Komputer pada 2024, publikasi 2023-nya
+        // tetap milik prodi lama).
         $dtpsIdsByYear = [];
         foreach ($years as $key => $year) {
-            $dtpsIdsByYear[$key] = $scopeProdiIds === [] ? [] : $this->publikasiDtpsIds($year, $scopeProdiIds, $this->jenjangFilter());
+            $dtpsIdsByYear[$key] = $scopeProdiIds === []
+                ? []
+                : array_flip($this->publikasiDtpsIds($year, $scopeProdiIds, $this->jenjangFilter()));
         }
 
         $publikasiByYear = $this->publikasiRows(array_values($years));
@@ -94,26 +141,35 @@ abstract class SaptoPublikasiDtpsRepository
         $distinctJudul = array_fill_keys(array_keys($years), 0);
 
         foreach ($years as $key => $year) {
-            $dtpsIds = array_flip($dtpsIdsByYear[$key]);
+            $dtpsIds = $dtpsIdsByYear[$key];
+            $seenPerCategory = [];
 
             foreach ($publikasiByYear[$year] ?? [] as $row) {
-                if (! $this->hasDtpsAuthor($row['id_sdm_list'], $dtpsIds)) {
-                    continue;
-                }
-
                 $category = $jenisMap[$row['jenis_publikasi']] ?? null;
 
-                if ($category === null) {
+                if ($category === null || ! $this->hasDtpsAuthor($row['id_sdm_list'], $dtpsIds)) {
                     continue;
                 }
 
+                $judulKey = $row['judul_key'];
+
+                // Satu judul dihitung sekali per kategori (mis. prosiding +
+                // poster dengan judul sama di "Seminar nasional" = 1).
+                if (isset($seenPerCategory[$category][$judulKey])) {
+                    continue;
+                }
+
+                $seenPerCategory[$category][$judulKey] = true;
                 $counts[$category][$key]++;
+                // Kartu metrik = jumlah tabel: judul yang tercatat di dua
+                // jenis_publikasi berbeda kategori dihitung di keduanya.
                 $distinctJudul[$key]++;
             }
         }
 
         $rows = collect($categories)
             ->map(fn (string $label, string $key): array => [
+                'detail_key' => $key,
                 'jenis_publikasi' => $label,
                 'ts_2' => $counts[$key]['ts_2'],
                 'ts_1' => $counts[$key]['ts_1'],
@@ -124,6 +180,7 @@ abstract class SaptoPublikasiDtpsRepository
             ->map(fn (array $row, int $index): array => ['no' => $index + 1] + $row)
             ->push([
                 'no' => null,
+                'detail_key' => 'all',
                 'jenis_publikasi' => 'Jumlah',
                 'ts_2' => array_sum(array_column($counts, 'ts_2')),
                 'ts_1' => array_sum(array_column($counts, 'ts_1')),
@@ -149,52 +206,66 @@ abstract class SaptoPublikasiDtpsRepository
                 ['key' => 'jumlah', 'label' => 'Jumlah', 'align' => 'num'],
             ],
             'rows' => $rows,
-            'metrics' => $this->metrics($distinctJudul, $ts),
-            'source' => $this->sourcePayload(),
+            // Kartu DTPS = DTPS murni (tanpa pengajar); kartu kedua = seluruh
+            // dosen yang publikasinya dihitung (DTPS + pengajar) pada TS.
+            'metrics' => $this->metrics(
+                $distinctJudul,
+                $scopeProdiIds === [] ? 0 : count($this->publikasiDtpsIds($ts, $scopeProdiIds, $this->jenjangFilter(), false)),
+                count($dtpsIdsByYear['ts']),
+                $ts
+            ),
+            // Semua jumlah 0 = belum ada data untuk lingkup ini, walau barisnya
+            // (jenis/sumber) selalu tampil; SaptoKesiapanService membacanya.
+            'source' => $this->sourcePayload() + ['template' => (int) (end($rows)['jumlah'] ?? 0) === 0],
         ];
     }
 
     /**
-     * Judul publikasi dari sister_list_publikasi, dikelompokkan per id (satu
-     * baris per penulis) lalu per tahun publikasi (lihat docblock kelas).
+     * Publikasi dari sister_list_publikasi, dikelompokkan per
+     * (tahun, jenis_publikasi, judul ternormalisasi) lalu per tahun. Semua
+     * penulis (id_sdm) dari record yang judulnya sama digabung, apa pun `id`-nya.
      *
      * @param  array<int, int>  $years
-     * @return array<int, array<int, array{jenis_publikasi: ?string, id_sdm_list: array<int, string>}>>
+     * @return array<int, array<int, array{jenis_publikasi: ?string, judul_key: string, id_sdm_list: array<int, string>}>>
      */
     private function publikasiRows(array $years): array
     {
-        $cacheKey = 'sapto:publikasi-dtps:publikasi:v1:'.md5(json_encode($years));
+        $cacheKey = 'sapto:publikasi-dtps:publikasi:v2:'.md5(json_encode($years));
 
         return Cache::remember($cacheKey, $this->cacheTtl(), function () use ($years): array {
             $yearStrings = array_map(fn (int $y): string => (string) $y, $years);
             $placeholders = implode(',', array_fill(0, count($yearStrings), '?'));
 
-            $byId = [];
+            $groups = [];
 
             foreach (DB::table('sister_list_publikasi')
-                ->selectRaw('id, id_sdm, jenis_publikasi, substr(tanggal,1,4) as tahun')
+                ->selectRaw('id, id_sdm, jenis_publikasi, judul, substr(tanggal,1,4) as tahun')
                 ->whereRaw("substr(tanggal,1,4) in ({$placeholders})", $yearStrings)
                 ->cursor() as $row) {
-                $id = (string) $row->id;
+                $tahun = (int) $row->tahun;
+                $judulKey = $this->judulKey($row->judul, (string) $row->id);
+                $groupKey = $tahun.'|'.($row->jenis_publikasi ?? '').'|'.$judulKey;
 
-                $byId[$id] ??= [
-                    'tahun' => (int) $row->tahun,
+                $groups[$groupKey] ??= [
+                    'tahun' => $tahun,
                     'jenis_publikasi' => $row->jenis_publikasi,
+                    'judul_key' => $judulKey,
                     'id_sdm_list' => [],
                 ];
-                $byId[$id]['id_sdm_list'][] = (string) $row->id_sdm;
+                $groups[$groupKey]['id_sdm_list'][(string) $row->id_sdm] = true;
             }
 
             $byYear = array_fill_keys($years, []);
 
-            foreach ($byId as $row) {
+            foreach ($groups as $row) {
                 if (! isset($byYear[$row['tahun']])) {
                     continue;
                 }
 
                 $byYear[$row['tahun']][] = [
                     'jenis_publikasi' => $row['jenis_publikasi'],
-                    'id_sdm_list' => $row['id_sdm_list'],
+                    'judul_key' => $row['judul_key'],
+                    'id_sdm_list' => array_keys($row['id_sdm_list']),
                 ];
             }
 
@@ -203,13 +274,25 @@ abstract class SaptoPublikasiDtpsRepository
     }
 
     /**
-     * @param  array<int, string>  $idSdmList
+     * Kunci deduplikasi judul: lowercase + spasi dirapikan (setara
+     * LOWER(TRIM(REGEXP_REPLACE(judul,'[[:space:]]+',' '))) di MySQL), di-md5
+     * supaya cache ringkas. Judul kosong/tidak valid jatuh kembali ke `id`.
+     */
+    private function judulKey(?string $judul, string $id): string
+    {
+        $normal = mb_strtolower(trim((string) preg_replace('/\s+/u', ' ', (string) $judul)));
+
+        return $normal === '' ? 'id:'.$id : md5($normal);
+    }
+
+    /**
+     * @param  array<int|string, string>  $idSdmList
      * @param  array<string, int>  $dtpsIdsFlipped
      */
     private function hasDtpsAuthor(array $idSdmList, array $dtpsIdsFlipped): bool
     {
         foreach ($idSdmList as $id) {
-            if (isset($dtpsIdsFlipped[$id])) {
+            if (isset($dtpsIdsFlipped[(string) $id])) {
                 return true;
             }
         }
@@ -218,12 +301,14 @@ abstract class SaptoPublikasiDtpsRepository
     }
 
     /**
-     * @param  array<string, int>  $distinctJudul
+     * @param  array<string, int>  $distinctJudul  jumlah judul per tahun (= baris Jumlah tabel)
      * @return array<int, array{label: string, value: int|float|string}>
      */
-    private function metrics(array $distinctJudul, int $ts): array
+    private function metrics(array $distinctJudul, int $jumlahDtps, int $jumlahDosen, int $ts): array
     {
         return [
+            ['label' => 'Jumlah DTPS (TS)', 'value' => $jumlahDtps],
+            ['label' => 'Dosen dihitung: DTPS + pengajar (TS)', 'value' => $jumlahDosen],
             ['label' => 'Total judul publikasi DTPS (TS-2..TS)', 'value' => array_sum($distinctJudul)],
             ['label' => 'Judul publikasi DTPS (TS)', 'value' => $distinctJudul['ts']],
             ['label' => 'Judul publikasi DTPS (TS-1)', 'value' => $distinctJudul['ts_1']],

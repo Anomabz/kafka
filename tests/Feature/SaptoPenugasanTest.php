@@ -211,13 +211,18 @@ class SaptoPenugasanTest extends TestCase
 
         $this->sebagai(['sub' => '1', 'name' => 'Bemby', 'nomor_identitas' => '197801212008121003'])->get('/')
             ->assertOk()
-            ->assertSee('Dekan — Fakultas Ilmu Komputer')
-            ->assertSee('Dekan — semua program studi di Fakultas Ilmu Komputer')
+            // Sejak redesain 28bc5e2 peran tampil sebagai badge terpisah dari
+            // teks lingkup/cakupan (dulu "Dekan — Fakultas ...").
+            ->assertSee('role-badge-dekan', false)
+            ->assertDontSee('role-badge-korprodi', false)
+            ->assertSee('Fakultas Ilmu Komputer')
+            ->assertSee('semua program studi di Fakultas Ilmu Komputer')
             ->assertDontSee('Pengelola Program Studi');
 
         $this->sebagai(['sub' => '2', 'name' => 'Kaprodi', 'nomor_identitas' => '1000003'])->get('/')
             ->assertOk()
-            ->assertSee('Koordinator Program Studi — S1 Sistem Komputer');
+            ->assertSee('role-badge-korprodi', false)
+            ->assertSee('hanya S1 Sistem Komputer');
     }
 
     public function test_page_still_renders_for_an_account_without_any_access(): void

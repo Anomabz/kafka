@@ -21,3 +21,10 @@ Schedule::call(fn () => app(\App\Services\PdUnsriHealthCheck::class)->refresh())
     ->everyMinute()
     ->name('pd-unsri-health')
     ->withoutOverlapping();
+
+// Event Kafka yang tertahan (proxy/broker sempat mati) dikirim ulang tiap
+// menit -- lihat KafkaProducerService dan docs/kafka.md.
+Schedule::command('sapto:kafka-flush-outbox')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->runInBackground();

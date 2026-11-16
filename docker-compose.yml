@@ -49,12 +49,78 @@ services:
       SAPTO_API_DATA_MAX_PAGES: "${SAPTO_API_DATA_MAX_PAGES:-10}"
       SAPTO_API_ACTIVITY_LOOKUP_LIMIT: "${SAPTO_API_ACTIVITY_LOOKUP_LIMIT:-600}"
       SAPTO_API_ACTIVITY_POOL_SIZE: "${SAPTO_API_ACTIVITY_POOL_SIZE:-20}"
+      # Kafka lewat REST Proxy (lihat config/kafka.php dan docs/kafka.md).
+      KAFKA_REST_URL: "${KAFKA_REST_URL:-http://kafka-rest:8082}"
+    # Sengaja TIDAK bergantung pada kafka/kafka-rest: Kafka pelengkap (arsip
+    # event & audit), dan event yang gagal terkirim ditampung outbox. Kalau
+    # depends_on ke sana, broker yang bermasalah ikut menahan aplikasi utama.
     depends_on:
       db:
         condition: service_healthy
     networks:
       - default
       - frontend
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    restart: unless-stopped
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    restart: unless-stopped
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://kafka:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+  # Pintu HTTP ke Kafka untuk aplikasi (produce/consume/admin). Tanpa port
+  # host: hanya container di network compose ini yang boleh memakainya.
+  # Dipakai karena image app (composer:2 Alpine) tidak punya ekstensi rdkafka.
+  kafka-rest:
+    image: confluentinc/cp-kafka-rest:7.5.0
+    restart: unless-stopped
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_REST_HOST_NAME: kafka-rest
+      KAFKA_REST_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:9092
+      KAFKA_REST_LISTENERS: http://0.0.0.0:8082
+      # Server ini sempit RAM (banyak project compose); default JVM terlalu boros.
+      KAFKA_REST_HEAP_OPTS: "-Xms128m -Xmx256m"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8082/topics >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+  # Antarmuka web untuk melihat topic/pesan. Sekarang memakai login dan hanya
+  # mendengarkan di localhost: dulu terbuka tanpa password di jaringan kampus
+  # (10.8.5.67:8088). Akses dari laptop lewat SSH tunnel:
+  #   ssh -L 8088:127.0.0.1:8088 <user>@<server>   lalu buka http://localhost:8088
+  # Sandi ada di .env (KAFKA_UI_PASSWORD). Halaman ringkasan yang lebih
+  # mudah dibaca ada di SAPTO: Admin -> Event Stream (Kafka).
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8088:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      AUTH_TYPE: LOGIN_FORM
+      SPRING_SECURITY_USER_NAME: "${KAFKA_UI_USER:-admin}"
+      SPRING_SECURITY_USER_PASSWORD: "${KAFKA_UI_PASSWORD}"
+    depends_on:
+      - kafka
 
   db:
     image: mysql:8.0
@@ -78,10 +144,10 @@ services:
       - mysql_data:/var/lib/mysql
 
   phpmyadmin:
-    image: phpmyadmin/phpmyadmin
+    image: phpmyadmin:latest
     restart: always
     ports:
-      - "8086:80"
+      - "127.0.0.1:8087:80"
     environment:
       PMA_HOST: db
       MYSQL_ROOT_PASSWORD: rootpassword

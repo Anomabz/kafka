@@ -18,22 +18,25 @@ use Illuminate\Support\Facades\DB;
  *
  * Versi kurikulum yang ditampilkan: yang paling baru mulai berlaku PALING
  * LAMBAT pada tahun akademik TS. id_semester berformat YYYYS (20251 = ganjil
- * 2025/2026, 20252 = genap), jadi batasnya TS*10+2. Prodi memang punya
- * beberapa versi kurikulum (503 versi untuk 136 prodi di data nyata) dan
- * dokumen akreditasi hanya menanyakan yang berlaku pada TS.
+ * 2025/2026, 20252 = genap), jadi batasnya TS*10+2.
  *
- * Tiga kelompok kolom LKPS SENGAJA dikosongkan karena tidak ada sumbernya di
- * PD UNSRI, dan angka akreditasi tidak boleh dikarang:
- * - "Konversi Kredit ke Jam": tidak ada field jam di feeder.
- * - Capaian Pembelajaran (Sikap/Pengetahuan/Keterampilan Umum/Khusus):
- *   pemetaan CPL per mata kuliah tidak dikirim feeder.
- * - "Seminar" pada bobot kredit: feeder hanya punya sks tatap muka, praktek,
- *   praktek lapangan, dan simulasi -- tidak ada kolom seminar. Simulasi tidak
- *   disamakan dengan seminar karena artinya berbeda.
+ * Bobot kredit: Kuliah = sks tatap muka; Praktikum/Praktik/Praktik Lapangan =
+ * sks praktek + praktek lapangan + SIMULASI (simulasi adalah bentuk praktik,
+ * mis. simulasi klinik; 255 mata kuliah memakainya). Seminar tetap kosong --
+ * feeder tidak punya kolom seminar dan simulasi tidak disamakan dengannya.
  *
- * "Mata Kuliah Kompetensi" diturunkan dari apakah_wajib (mata kuliah wajib
- * prodi); itu pendekatan terdekat yang tersedia, bukan field kompetensi
- * tersendiri -- disebutkan di notice supaya tidak dikira data resmi.
+ * Dokumen Rencana Pembelajaran ditandai "✓" bila RPS ada pada mata kuliah
+ * itu sendiri (id_matkul) ATAU pada mata kuliah berKODE sama di kurikulum
+ * lain prodi yang sama (sesuai keputusan pengguna, tanpa label asal).
+ * Catatan: terverifikasi kode kadang dipakai ulang untuk mata kuliah berbeda
+ * (S1 Sistem Komputer FSK2107 = Praktikum Sistem Operasi di kurikulum 2021,
+ * Kimia di 2024), jadi tanda ✓ lewat kode perlu dicek isinya oleh prodi.
+ *
+ * Kolom yang SENGAJA dikosongkan karena tidak ada sumbernya di PD UNSRI:
+ * "Konversi Kredit ke Jam", keempat kolom Capaian Pembelajaran, dan sks
+ * Seminar. "Mata Kuliah Kompetensi" diturunkan dari apakah_wajib. "Unit
+ * Penyelenggara" selalu prodi pemilik kurikulum (terverifikasi 28.052/28.052
+ * baris) karena feeder tidak mencatat unit penyelenggara.
  */
 class SaptoKurikulumRepository
 {
@@ -100,7 +103,7 @@ class SaptoKurikulumRepository
     private function mataKuliah(string $kurikulumId): array
     {
         return Cache::remember(
-            'sapto:kurikulum:matkul:v1:'.md5($kurikulumId),
+            'sapto:kurikulum:matkul:v5:'.md5($kurikulumId),
             $this->cacheTtl(),
             function () use ($kurikulumId): array {
                 // RPS dihitung sekali sebagai subquery agregat; menghitung per
@@ -116,13 +119,22 @@ class SaptoKurikulumRepository
                     ->orderByRaw('cast(mk.semester as unsigned)')
                     ->orderBy('mk.kode_mata_kuliah')
                     ->get([
-                        'mk.semester', 'mk.kode_mata_kuliah', 'mk.nama_mata_kuliah', 'mk.nama_program_studi',
+                        'mk.id_prodi', 'mk.semester', 'mk.kode_mata_kuliah', 'mk.nama_mata_kuliah', 'mk.nama_program_studi',
                         'mk.sks_mata_kuliah', 'mk.sks_tatap_muka', 'mk.sks_praktek', 'mk.sks_praktek_lapangan',
-                        'mk.apakah_wajib', 'rps.pertemuan',
+                        'mk.sks_simulasi', 'mk.apakah_wajib', 'rps.pertemuan',
                     ]);
 
-                return $rows->values()->map(function (object $row, int $i): array {
-                    $praktikum = $this->angka($row->sks_praktek) + $this->angka($row->sks_praktek_lapangan);
+                $rpsLain = $this->rpsKurikulumLain((string) ($rows->first()->id_prodi ?? ''), $kurikulumId);
+
+                return $rows->values()->map(function (object $row, int $i) use ($rpsLain): array {
+                    $praktikum = $this->angka($row->sks_praktek)
+                        + $this->angka($row->sks_praktek_lapangan)
+                        + $this->angka($row->sks_simulasi);
+
+                    // RPS milik mata kuliah ini sendiri ATAU mata kuliah berkode
+                    // sama di kurikulum lain prodi ini -> "✓".
+                    $adaRps = (int) ($row->pertemuan ?? 0) > 0
+                        || isset($rpsLain[$this->kunciKode($row->kode_mata_kuliah)]);
 
                     return [
                         'no' => $i + 1,
@@ -132,19 +144,49 @@ class SaptoKurikulumRepository
                         'mk_kompetensi' => (string) $row->apakah_wajib === '1' ? self::TANDA : '',
                         'sks_kuliah' => $this->angka($row->sks_tatap_muka),
                         'sks_seminar' => null,
-                        'sks_praktikum' => $praktikum,
+                        'sks_praktikum' => round($praktikum, 2),
                         'sks_total' => $this->angka($row->sks_mata_kuliah),
                         'konversi_jam' => null,
                         'cpl_sikap' => null,
                         'cpl_pengetahuan' => null,
                         'cpl_ket_umum' => null,
                         'cpl_ket_khusus' => null,
-                        'dok_rps' => (int) ($row->pertemuan ?? 0) > 0 ? self::TANDA : '',
+                        'dok_rps' => $adaRps ? self::TANDA : '',
                         'unit_penyelenggara' => (string) $row->nama_program_studi,
                     ];
                 })->all();
             },
         );
+    }
+
+    /**
+     * Kode mata kuliah milik prodi ini yang punya RPS di kurikulum LAIN.
+     *
+     * @return array<string, true> kode => true
+     */
+    private function rpsKurikulumLain(string $prodiId, string $kurikulumId): array
+    {
+        if ($prodiId === '') {
+            return [];
+        }
+
+        $result = [];
+
+        foreach (DB::table('rencana_pembelajaran as r')
+            ->join('matkul_kurikulum as m', 'm.id_matkul', '=', 'r.id_matkul')
+            ->where('m.id_prodi', $prodiId)
+            ->where('m.id_kurikulum', '<>', $kurikulumId)
+            ->distinct()
+            ->pluck('m.kode_mata_kuliah') as $kode) {
+            $result[$this->kunciKode($kode)] = true;
+        }
+
+        return $result;
+    }
+
+    private function kunciKode(mixed $kode): string
+    {
+        return mb_strtoupper(trim((string) $kode));
     }
 
     /** @return array<int, array<string, string>> */
@@ -176,8 +218,11 @@ class SaptoKurikulumRepository
         return sprintf(
             'Kurikulum yang ditampilkan: %s (mulai berlaku %s). Kolom Konversi Kredit ke Jam, keempat kolom '
             .'Capaian Pembelajaran, dan sks Seminar dikosongkan karena tidak ada sumbernya di PD UNSRI. '
-            .'Kolom Mata Kuliah Kompetensi diturunkan dari status mata kuliah wajib. Dokumen Rencana '
-            .'Pembelajaran ditandai bila RPS mata kuliah itu sudah masuk ke PD UNSRI.',
+            .'Kolom Mata Kuliah Kompetensi diturunkan dari status mata kuliah wajib. sks Simulasi digabung ke '
+            .'kolom Praktikum/Praktik. Unit Penyelenggara diisi prodi pemilik kurikulum karena feeder tidak '
+            .'mencatat unit penyelenggara; sesuaikan manual untuk mata kuliah umum/universitas. Dokumen Rencana '
+            .'Pembelajaran ditandai bila RPS mata kuliah itu, atau mata kuliah berkode sama di kurikulum lain '
+            .'prodi ini, sudah masuk ke PD UNSRI.',
             $kurikulum['nama_kurikulum'],
             $kurikulum['semester_mulai_berlaku'],
         );
@@ -216,7 +261,7 @@ class SaptoKurikulumRepository
 
         return [
             ['label' => 'Jumlah mata kuliah', 'value' => count($rows)],
-            ['label' => 'Total sks kurikulum', 'value' => round(array_sum(array_column($rows, 'sks_total')), 2)],
+            ['label' => 'Total sks seluruh MK (termasuk pilihan)', 'value' => round(array_sum(array_column($rows, 'sks_total')), 2)],
             ['label' => 'sks lulus (kurikulum)', 'value' => $kurikulum ? (float) $kurikulum['jumlah_sks_lulus'] : null],
             ['label' => 'Mata kuliah ber-RPS', 'value' => count(array_filter($rows, fn (array $r): bool => $r['dok_rps'] !== ''))],
         ];

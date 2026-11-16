@@ -35,6 +35,16 @@ return [
         // manual sesudah sync kalau butuh data langsung fresh.
         'cache_ttl' => (int) env('PANGKALAN_DATA_CACHE_TTL', 86400),
         'token_cache_ttl' => (int) env('PANGKALAN_DATA_TOKEN_CACHE_TTL', 3300),
+        // Data (bukan token) diambil lewat Gravitee API Gateway -- lihat
+        // docs/gravitee.md. Dibaca dari config, bukan env() langsung di
+        // PangkalanDataApiClient: env() di luar config bernilai null begitu
+        // `config:cache` dipakai, dan client diam-diam jatuh ke alamat default.
+        // Default = nama host gateway di network docker `frontend`.
+        'gateway_url' => env('SAPTO_GATEWAY_URL', 'http://gateway:8082/sapto-api'),
+        // Kunci langganan plan "SAPTO Web App" di Gravitee (header
+        // X-Gravitee-Api-Key). Kosong = header tidak dikirim, yang hanya
+        // berhasil selama plan tanpa kunci (KEY_LESS) masih terbuka.
+        'gateway_api_key' => env('SAPTO_GATEWAY_API_KEY'),
     ],
 
     'sso' => [

@@ -11,6 +11,7 @@ berasal dari mirror Feeder dan API Pangkalan Data UNSRI.
 ## Daftar isi
 
 - [Arsitektur dan sumber data](#arsitektur-dan-sumber-data)
+- [Beranda](#beranda)
 - [Menjalankan aplikasi](#menjalankan-aplikasi)
 - [Konfigurasi](#konfigurasi)
 - [Autentikasi dan hak akses](#autentikasi-dan-hak-akses)
@@ -39,6 +40,32 @@ BAN-PT akan tampil kosong atau 0**, meski migrasi sudah jalan dan aplikasinya
 sendiri berjalan normal. Migrasi cuma membuat skema; isinya baru terisi
 lewat proses sync terpisah (`sync.py` untuk memindahkan `database/database.sqlite`
 ke MySQL, atau `php artisan sync:mahasiswa` untuk tabel `list_mahasiswa` saja).
+
+## Beranda
+
+Halaman awal setelah login (`/`) adalah **Beranda**, satu halaman virtual dengan
+dua tampilan: kartu-kartu untuk HP dan dasbor untuk desktop (≥ 640px). Markup
+ada di `resources/views/components/{mobile-pages,desktop-home}.blade.php`,
+logikanya di bagian "Shell mobile & Beranda" dan "Beranda desktop" pada
+`resources/views/sapto.blade.php`. Keduanya berbagi data
+(`/api/sapto/kesiapan`); dasbor desktop menambah angka utama dan tren dari
+`/api/sapto/dashboard/summary`, dan khusus admin panel *Kesehatan sistem*
+(status API PD UNSRI, sinkronisasi, Kafka, pekerja antrean).
+
+Tata letak dasbor mengikuti **lebar kontennya** (container query pada `.home`),
+bukan lebar layar, karena sidebar menyita 72-280px. Setiap sumber data gagal
+atau lambat sendiri-sendiri; bagian yang datanya belum ada menampilkan
+skeleton atau pesan, tidak menahan bagian lain.
+
+Aturan persentase kelengkapan (`SaptoKesiapanService`):
+
+- **Tidak wajib**: tabel yang bukan kewajiban jenjang prodi terpilih (mis. 6.b
+  hanya Magister/Doktor) tidak dihitung. Petanya ada di `config/lkps.php`,
+  diturunkan dari sheet "Daftar Tabel" di `SAPTO & PD_UNSRI.xlsx`.
+- **Perlu diisi manual**: tabel yang barisnya hanya templat karena sumbernya
+  tidak ada di PD UNSRI (4 Penggunaan Dana, 5.c, 8.e.2, 3.b.5), atau tabel
+  agregat yang semua jumlahnya 0, dihitung *kosong*. Repository menandainya
+  dengan `source.template = true`.
 
 ## Menjalankan aplikasi
 
@@ -317,7 +344,10 @@ curl -b "sapto-session=..." "http://localhost:8020/api/sapto/tables/ipk-lulusan/
 
 | Endpoint | Keterangan |
 | --- | --- |
-| `/api/sapto/dashboard/summary` | Ringkasan + `available_years` (halaman dashboard sudah dihapus, endpoint masih ada) |
+| `/api/sapto/dashboard/summary` | Angka utama + tren tiga tahun + `available_years`; sumber angka dan grafik di Beranda |
+| `/api/sapto/kesiapan` | Status kelengkapan tiap tabel (lengkap/sebagian/kosong/perlu prodi/tidak wajib); sumber Beranda |
+| `/api/sapto/tables/publikasi-mahasiswa/summary` | Tabel 8.f.1 (akademik): publikasi dengan penulis mahasiswa di SISTER |
+| `/api/sapto/tables/pagelaran-mahasiswa/summary` | Tabel 8.f.1 (terapan) |
 | `/api/sapto/program-studi` | Daftar program studi |
 | `/api/sapto/fakultas` | Daftar fakultas |
 | `/api/sapto/tables/kerjasama-pendidikan/summary` | Tabel 1 — Pendidikan |
@@ -393,12 +423,19 @@ menjatuhkan seluruh stack ini selama 25 jam (2026-07-26). Aturannya:
 - Jangan pakai `container_name:` — mematikan namespacing compose dan bisa
   bentrok dengan project lain yang punya nama service sama.
 - Port project ini: **8020** (app), **8086** (phpMyAdmin). Db tanpa port host.
+  `kafka-ui` di `127.0.0.1:8088` (login, hanya lewat SSH tunnel).
 
 Container `app` me-mount root project ini ke `/var/www/html`, jadi **perubahan
 kode langsung berlaku tanpa rebuild** — dengan jeda sampai 60 detik, karena
 opcache memeriksa ulang file paling cepat tiap 60 detik (`revalidate_freq=60`).
 Aset Vite tetap harus di-build ulang (`npm run build`) agar class Tailwind baru
 ikut ter-compile; sampai itu terjadi, class baru diam-diam tidak berlaku.
+
+**Event stream dan gateway.** Kejadian penting (login, perubahan peran,
+sinkronisasi PD UNSRI) dicatat lewat Kafka dan dipantau di Admin → *Event
+Stream (Kafka)* — penjelasan untuk pemula, alur, dan perintah operasional di
+[`docs/kafka.md`](docs/kafka.md). Data PD UNSRI diambil lewat Gravitee API
+Gateway (API Key + rate limit) — lihat [`docs/gravitee.md`](docs/gravitee.md).
 
 `docker/watchdog.sh` (dipasang lewat cron tiap 5 menit) menyalakan ulang stack
 kalau `/up` mati atau ada service compose yang tidak `running`, dan mencatat

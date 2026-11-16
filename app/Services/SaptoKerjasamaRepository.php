@@ -81,13 +81,9 @@ abstract class SaptoKerjasamaRepository
 
         $availableYears = $this->availableYears();
 
-        // TS yang dibawa dari tabel lain (mis. Dosen Pembimbing TS-nya 2025)
-        // bisa jadi bukan tahun yang ada MoU/PKS-nya di sini — kalau dipakai
-        // apa adanya, respons balik ts=2025 tapi 2025 tak ada di
-        // available_years, dropdown TS di klien jadi tak punya opsi buat
-        // dipilih (terlihat seperti "belum kepilih"). Jatuhkan ke tahun
-        // terbaru yang benar-benar ada di sini, sama seperti kalau ts kosong.
-        if ($ts === null || ! in_array($ts, $availableYears, true)) {
+        // Pertahankan TS yang dipilih pengguna meskipun belum ada baris
+        // kerjasama untuk tahun tersebut, agar filter global tetap konsisten.
+        if ($ts === null || $ts < 2000 || $ts > 2100) {
             $ts = $this->latestYear();
         }
 
@@ -323,11 +319,12 @@ abstract class SaptoKerjasamaRepository
      */
     public function availableYears(): array
     {
-        return Cache::remember("sapto:{$this->cachePrefix()}:years:v1", $this->cacheTtl(), function (): array {
+        return Cache::remember("sapto:{$this->cachePrefix()}:years:v2", $this->cacheTtl(), function (): array {
+            $latest = $this->latestYear();
             return DB::table('daftar_mou')->whereNotNull('tahun')->distinct()->pluck('tahun')
                 ->merge(DB::table('daftar_pks')->whereNotNull('tahun')->distinct()->pluck('tahun'))
                 ->map(fn (mixed $year): int => (int) $year)
-                ->push($this->latestYear())
+                ->merge(range($latest - 5, $latest))
                 ->unique()
                 ->filter(fn (int $year): bool => $year >= 2000 && $year <= 2100)
                 ->sortDesc()

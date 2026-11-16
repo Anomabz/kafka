@@ -9,17 +9,19 @@
     the "Part-time" count (not tracked yet, always 0) without showing numbers
     that don't match what the drawer actually returns.
 --}}
-<div class="glass mb-5 rounded-2xl px-4 py-3.5 text-[13px] leading-relaxed text-muted">
+<div class="ma-intro glass mb-5 rounded-2xl px-4 py-3.5 text-[13px] leading-relaxed text-muted">
     Diisi oleh pengusul dari Program Studi pada program Sarjana/Sarjana Terapan/Magister/Magister Terapan/Doktor/Doktor Terapan.
 </div>
 
-<section id="ma-panel-section" class="glass overflow-hidden rounded-2xl">
-    <header class="flex items-center justify-between gap-3 px-4 py-3.5" style="border-bottom:1px solid var(--color-line)">
+<section id="ma-panel-section" class="glass overflow-hidden rounded-2xl" data-view="kartu">
+    <header class="tp-head flex items-center justify-between gap-3 px-4 py-3.5" style="border-bottom:1px solid var(--color-line)">
         <h2 class="text-[15px] font-bold text-ink">Mahasiswa Asing</h2>
         <span id="ma-table-status" class="text-[12px] text-muted">Memuat data...</span>
+        {{-- Khusus HP: ganti tampilan kartu <-> tabel lengkap (lihat app.css). --}}
+        <button type="button" class="tp-view-btn sm:hidden" data-view-toggle>Lihat sebagai tabel</button>
     </header>
 
-    <div class="flex flex-wrap items-center gap-2 px-4 py-3" style="border-bottom:1px solid var(--color-line)">
+    <div class="tp-toolbar flex flex-wrap items-center gap-2 px-4 py-3" style="border-bottom:1px solid var(--color-line)">
         <div class="relative min-w-[180px] flex-1">
             <svg class="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.7" />
@@ -47,6 +49,8 @@
             Export Excel
         </button>
     </div>
+
+    <div id="ma-table-cards" class="table-cards"></div>
 
     <div class="table-scroll">
         <table class="w-full min-w-[980px] border-collapse">

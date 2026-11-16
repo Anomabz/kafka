@@ -113,6 +113,7 @@ class PangkalanDataApiClient
                     return collect($chunk)
                         ->map(fn (string $id) => $pool
                             ->as($id)
+                            ->withHeaders($this->gatewayHeaders())
                             ->withToken($token)
                             ->acceptJson()
                             ->timeout($this->timeout())
@@ -191,6 +192,7 @@ class PangkalanDataApiClient
     public function probe(string $path, array $query = [], int $timeout = 5, int $connectTimeout = 3): Response
     {
         $send = fn (): Response => Http::baseUrl($this->baseUrl())
+            ->withHeaders($this->gatewayHeaders())
             ->withToken($this->token())
             ->acceptJson()
             ->timeout($timeout)
@@ -283,6 +285,7 @@ class PangkalanDataApiClient
     {
         try {
             return Http::baseUrl($this->baseUrl())
+                ->withHeaders($this->gatewayHeaders())
                 ->withToken($this->token())
                 ->acceptJson()
                 ->timeout($this->timeout())
@@ -450,10 +453,26 @@ class PangkalanDataApiClient
         return rtrim((string) config('services.pangkalan_data.base_url'), '/');
     }
 
-    // MODIFIKASI 3: Mengubah baseUrl() untuk membelokkan rute data ke Gravitee Gateway
+    // Rute DATA lewat Gravitee API Gateway (token tetap langsung ke server
+    // kampus, lihat authBaseUrl()): kredensial api/get-token dikirim sebagai
+    // query string, jadi kalau lewat gateway ikut tercatat di log analitik
+    // Gravitee. Lihat docs/gravitee.md.
     private function baseUrl(): string
     {
-        return rtrim(env('SAPTO_GATEWAY_URL', 'http://localhost:8077/sapto-api'), '/');
+        return rtrim((string) config('services.pangkalan_data.gateway_url'), '/');
+    }
+
+    /**
+     * Header kunci langganan Gravitee. Hanya dikirim bila dikonfigurasi,
+     * supaya kode ini bisa dipasang sebelum plan API Key dibuat di gateway.
+     *
+     * @return array<string, string>
+     */
+    private function gatewayHeaders(): array
+    {
+        $key = (string) config('services.pangkalan_data.gateway_api_key');
+
+        return $key === '' ? [] : ['X-Gravitee-Api-Key' => $key];
     }
 
     private function timeout(): int

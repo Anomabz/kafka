@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\ImpersonationController;
+use App\Http\Controllers\Admin\KafkaController;
 use App\Http\Controllers\Admin\PdUnsriSyncController;
 use App\Http\Controllers\Admin\PenugasanController;
 use App\Http\Controllers\Api\Sapto\MahasiswaController; // <-- 1. Import Controllernya di sini
@@ -117,11 +118,19 @@ Route::middleware('sso.auth')->group(function () {
     Route::get('/admin/sync-pd-unsri/status', [PdUnsriSyncController::class, 'status'])->name('admin.sync-pd-unsri.status');
     Route::post('/admin/sync-pd-unsri/cancel', [PdUnsriSyncController::class, 'cancel'])->name('admin.sync-pd-unsri.cancel');
 
+    // Monitor Event Stream (Kafka): status, topic, event terbaru, event uji --
+    // lihat KafkaController, KafkaMonitor, docs/kafka.md. Khusus admin.
+    Route::get('/admin/kafka', [KafkaController::class, 'index'])->name('admin.kafka');
+    Route::get('/admin/kafka/status', [KafkaController::class, 'status'])->name('admin.kafka.status');
+    Route::post('/admin/kafka/test', [KafkaController::class, 'test'])->name('admin.kafka.test');
+
     Route::get('/', function () {
         return view('sapto', [
-            // Dashboard dihapus; tabel pertama (Kerjasama Tridharma - Pendidikan)
-            // jadi tab default saat aplikasi dibuka.
-            'activeTableId' => 'kerjasama-pendidikan',
+            // Halaman awal = Beranda (ringkasan kelengkapan data & capaian).
+            // Bukan tabel BAN-PT, jadi tidak ada di daftar `tables` di bawah:
+            // ia "halaman virtual" (lihat bagian Shell mobile & Beranda di
+            // sapto.blade.php). ?table=<id> tetap membuka tabel langsung.
+            'activeTableId' => 'beranda',
             'tables' => [
                 ['id' => 'kerjasama-pendidikan', 'code' => '1', 'name' => 'Tabel 1 Kerjasama Tridharma - Pendidikan'],
                 ['id' => 'kerjasama-penelitian', 'code' => '1', 'name' => 'Tabel 1 Kerjasama Tridharma - Penelitian'],

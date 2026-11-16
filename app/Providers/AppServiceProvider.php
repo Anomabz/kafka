@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Services\Kafka\KafkaRestProxy;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 
@@ -12,7 +13,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // Dibuat per resolve (bukan singleton) supaya config('kafka.*') yang
+        // diubah di tes langsung berlaku.
+        $this->app->bind(KafkaRestProxy::class, fn () => KafkaRestProxy::fromConfig());
     }
 
     /**

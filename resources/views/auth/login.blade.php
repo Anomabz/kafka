@@ -39,7 +39,7 @@
                background ini cuma berlaku di halaman login (scoped ke sini),
                tidak menyentuh app.css/halaman lain. */
             background:
-                linear-gradient(165deg, rgba(11, 16, 11, 0.88) 0%, rgba(28, 38, 28, 0.78) 45%, rgba(51, 80, 46, 0.6) 100%),
+                linear-gradient(165deg, rgba(11, 11, 16, 0.88) 0%, rgba(28, 28, 38, 0.78) 45%, rgba(var(--brand-ink-rgb), 0.62) 100%),
                 url('{{ asset('images/login-bg.jpg') }}') center/cover no-repeat fixed;
         }
 
@@ -49,12 +49,12 @@
            tema terang dipilih (text-ink jadi gelap di tema terang). */
         .auth-mobile-brand,
         .auth-mobile-brand .text-ink {
-            color: #f8fdfc;
+            color: #f8f9fb;
         }
 
         .auth-mobile-brand .text-muted,
         .auth-mobile-stat .text-muted {
-            color: rgba(243, 250, 248, 0.72);
+            color: rgba(243, 245, 248, 0.72);
         }
 
         .auth-mobile-stat.glass {
@@ -156,8 +156,10 @@
             flex-direction: column;
             justify-content: space-between;
             gap: 2.5rem;
-            color: #f3faf8;
-            background: #1c261c;
+            color: #f3f5f8;
+            /* Biru tua merek di desktop, marun tua di HP (token --brand-ink
+               di app.css), bukan abu-arang netral desain lama. */
+            background: linear-gradient(165deg, var(--brand-ink) 0%, color-mix(in srgb, var(--brand-ink) 62%, #05070b) 100%);
         }
 
         /* Motif batik Palembang -- satu medali bunga besar mengambang di
@@ -174,15 +176,15 @@
         }
 
         .auth-context .text-ink {
-            color: #f8fdfc;
+            color: #f8f9fb;
         }
 
         .auth-context .text-muted {
-            color: rgba(243, 250, 248, 0.72);
+            color: rgba(243, 245, 248, 0.72);
         }
 
         .auth-context .bg-accent {
-            background-color: #b7dba9;
+            background-color: var(--brand-light);
         }
 
         .auth-context-inner {
@@ -199,7 +201,7 @@
             font-weight: 800;
             line-height: 1.2;
             letter-spacing: -0.01em;
-            color: #f8fdfc;
+            color: #f8f9fb;
         }
 
         .auth-stat {
@@ -212,7 +214,7 @@
             font-size: 46px;
             font-weight: 800;
             line-height: 1;
-            color: #b7dba9;
+            color: var(--brand-light);
             letter-spacing: -0.02em;
         }
 
@@ -220,7 +222,7 @@
             max-width: 11rem;
             font-size: 12.5px;
             line-height: 1.4;
-            color: rgba(243, 250, 248, 0.72);
+            color: rgba(243, 245, 248, 0.72);
         }
 
         .auth-pillars {
@@ -235,14 +237,14 @@
             display: block;
             font-weight: 700;
             font-size: 13px;
-            color: #f8fdfc;
+            color: #f8f9fb;
         }
 
         .auth-pillars .pillar-hint {
             display: block;
             margin-top: 0.1rem;
             font-size: 12px;
-            color: rgba(243, 250, 248, 0.72);
+            color: rgba(243, 245, 248, 0.72);
         }
 
         .auth-card {
@@ -300,7 +302,7 @@
             height: 26px;
             border-radius: 999px;
             background: rgba(255, 255, 255, 0.12);
-            color: #b7dba9;
+            color: var(--brand-light);
         }
 
         .auth-pillar-icon svg {
@@ -390,7 +392,7 @@
             width: 22rem;
             height: 22rem;
             border-radius: 999px;
-            background: radial-gradient(circle, rgba(99, 150, 90, 0.28), transparent 68%);
+            background: radial-gradient(circle, rgba(var(--brand-rgb), 0.32), transparent 68%);
             pointer-events: none;
         }
 
@@ -401,7 +403,7 @@
             left: 0;
             right: 0;
             height: 3px;
-            background: linear-gradient(90deg, #33502e 0%, #4b7a42 40%, #63965a 70%, #b7dba9 100%);
+            background: linear-gradient(90deg, var(--brand-ink) 0%, var(--brand) 40%, var(--brand-muted) 70%, var(--brand-light) 100%);
             pointer-events: none;
         }
 
@@ -432,15 +434,15 @@
             color: #ffffff;
             text-decoration: none;
             cursor: pointer;
-            background: linear-gradient(135deg, #4b7a42 0%, #63965a 55%, #33502e 100%);
-            box-shadow: 0 12px 26px -10px rgba(75, 122, 66, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+            background: linear-gradient(135deg, var(--brand) 0%, var(--brand-muted) 55%, var(--brand-ink) 100%);
+            box-shadow: 0 12px 26px -10px rgba(var(--brand-rgb), 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.18);
             transition: transform 140ms ease, box-shadow 140ms ease, filter 140ms ease;
         }
 
         .auth-cta:hover {
             transform: translateY(-1px);
             filter: brightness(1.06);
-            box-shadow: 0 16px 32px -10px rgba(75, 122, 66, 0.95), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+            box-shadow: 0 16px 32px -10px rgba(var(--brand-rgb), 0.95), inset 0 1px 0 rgba(255, 255, 255, 0.22);
         }
 
         /* Terkunci sampai captcha lolos. */
@@ -477,7 +479,7 @@
         }
 
         .auth-verify[data-state="ok"] {
-            border-color: rgba(22, 163, 74, 0.45);
+            border-color: rgba(var(--brand-soft-rgb), 0.55);
         }
 
         .auth-verify-check {
@@ -555,8 +557,8 @@
         }
 
         .auth-verify[data-state="ok"] .auth-verify-box {
-            border-color: #16a34a;
-            background: #16a34a;
+            border-color: var(--brand);
+            background: var(--brand);
         }
 
         .auth-verify[data-state="ok"] .auth-verify-tick {
@@ -574,7 +576,7 @@
         }
 
         .auth-verify[data-state="ok"] .auth-verify-label {
-            color: #16a34a;
+            color: var(--brand-soft);
         }
 
         .auth-verify-brand {
@@ -841,7 +843,7 @@
             display: grid;
             place-items: center;
             overflow: hidden;
-            background: #0b100b;
+            background: #0b0b10;
             opacity: 0;
             visibility: hidden;
             pointer-events: none;
@@ -875,7 +877,7 @@
             position: absolute;
             inset: 0;
             border-radius: 50%;
-            border: 1.5px solid rgba(143, 191, 126, 0.35);
+            border: 1.5px solid rgba(var(--brand-soft-rgb), 0.35);
             opacity: 0;
             animation: leave-ring-pulse 2.1s 0.15s ease-out infinite;
         }
@@ -905,7 +907,7 @@
             font-size: 13px;
             font-weight: 700;
             letter-spacing: 0.03em;
-            color: rgba(243, 250, 248, 0.85);
+            color: rgba(243, 245, 248, 0.85);
         }
 
         /* Bar geser (bukan mengisi 0->100%): durasi transisi ke Keycloak
@@ -926,7 +928,7 @@
             bottom: 0;
             width: 40%;
             border-radius: 999px;
-            background: linear-gradient(90deg, #4b7a42, #b7dba9);
+            background: linear-gradient(90deg, var(--brand), var(--brand-light));
             animation: leave-bar-slide 1.1s ease-in-out infinite;
         }
 
@@ -1007,7 +1009,7 @@
                             <rect width="280" height="280" fill="url(#batikFade)"/>
                         </mask>
                     </defs>
-                    <g mask="url(#batikMask)" fill="none" stroke="#8fbf7e" stroke-width="1.1">
+                    <g mask="url(#batikMask)" fill="none" style="stroke:var(--brand-soft)" stroke-width="1.1">
                         <circle cx="140" cy="140" r="118"/>
                         <circle cx="140" cy="140" r="96"/>
                         <g transform="translate(140,140)">
@@ -1032,7 +1034,7 @@
                                 <path d="M0 -58 C 9 -48, 9 -34, 0 -27 C -9 -34, -9 -48, 0 -58 Z" transform="rotate(337.5)"/>
                             </g>
                             <circle r="16"/>
-                            <circle r="8" fill="#8fbf7e" stroke="none"/>
+                            <circle r="8" style="fill:var(--brand-soft)" stroke="none"/>
                         </g>
                     </g>
                 </svg>

@@ -3,21 +3,26 @@
 namespace App\Http\Controllers\Api\Sapto;
 
 use App\Services\SaptoMahasiswaAsingRepository;
+use App\Services\SaptoProgramStudiRepository;
 use App\Support\SaptoUserContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class MahasiswaController extends SaptoTableController
 {
-    /**
-     * FUNGSI 1: Rekapitulasi Matriks Angka (Sesuai 11 Kolom Borang Excel BAN-PT)
-     * URL: http://10.8.5.67:8001/sapto/mahasiswa-asing
-     */
-    public function data_mahasiswa_asing(Request $request, SaptoMahasiswaAsingRepository $repository)
-    {
+    public function data_mahasiswa_asing(
+        Request $request,
+        SaptoMahasiswaAsingRepository $repository
+    ) {
         $ts = $this->validateTs($request);
+
         $context = SaptoUserContext::fromRequest($request);
-        $summary = $repository->summary($context->resolveFakultasId($request), $context->resolveProgramStudiId($request), $ts);
+
+        $summary = $repository->summary(
+            $context->resolveFakultasId($request),
+            $context->resolveProgramStudiId($request),
+            $ts
+        );
 
         return response()->json([
             'success' => true,
@@ -29,97 +34,152 @@ class MahasiswaController extends SaptoTableController
         ]);
     }
 
-    /**
-     * FUNGSI 2: Detail List Mahasiswa Pas Diklik
-     * URL: http://10.8.5.67:8001/sapto/mahasiswa-asing/detail?tahun=2025
-     *
-     * Prodi diambil dari SaptoUserContext (akun yang login), bukan dari
-     * parameter klien — dulu endpoint ini menerima id_prodi/nama_prodi
-     * mentah dari request tanpa validasi sama sekali, jadi siapapun yang
-     * login bisa lihat data prodi manapun (termasuk lewat pencarian bebas
-     * nama_prodi). Lihat SaptoUserContext::fromRequest().
-     */
     public function detail_mahasiswa_asing(Request $request)
     {
         $context = SaptoUserContext::fromRequest($request);
-        $idProdi = $context->resolveProgramStudiId($request);
+
+        $idProdi = $request->query('id_prodi')
+            ?? $request->query('program_studi_id')
+            ?? $context->resolveProgramStudiId($request);
+
         $fakultasId = $context->resolveFakultasId($request);
-        $tahun   = $request->query('tahun');
+
+        $tahun = (int) $request->query('tahun');
+
+        if ($tahun <= 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Parameter tahun wajib diisi.',
+            ], 422);
+        }
 
         $query = "
             SELECT
-                lrpm.nim,
-                lrpm.nama_mahasiswa AS nama,
+                x.id_mahasiswa,
+                x.nim,
+                x.nama,
+                x.id_prodi,
                 ps.nama_jenjang_pendidikan AS jenjang,
                 ps.nama_program_studi AS nama_prodi,
-                SUBSTRING(lrpm.id_periode_masuk, 1, 4) AS angkatan,
-                CASE
-                    WHEN lrpm.id_periode_keluar IS NULL OR lrpm.id_periode_keluar = '' THEN 'Aktif'
-                    ELSE COALESCE(lrpm.keterangan_keluar, 'Keluar')
-                END AS status,
+                SUBSTRING(x.id_periode, 1, 4) AS angkatan,
+                'Aktif' AS status,
                 IFNULL(n.nama_negara, 'Belum Diisi') AS kewarganegaraan
-            FROM list_riwayat_pendidikan_mahasiswa lrpm
-            LEFT JOIN program_studi ps ON ps.id_prodi = lrpm.id_prodi
-            LEFT JOIN biodata_mahasiswa bm ON bm.id_mahasiswa = lrpm.id_mahasiswa
-            LEFT JOIN negara n ON n.id_negara = bm.id_negara
-            WHERE 1=1
+            FROM (
+                SELECT
+                    lm.id_mahasiswa,
+                    lm.nim,
+                    lm.nama_mahasiswa AS nama,
+                    lm.id_prodi,
+                    lm.id_periode,
+                    lm.id_periode_keluar,
+                    lm.tanggal_keluar,
+                    lm.id_status_mahasiswa,
+                    lm.nama_status_mahasiswa,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY lm.id_mahasiswa
+                        ORDER BY
+                            CAST(lm.id_periode AS UNSIGNED) DESC
+                    ) AS rn
+                FROM list_mahasiswa lm
+                WHERE
+                    lm.id_periode IS NOT NULL
+                    AND TRIM(lm.id_periode) <> ''
+                    AND LEFT(lm.id_periode, 4) <= ?
+            ) x
+            LEFT JOIN program_studi ps
+                ON ps.id_prodi = x.id_prodi
+            LEFT JOIN biodata_mahasiswa bm
+                ON bm.id_mahasiswa = x.id_mahasiswa
+            LEFT JOIN negara n
+                ON n.id_negara = bm.id_negara
+            WHERE
+                x.rn = 1
+                AND (
+                    x.id_periode_keluar IS NULL
+                    OR TRIM(x.id_periode_keluar) = ''
+                    OR LEFT(x.id_periode_keluar, 4) > ?
+                )
+                AND n.id_negara IS NOT NULL
+                AND n.id_negara <> 'ID'
         ";
 
-        $params = [];
+        $params = [
+            (string) $tahun,
+            (string) $tahun,
+        ];
 
-        if ($idProdi !== null) {
-            $query .= " AND lrpm.id_prodi = ? ";
+        if ($idProdi !== null && $idProdi !== '') {
+            $query .= " AND x.id_prodi = ? ";
             $params[] = $idProdi;
         } elseif ($fakultasId !== null) {
-            // Dekan tanpa prodi terpilih: semua prodi di fakultasnya saja.
-            // Tanpa cabang ini $idProdi null berarti TANPA saringan -- dekan
-            // mendapat daftar mahasiswa asing se-universitas.
-            $prodiFakultas = app(\App\Services\SaptoProgramStudiRepository::class)->programStudis()
-                ->where('fakultas_id', $fakultasId)
+            $prodiFakultas = app(
+                SaptoProgramStudiRepository::class
+            )
+                ->programStudis()
+                ->where(
+                    'fakultas_id',
+                    $fakultasId
+                )
                 ->pluck('id')
                 ->all();
 
             if ($prodiFakultas === []) {
-                return response()->json(['success' => true, 'total_mahasiswa' => 0, 'data' => []]);
+                return response()->json([
+                    'success' => true,
+                    'total_mahasiswa' => 0,
+                    'data' => [],
+                ]);
             }
 
-            $query .= ' AND lrpm.id_prodi IN ('.implode(',', array_fill(0, count($prodiFakultas), '?')).') ';
-            array_push($params, ...$prodiFakultas);
+            $placeholders = implode(
+                ',',
+                array_fill(
+                    0,
+                    count($prodiFakultas),
+                    '?'
+                )
+            );
+
+            $query .= "
+                AND x.id_prodi IN (
+                    {$placeholders}
+                )
+            ";
+
+            array_push(
+                $params,
+                ...$prodiFakultas
+            );
         }
 
-        // Spesifik per tahun TS / TS-1 / TS-2 yang diklik. "Aktif pada tahun X"
-        // harus sama persis dengan logika di data_mahasiswa_asing() supaya
-        // jumlah baris di sini selalu cocok dengan angka yang diklik: sudah
-        // terdaftar sebelum/di tahun X, dan belum keluar sebelum tahun X
-        // berakhir. Tidak dibatasi ke angkatan 2023-2025 seperti sebelumnya,
-        // karena mahasiswa angkatan lama yang masih aktif di tahun X tetap
-        // harus muncul.
-        if ($tahun) {
-            $query .= " AND SUBSTRING(lrpm.id_periode_masuk, 1, 4) <= ? AND (lrpm.id_periode_keluar IS NULL OR lrpm.id_periode_keluar = '' OR SUBSTRING(lrpm.id_periode_keluar, 1, 4) > ?) ";
-            $params[] = $tahun;
-            $params[] = $tahun;
-        }
+        $query .= "
+            ORDER BY
+                x.id_periode DESC,
+                x.nama ASC
+        ";
 
-        /* * NOTE UNTUK TESTING LOKAL:
-         * Aturan pembimbing mewajibkan penyaringan mahasiswa asing murni mumpuni lewat ID Negara:
-         * "AND n.id_negara IS NOT NULL AND n.id_negara <> 'ID'"
-         * * Jika saat ini data tabel biodata_mahasiswa lu masih kosong dan lu ingin menguji kelancaran 
-         * visual data mahasiswa lokal Indonesia terlebih dahulu, silakan beri tanda komentar (--) 
-         * pada dua baris filter negara di bawah ini.
-         */
-        $query .= " AND n.id_negara IS NOT NULL ";
-        $query .= " AND n.id_negara <> 'ID' ";
+        $rows = DB::select(
+            $query,
+            $params
+        );
 
-        $query .= " ORDER BY lrpm.id_periode_masuk DESC, lrpm.nama_mahasiswa ASC ";
-        
-        $data = array_map(function (object $row): object {
-            // Label prodi bersih (tanpa "Profesi Profesi ..." / jenjang
-            // placeholder), konsisten dengan tabel ringkasannya.
-            $row->program_studi = \App\Services\SaptoProgramStudiRepository::composeLabel($row->jenjang ?? '', $row->nama_prodi ?? '');
-            unset($row->jenjang, $row->nama_prodi);
+        $data = array_map(
+            function (object $row): object {
+                $row->program_studi =
+                    SaptoProgramStudiRepository::composeLabel(
+                        $row->jenjang ?? '',
+                        $row->nama_prodi ?? ''
+                    );
 
-            return $row;
-        }, DB::select($query, $params));
+                unset(
+                    $row->jenjang,
+                    $row->nama_prodi
+                );
+
+                return $row;
+            },
+            $rows
+        );
 
         return response()->json([
             'success' => true,
@@ -128,7 +188,7 @@ class MahasiswaController extends SaptoTableController
                 'id_prodi' => $idProdi,
                 'tahun' => $tahun,
             ],
-            'data' => $data
+            'data' => $data,
         ]);
     }
 }

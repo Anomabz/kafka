@@ -12,36 +12,99 @@ use Illuminate\Support\Str;
  * Tabel 3.b.2) Penelitian DTPS. Sumber: sister_detail_penelitian (hasil
  * sinkronisasi SISTER). Anggota peneliti tersimpan sebagai JSON di kolom
  * `anggota` (bukan lewat sister_list_penelitian, yang kosong di sumber).
- * "DTPS" = dosen tetap program studi: judul dihitung bila salah satu anggota
- * bertipe "Dosen" cocok dengan roster homebase (list_penugasan_dosen,
- * a_sp_homebase = 1) pada TAHUN judul itu dilaksanakan -- roster dihitung
+ * Judul dihitung bila salah satu anggota bertipe "Dosen" cocok dengan roster
+ * prodi pada TAHUN judul itu dilaksanakan. Roster = dosen homebase
+ * (list_penugasan_dosen, a_sp_homebase = 1) DITAMBAH dosen yang mengajar
+ * kelas prodi itu pada tahun yang sama (keputusan pengguna) -- roster dihitung
  * terpisah untuk TS-2/TS-1/TS, bukan cuma TS, karena homebase dosen bisa
  * berubah antar tahun ajaran.
  *
  * Baris sumber dari sinkronisasi mengandung duplikat identik per id (fan-out
  * di proses sync) -> dideduplikasi per id sebelum dihitung.
  *
- * Klasifikasi "Sumber Pembiayaan" tidak saling eksklusif -- satu judul yang
- * didanai lebih dari satu sumber dihitung di tiap baris kategori yang
- * berlaku (konsisten dengan makna "jumlah judul per sumber dana"):
- * - "a) Perguruan Tinggi b) Mandiri": dana_perguruan_tinggi > 0, atau tidak
- *   ada dana tercatat sama sekali di ketiga kolom (dianggap mandiri -- tidak
- *   ada kolom "mandiri" eksplisit di sumber).
+ * Judul dengan dana 0 di ketiga kolom (dana_dikti, dana_perguruan_tinggi,
+ * dana_institusi_lain) TIDAK dihitung, baik di tabel, kartu metrik, maupun
+ * drill-down (aturan ada di satu tempat: klasifikasi()).
+ *
+ * Klasifikasi "Sumber Pembiayaan" TIDAK saling eksklusif -- judul berdana
+ * ganda masuk SEMUA kategori sumber dananya (satu judul bisa tampil di lebih
+ * dari satu baris). Baris "Jumlah" dan kartu metrik menghitung judul unik,
+ * jadi bisa lebih kecil dari penjumlahan baris:
+ * - "a) Perguruan Tinggi b) Mandiri": dana_perguruan_tinggi > 0.
  * - "Lembaga dalam negeri (di luar PT)": dana_dikti > 0 atau
  *   dana_institusi_lain > 0 (Kemendikbud/DIKTI, institusi lain domestik).
  * - "Lembaga luar negeri": jenis_skim mengandung teks "luar negeri"
  *   (heuristik teks -- satu-satunya penanda eksplisit luar negeri di sumber;
- *   perlu diverifikasi manual). Menang atas kategori dalam negeri bila
- *   keduanya cocok pada judul yang sama.
+ *   perlu diverifikasi manual), dan judul harus punya dana > 0.
  */
 class SaptoPenelitianDtpsRepository
 {
     use ResolvesSaptoScope;
     use ResolvesSaptoTs;
 
+    private const LABEL_DETAIL = [
+        'pt_mandiri' => 'Perguruan Tinggi / Mandiri',
+        'dalam_negeri' => 'Lembaga dalam negeri',
+        'luar_negeri' => 'Lembaga luar negeri',
+    ];
+
     public function __construct(
         private readonly SaptoProgramStudiRepository $client,
     ) {}
+
+    public function detail(int $year, string $category, ?string $fakultasId, ?string $programStudiId): array
+    {
+        $programStudis = $this->client->programStudis();
+        $this->validateScope($programStudis, $fakultasId, $programStudiId);
+        $scopeProdiIds = $this->scopeProdiIds($programStudis, $fakultasId, $programStudiId);
+        $dtpsIds = array_flip($scopeProdiIds === [] ? [] : $this->dtpsIds($year, $scopeProdiIds));
+        $items = [];
+        $seen = [];
+
+        foreach (DB::table('sister_detail_penelitian')
+            ->select('id', 'judul', 'tahun_pelaksanaan', 'jenis_skim', 'dana_dikti', 'dana_perguruan_tinggi', 'dana_institusi_lain', 'anggota')
+            ->where('tahun_pelaksanaan', (string) $year)
+            ->orderBy('judul')
+            ->cursor() as $row) {
+            if (isset($seen[(string) $row->id])) {
+                continue;
+            }
+            $seen[(string) $row->id] = true;
+
+            if (! $this->hasDtpsMember($this->dosenIdsFromAnggota($row->anggota), $dtpsIds)) {
+                continue;
+            }
+
+            $kategori = $this->klasifikasi(
+                (float) $row->dana_dikti,
+                (float) $row->dana_perguruan_tinggi,
+                (float) $row->dana_institusi_lain,
+                $row->jenis_skim,
+            );
+
+            // Dana 0 di ketiga kolom -> tidak dihitung.
+            if ($kategori === []) {
+                continue;
+            }
+
+            // Satu judul bisa masuk beberapa kategori (dana ganda).
+            if ($category !== 'all' && ! in_array($category, $kategori, true)) {
+                continue;
+            }
+
+            $items[] = [
+                'judul' => $row->judul ?: '(Judul tidak tersedia)',
+                'jenis' => $row->jenis_skim ?: '-',
+                'kategori' => implode(', ', array_map(fn (string $k): string => self::LABEL_DETAIL[$k], $kategori)),
+                'tahun' => $row->tahun_pelaksanaan,
+                'dana_dikti' => $row->dana_dikti,
+                'dana_pt' => $row->dana_perguruan_tinggi,
+                'dana_lain' => $row->dana_institusi_lain,
+            ];
+        }
+
+        return $items;
+    }
 
     public function summary(?int $ts, ?string $fakultasId, ?string $programStudiId): array
     {
@@ -76,30 +139,31 @@ class SaptoPenelitianDtpsRepository
                     continue;
                 }
 
+                $kategori = $this->klasifikasi(
+                    $row['dana_dikti'],
+                    $row['dana_perguruan_tinggi'],
+                    $row['dana_institusi_lain'],
+                    $row['jenis_skim'],
+                );
+
+                // Dana 0 di ketiga kolom -> tidak dihitung.
+                if ($kategori === []) {
+                    continue;
+                }
+
+                // Judul dihitung SEKALI di total, tetapi masuk SEMUA kategori
+                // sumber dananya (dana ganda -> beberapa baris).
                 $distinctJudul[$key]++;
 
-                $isForeign = $row['jenis_skim'] !== null && Str::contains(Str::lower($row['jenis_skim']), 'luar negeri');
-                $hasDikti = $row['dana_dikti'] > 0;
-                $hasPt = $row['dana_perguruan_tinggi'] > 0;
-                $hasLain = $row['dana_institusi_lain'] > 0;
-                $hasNoFunding = ! $hasDikti && ! $hasPt && ! $hasLain;
-
-                if ($hasPt || $hasNoFunding) {
-                    $counts['pt_mandiri'][$key]++;
-                }
-
-                if (($hasDikti || $hasLain) && ! $isForeign) {
-                    $counts['dalam_negeri'][$key]++;
-                }
-
-                if ($isForeign) {
-                    $counts['luar_negeri'][$key]++;
+                foreach ($kategori as $kategoriKey) {
+                    $counts[$kategoriKey][$key]++;
                 }
             }
         }
 
         $rows = collect($categories)
             ->map(fn (string $label, string $key): array => [
+                'detail_key' => $key,
                 'sumber_pembiayaan' => $label,
                 'ts_2' => $counts[$key]['ts_2'],
                 'ts_1' => $counts[$key]['ts_1'],
@@ -110,11 +174,14 @@ class SaptoPenelitianDtpsRepository
             ->map(fn (array $row, int $index): array => ['no' => $index + 1] + $row)
             ->push([
                 'no' => null,
+                'detail_key' => 'all',
                 'sumber_pembiayaan' => 'Jumlah',
-                'ts_2' => array_sum(array_column($counts, 'ts_2')),
-                'ts_1' => array_sum(array_column($counts, 'ts_1')),
-                'ts' => array_sum(array_column($counts, 'ts')),
-                'jumlah' => array_sum(array_map('array_sum', $counts)),
+                // Jumlah = judul unik (bukan penjumlahan baris, karena satu
+                // judul berdana ganda tampil di beberapa baris).
+                'ts_2' => $distinctJudul['ts_2'],
+                'ts_1' => $distinctJudul['ts_1'],
+                'ts' => $distinctJudul['ts'],
+                'jumlah' => array_sum($distinctJudul),
             ])
             ->values()
             ->all();
@@ -136,34 +203,86 @@ class SaptoPenelitianDtpsRepository
             ],
             'rows' => $rows,
             'metrics' => $this->metrics($distinctJudul, $ts),
-            'source' => $this->sourcePayload(),
+            // Semua jumlah 0 = belum ada data untuk lingkup ini, walau barisnya
+            // (jenis/sumber) selalu tampil; SaptoKesiapanService membacanya.
+            'source' => $this->sourcePayload() + ['template' => (int) (end($rows)['jumlah'] ?? 0) === 0],
         ];
     }
 
     /**
-     * Roster id_dosen homebase (DTPS) pada satu tahun ajaran + scope prodi.
+     * Satu-satunya tempat aturan klasifikasi sumber pembiayaan, dipakai
+     * bersama oleh summary() dan detail() supaya angkanya selalu konsisten.
+     * Kategori TIDAK saling eksklusif: judul berdana ganda masuk semua
+     * kategori sumber dananya.
+     *
+     * @return array<int, 'pt_mandiri'|'dalam_negeri'|'luar_negeri'> kosong =
+     *         dana 0 di ketiga kolom (judul tidak dihitung)
+     */
+    private function klasifikasi(float $danaDikti, float $danaPt, float $danaLain, ?string $jenisSkim): array
+    {
+        $hasDikti = $danaDikti > 0;
+        $hasPt = $danaPt > 0;
+        $hasLain = $danaLain > 0;
+
+        if (! $hasDikti && ! $hasPt && ! $hasLain) {
+            return [];
+        }
+
+        $kategori = [];
+
+        if ($hasPt) {
+            $kategori[] = 'pt_mandiri';
+        }
+
+        if ($hasDikti || $hasLain) {
+            $kategori[] = 'dalam_negeri';
+        }
+
+        if ($jenisSkim !== null && Str::contains(Str::lower($jenisSkim), 'luar negeri')) {
+            $kategori[] = 'luar_negeri';
+        }
+
+        return $kategori;
+    }
+
+    /**
+     * Roster dosen pada satu tahun ajaran + scope prodi:
+     *  (a) homebase (DTPS) di scope pada tahun itu, DITAMBAH
+     *  (b) dosen yang MENGAJAR kelas prodi di scope pada tahun itu
+     *      (dosen_pengajar_kelas_kuliah, semester ganjil/genap/pendek)
+     *      -- keputusan pengguna, pola sama dengan 3.a.1 / EWMP / 3.b.1.
+     * id_dosen feeder = id_sdm SISTER (terverifikasi >99%), jadi bisa
+     * dicocokkan langsung dengan anggota penelitian.
      *
      * @param  array<int, string>|null  $scopeProdiIds
      * @return array<int, string>
      */
     private function dtpsIds(int $year, ?array $scopeProdiIds): array
     {
-        $cacheKey = 'sapto:penelitian-dtps:roster:v1:'.md5(json_encode([$year, $scopeProdiIds]));
+        $cacheKey = 'sapto:penelitian-dtps:roster:v2:'.md5(json_encode([$year, $scopeProdiIds]));
 
         return Cache::remember($cacheKey, $this->cacheTtl(), function () use ($year, $scopeProdiIds): array {
-            $query = DB::table('list_penugasan_dosen')
+            $homebase = DB::table('list_penugasan_dosen')
                 ->select('id_dosen')
                 ->distinct()
                 ->where('a_sp_homebase', '1')
                 ->whereRaw('substr(nama_tahun_ajaran,1,4) = ?', [(string) $year]);
 
+            $pengajar = DB::table('dosen_pengajar_kelas_kuliah')
+                ->select('id_dosen')
+                ->distinct()
+                ->whereRaw('left(id_semester,4) = ?', [(string) $year]);
+
             if ($scopeProdiIds !== null) {
-                $query->whereIn('id_prodi', $scopeProdiIds);
+                $homebase->whereIn('id_prodi', $scopeProdiIds);
+                $pengajar->whereIn('id_prodi', $scopeProdiIds);
             }
 
-            return $query->pluck('id_dosen')
+            return $homebase->pluck('id_dosen')
+                ->merge($pengajar->pluck('id_dosen'))
                 ->map(fn (mixed $id): string => (string) $id)
                 ->filter(fn (string $id): bool => $id !== '')
+                ->unique()
                 ->values()
                 ->all();
         });

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Penugasan;
+use App\Services\KafkaProducerService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -55,12 +56,27 @@ class ImpersonationController extends Controller
             'target_email' => $target['email'],
             'target_nama' => $target['nama'],
         ]);
+        // Pelaku di event = admin asli (actorFromRequest membaca
+        // impersonator_sso_user, yang baru saja diisi di atas).
+        app(KafkaProducerService::class)->audit('impersonation.started', [
+            'target_nip' => $target['nip'],
+            'target_email' => $target['email'],
+            'target_nama' => $target['nama'],
+        ], $request);
 
         return redirect('/');
     }
 
     public function stop(Request $request)
     {
+        // Sebelum sesi dikembalikan ke admin: setelahnya sso_user sudah admin
+        // dan penanda penyamaran hilang.
+        if ($request->session()->has('impersonator_sso_user')) {
+            app(KafkaProducerService::class)->audit('impersonation.stopped', [
+                'terakhir_sebagai' => $request->session()->get('sso_user.name'),
+            ], $request);
+        }
+
         $admin = $request->session()->pull('impersonator_sso_user');
 
         if ($admin) {
